@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+{% block title %}Setup — Ledger{% endblock %}
+{% block content %}
+
+<div class="mb-7">
+  <h1 class="text-xl font-semibold" style="color:var(--text)">Setup</h1>
+  <p class="text-sm mt-1" style="color:var(--text-muted)">Connetti e gestisci i tuoi conti bancari.</p>
+</div>
+
+<!-- Connected accounts -->
+{% if accounts %}
+<p class="text-xs font-medium uppercase tracking-wider mb-3" style="color:var(--text-muted)">Conti connessi</p>
+<div class="card mb-7" style="padding:0">
+  {% for acc in accounts %}
+  <div x-data="{ open: false }" class="{% if not loop.last %}border-b{% endif %}" style="{% if not loop.last %}border-color:var(--border-subtle){% endif %}">
+
+    <!-- Main row -->
+    <div class="px-5 py-4 flex items-center gap-4">
+      <!-- Status dot -->
+      <div class="relative flex-shrink-0">
+        <div class="w-2 h-2 rounded-full" style="background:{% if acc.connected %}var(--emerald){% else %}var(--text-dim){% endif %}"></div>
+        {% if acc.connected %}
+        <div class="absolute inset-0 w-2 h-2 rounded-full animate-ping opacity-60" style="background:var(--emerald)"></div>
+        {% endif %}
+      </div>
+
+      <!-- Info -->
+      <div class="flex-1 min-w-0">
+        <p class="text-sm font-medium" style="color:var(--text)">{{ acc.display_name or (acc.bank_name ~ ' — ' ~ acc.name) }}</p>
+        <p class="text-xs mt-0.5" style="color:var(--text-muted)">
+          {{ acc.bank_name }}
+          {% if acc.currency and acc.currency != 'EUR' %}
+          <span class="tag" style="background:rgba(3,105,161,0.1);color:var(--sky);border:1px solid rgba(3,105,161,0.2);font-size:10px;vertical-align:middle">{{ acc.currency }}</span>
+          {% endif %}
+          · Sync: {{ acc.last_sync.strftime('%d/%m/%Y %H:%M') if acc.last_sync else 'mai' }}
+          {% if acc.iban %} · {{ acc.iban[-8:] }}{% endif %}
+        </p>
+      </div>
+
+      <!-- Actions -->
+      <div class="flex items-center gap-2">
+        <form method="post" action="/setup/account/{{ acc.id }}/sync">
+          <button type="submit" class="btn-ghost" style="height:36px; color:var(--sky); border-color:rgba(125,211,252,0.25)">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+            </svg>
+            Sync
+          </button>
+        </form>
+        <button @click="open = !open" class="btn-ghost" style="height:36px; color:var(--text-muted)">
+          <svg class="w-3.5 h-3.5 transition-transform duration-150" :style="open ? 'transform:rotate(180deg)' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+          </svg>
+          Gestisci
+        </button>
+        <form method="post" action="/setup/account/{{ acc.id }}/delete"
+              onsubmit="return confirm('Rimuovere {{ acc.bank_name }} — {{ acc.name }}? Verranno cancellate tutte le transazioni associate.')">
+          <button type="submit" class="btn-ghost" style="height:36px; color:var(--rose); border-color:rgba(225,29,72,0.25)">
+            Rimuovi
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <!-- Submenu -->
+    <div x-show="open" x-transition:enter="transition ease-out duration-100" x-transition:enter-start="opacity-0 -translate-y-1" x-transition:enter-end="opacity-100 translate-y-0" class="px-5 pb-4 flex flex-wrap gap-2 items-center" style="border-top:1px solid var(--border-subtle); padding-top:12px">
+      <form method="post" action="/setup/account/{{ acc.id }}/name" class="flex items-center gap-1.5">
+        <input type="text" name="display_name" value="{{ acc.display_name or '' }}" placeholder="Nome conto" class="input text-sm" style="width:150px; height:36px; padding-top:0; padding-bottom:0">
+        <button type="submit" class="btn-ghost" style="height:36px">Rinomina</button>
+      </form>
+      <form method="post" action="/setup/account/{{ acc.id }}/type" class="flex items-center gap-1.5">
+        <select name="type" class="input text-sm" style="height:36px; padding-top:0; padding-bottom:0">
+          <option value="checking" {% if acc.type == 'checking' %}selected{% endif %}>💳 Corrente</option>
+          <option value="savings" {% if acc.type == 'savings' %}selected{% endif %}>🏦 Risparmio</option>
+          <option value="investment" {% if acc.type == 'investment' %}selected{% endif %}>📈 Investimento</option>
+        </select>
+        <button type="submit" class="btn-ghost" style="height:36px">Salva tipo</button>
+      </form>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+<!-- Connect new bank -->
+<p class="text-xs font-medium uppercase tracking-wider mb-3" style="color:var(--text-muted)">Connetti una banca</p>
+<div class="card mb-4">
+  <form method="post" action="/setup/connect" class="flex gap-2">
+    <select name="bank" class="input flex-1 text-sm">
+      {% for b in supported_banks %}
+      <option value="{{ b.name }}">{{ b.display_name }}</option>
+      {% endfor %}
+    </select>
+    <button type="submit" class="btn-primary">Connetti →</button>
+  </form>
+  <p class="text-xs mt-3" style="color:var(--text-dim)">
+    Verrai reindirizzato alla pagina di autorizzazione della banca via PSD2/Open Banking.
+    Le credenziali bancarie non transitano mai per questa app.
+  </p>
+</div>
+
+<!-- Utility actions -->
+<div class="flex justify-end gap-2">
+  <form method="post" action="/setup/reparse">
+    <button type="submit" class="btn-ghost" style="color:var(--text-dim)">
+      Re-analizza transazioni →
+    </button>
+  </form>
+  <form method="post" action="/sync">
+    <button type="submit" class="btn-ghost" style="color:var(--text-dim)">
+      Forza sync completo →
+    </button>
+  </form>
+</div>
+
+{% endblock %}

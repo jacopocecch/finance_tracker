@@ -1,0 +1,207 @@
+{% extends "base.html" %}
+{% block title %}Transazioni — Ledger{% endblock %}
+{% block content %}
+
+<script>
+function txRow(el) {
+  const s = JSON.parse(el.dataset.state);
+  return {
+    editing: false, editShare: false, editMerchant: false,
+    isMapped: s.isMapped,
+    catColor: s.catColor, catName: s.catName, catIcon: s.catIcon, catTextColor: s.catTextColor,
+    txId: s.txId,
+    async saveCategory(catId) {
+      const fd = new FormData(); fd.append('category_id', catId);
+      const r = await fetch('/transactions/' + this.txId + '/category', {method:'POST', body:fd, headers:{'X-Fetch':'1'}});
+      const d = await r.json();
+      this.catColor = d.color; this.catName = d.name; this.catIcon = d.icon; this.catTextColor = d.text_color;
+      this.editing = false;
+    },
+    async saveMerchant(catId) {
+      const fd = new FormData(); fd.append('category_id', catId);
+      const r = await fetch('/transactions/' + this.txId + '/merchant-category', {method:'POST', body:fd, headers:{'X-Fetch':'1'}});
+      const d = await r.json();
+      this.catColor = d.color; this.catName = d.name; this.catIcon = d.icon; this.catTextColor = d.text_color;
+      this.isMapped = true; this.editMerchant = false;
+    }
+  };
+}
+</script>
+
+<!-- Header + count -->
+<div class="flex items-center justify-between mb-6">
+  <h1 class="text-xl font-semibold" style="color:var(--text)">Transazioni</h1>
+  <span class="num text-sm" style="color:var(--text-muted)">{{ total }} risultati</span>
+</div>
+
+<!-- Type quick-filter buttons -->
+<div class="flex gap-2 mb-3">
+  <a href="/transactions?type=income{% if selected_cat %}&cat={{ selected_cat }}{% endif %}{% if selected_account %}&account={{ selected_account }}{% endif %}{% if date_from %}&from={{ date_from }}{% endif %}{% if date_to %}&to={{ date_to }}{% endif %}"
+     class="btn-ghost text-sm px-4 font-medium flex items-center"
+     style="border-radius:8px; height:38px; {% if selected_type == 'income' %}background:rgba(5,150,105,0.1);color:var(--emerald);border-color:rgba(5,150,105,0.3){% else %}color:var(--emerald);border-color:rgba(5,150,105,0.2){% endif %}">
+    ↑ Entrate
+  </a>
+  <a href="/transactions?type=expense{% if selected_cat %}&cat={{ selected_cat }}{% endif %}{% if selected_account %}&account={{ selected_account }}{% endif %}{% if date_from %}&from={{ date_from }}{% endif %}{% if date_to %}&to={{ date_to }}{% endif %}"
+     class="btn-ghost text-sm px-4 font-medium flex items-center"
+     style="border-radius:8px; height:38px; {% if selected_type == 'expense' %}background:rgba(225,29,72,0.1);color:var(--rose);border-color:rgba(225,29,72,0.3){% else %}color:var(--rose);border-color:rgba(225,29,72,0.2){% endif %}">
+    ↓ Uscite
+  </a>
+</div>
+
+<!-- Filters -->
+<div class="card mb-5">
+  <form method="get" action="/transactions" class="flex gap-3 items-end flex-wrap">
+    <input type="hidden" name="type" value="{{ selected_type }}">
+    <div class="w-full">
+      <label class="text-xs mb-1.5 block font-medium" style="color:var(--text-muted)">Cerca</label>
+      <input type="text" name="search" value="{{ search }}" placeholder="Descrizione o esercente…" class="input w-full" style="height:38px">
+    </div>
+    <div class="flex-1 min-w-36">
+      <label class="text-xs mb-1.5 block font-medium" style="color:var(--text-muted)">Categoria</label>
+      <select name="cat" class="input w-full" style="height:38px">
+        <option value="">Tutte</option>
+        {% for cat in categories %}
+        <option value="{{ cat.id }}" {% if selected_cat == cat.id|string %}selected{% endif %}>
+          {{ cat.icon }} {{ cat.name }}
+        </option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="flex-1 min-w-36">
+      <label class="text-xs mb-1.5 block font-medium" style="color:var(--text-muted)">Conto</label>
+      <select name="account" class="input w-full" style="height:38px">
+        <option value="">Tutti</option>
+        {% for acc in accounts %}
+        <option value="{{ acc.id }}" {% if selected_account == acc.id|string %}selected{% endif %}>
+          {{ acc.display_name or (acc.bank_name ~ ' / ' ~ acc.name) }}
+        </option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label class="text-xs mb-1.5 block font-medium" style="color:var(--text-muted)">Da</label>
+      <input type="date" name="from" value="{{ date_from or '' }}" class="input" style="height:38px">
+    </div>
+    <div>
+      <label class="text-xs mb-1.5 block font-medium" style="color:var(--text-muted)">A</label>
+      <input type="date" name="to" value="{{ date_to or '' }}" class="input" style="height:38px">
+    </div>
+    <div class="flex gap-2">
+      <button type="submit" class="btn-primary text-sm px-4" style="height:38px">Filtra</button>
+      <a href="/transactions" class="btn-ghost text-sm px-4 flex items-center" style="border-radius:8px;height:38px">Reset</a>
+    </div>
+  </form>
+</div>
+
+<!-- Table -->
+<div class="card" style="padding:0">
+  <table class="w-full text-sm">
+    <thead>
+      <tr class="text-xs uppercase tracking-wide" style="color:var(--text-dim); border-bottom:1px solid var(--border)">
+        <th class="text-left px-5 py-3 font-medium">Data</th>
+        <th class="text-left px-5 py-3 font-medium">Descrizione</th>
+        <th class="text-left px-3 py-3 font-medium">Categoria</th>
+        <th class="px-3 py-3"></th>
+        <th class="text-left px-3 py-3 font-medium">Conto</th>
+        <th class="text-right px-5 py-3 font-medium">Importo</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for tx in transactions %}
+    {% set cat_color = tx.category.color if tx.category else '#6b6b88' %}
+    {% set is_mapped = tx.merchant and tx.merchant.lower() in mapped_merchants %}
+    {% set _state = {'isMapped': true if is_mapped else false, 'catColor': cat_color, 'catName': tx.category.name if tx.category else 'Altro', 'catIcon': tx.category.icon if tx.category else '❓', 'catTextColor': cat_color | tag_text_color, 'txId': tx.id} %}
+    <tr class="group" x-data="txRow($el)" data-state='{{ _state | tojson | replace("'", "&#39;") }}' style="border-bottom:1px solid var(--border-subtle)" onmouseover="this.style.background='rgba(255,255,255,0.02)'" onmouseout="this.style.background=''">
+      <td class="num px-5 py-3.5 text-xs" style="color:var(--text-muted); white-space:nowrap">{{ tx.date.strftime('%d %b %Y') }}</td>
+      <td class="px-5 py-3.5 max-w-xs">
+        <p class="truncate" style="color:var(--text)">{{ tx.merchant or tx.description or '—' }}</p>
+        {% if tx.merchant and tx.description %}
+        <p class="text-xs truncate mt-0.5" style="color:var(--text-dim)">{{ tx.description }}</p>
+        {% endif %}
+      </td>
+      <!-- Category cell -->
+      <td class="px-3 py-3.5">
+        <template x-if="!editing">
+          <span class="tag cursor-pointer" @click="editing = true"
+            :style="`background:${catColor};color:${catTextColor};border:none`"
+            x-text="catIcon + ' ' + catName"></span>
+        </template>
+        <template x-if="editing">
+          <select class="input text-xs" style="padding:4px 8px" @change="saveCategory($event.target.value)" @blur="editing=false">
+            {% for cat in categories %}
+            <option value="{{ cat.id }}" {% if tx.category_id == cat.id %}selected{% endif %}>{{ cat.icon }} {{ cat.name }}</option>
+            {% endfor %}
+          </select>
+        </template>
+      </td>
+      <!-- Associa cell -->
+      <td class="px-3 py-3.5" style="white-space:nowrap">
+        {% if tx.merchant %}
+        <div class="relative inline-block">
+          <button @click="editMerchant = !editMerchant" class="tag"
+            :style="isMapped ? 'font-size:10px;padding:2px 8px;cursor:pointer;background:rgba(5,150,105,0.15);border:1px solid rgba(5,150,105,0.35);color:var(--emerald)' : 'font-size:10px;padding:2px 8px;cursor:pointer;background:var(--surface-2);border:1px solid var(--border);color:var(--text-dim)'"
+            x-text="isMapped ? '✓ associa' : '⊕ associa'"></button>
+          <div x-show="editMerchant" x-transition @click.outside="editMerchant = false"
+               class="absolute z-50 card"
+               style="top:calc(100% + 6px);right:0;width:220px;padding:12px;box-shadow:0 8px 24px rgba(0,0,0,0.12);box-sizing:border-box;white-space:normal">
+            <p class="text-xs font-medium mb-2 truncate" style="color:var(--text-muted)">{{ tx.merchant }}</p>
+            <select class="input text-xs mb-2" style="height:32px;width:100%;box-sizing:border-box" x-ref="merchantCat">
+              {% for cat in categories %}
+              <option value="{{ cat.id }}" {% if tx.category_id == cat.id %}selected{% endif %}>{{ cat.icon }} {{ cat.name }}</option>
+              {% endfor %}
+            </select>
+            <button @click="saveMerchant($refs.merchantCat.value)" class="btn-primary text-xs" style="height:30px;width:100%;box-sizing:border-box;display:flex;align-items:center;justify-content:center">Salva associazione</button>
+          </div>
+        </div>
+        {% endif %}
+      </td>
+      <td class="px-3 py-3.5 text-xs" style="color:var(--text-muted)">{{ (tx.account.display_name or tx.account.bank_name) if tx.account else '—' }}</td>
+      <td class="num px-5 py-3.5 text-right font-medium" style="white-space:nowrap">
+        {% if tx.amount < 0 %}
+        <div>
+          <span @click="editShare = !editShare" style="color:var(--rose);cursor:pointer" title="Clicca per modificare quota personale">{{ "{:+,.2f}".format(tx.amount) }} €</span>
+          {% if tx.personal_share is not none %}
+          <span class="tag ml-1" style="background:rgba(3,105,161,0.1);color:var(--sky);border:1px solid rgba(3,105,161,0.2);font-size:10px" title="Quota personale">{{ "{:.2f}".format(tx.personal_share) }} €</span>
+          {% endif %}
+        </div>
+        <template x-if="editShare">
+          <form method="post" action="/transactions/{{ tx.id }}/share" class="mt-1 flex gap-1 justify-end">
+            <input type="hidden" name="redirect_to" value="{{ request.url }}">
+            <input type="number" name="personal_share" value="{{ tx.personal_share or '' }}" placeholder="quota €" step="0.01" min="0" class="input text-xs" style="width:90px;padding:3px 6px;height:28px">
+            <button type="submit" class="btn-primary text-xs" style="padding:3px 8px;height:28px">✓</button>
+          </form>
+        </template>
+        {% else %}
+        <span style="color:var(--emerald)">{{ "{:+,.2f}".format(tx.amount) }} €</span>
+        {% endif %}
+      </td>
+    </tr>
+    {% else %}
+    <tr>
+      <td colspan="6" class="px-5 py-14 text-center text-sm" style="color:var(--text-dim)">
+        Nessuna transazione trovata
+      </td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+
+  <!-- Pagination -->
+  {% if total > page_size %}
+  <div class="flex items-center justify-between px-5 py-4" style="border-top:1px solid var(--border)">
+    <span class="num text-xs" style="color:var(--text-muted)">
+      {{ (page-1)*page_size + 1 }}–{{ [page*page_size, total] | min }} di {{ total }}
+    </span>
+    <div class="flex items-center gap-2">
+      {% if page > 1 %}
+      <a href="?{{ query_string }}&page={{ page - 1 }}" class="btn-ghost text-xs px-3 py-1.5" style="border-radius:6px">← Prec</a>
+      {% endif %}
+      <span class="num text-xs px-3 py-1.5" style="color:var(--text-muted)">{{ page }} / {{ (total // page_size) + (1 if total % page_size else 0) }}</span>
+      {% if page * page_size < total %}
+      <a href="?{{ query_string }}&page={{ page + 1 }}" class="btn-ghost text-xs px-3 py-1.5" style="border-radius:6px">Succ →</a>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

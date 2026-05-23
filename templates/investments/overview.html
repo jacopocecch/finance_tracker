@@ -1,0 +1,209 @@
+{% extends "base.html" %}
+{% block title %}Investimenti — Ledger{% endblock %}
+{% block content %}
+
+<!-- Header -->
+<div class="flex items-center justify-between mb-7">
+  <div>
+    <h1 class="text-xl font-semibold" style="color:var(--text)">Investimenti</h1>
+    <p class="text-xs mt-0.5" style="color:var(--text-dim)">
+      {% if summary.last_updated %}
+        Aggiornato {{ summary.last_updated.strftime('%d/%m/%Y %H:%M') }} UTC
+        {% if summary.has_stale_quotes %}<span class="ml-1 px-1.5 py-0.5 rounded text-xs" style="background:rgba(245,158,11,0.1);color:#d97706;border:1px solid rgba(245,158,11,0.2)">stale</span>{% endif %}
+      {% else %}
+        Nessuna quotazione disponibile
+      {% endif %}
+    </p>
+  </div>
+  <div class="flex items-center gap-2">
+    <a href="/investments/pac" class="btn-ghost">PAC</a>
+    <form method="post" action="/investments/quotes/refresh">
+      <button type="submit" class="btn-ghost">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+        </svg>
+        Aggiorna quotazioni
+      </button>
+    </form>
+    <a href="/investments/transactions/add" class="btn-primary">+ Acquisto</a>
+  </div>
+</div>
+
+{% if summary.n_instruments == 0 %}
+<!-- Empty state -->
+<div class="card py-20 text-center">
+  <p class="text-sm mb-1" style="color:var(--text-muted)">Nessun investimento registrato.</p>
+  <p class="text-xs mb-5" style="color:var(--text-dim)">Aggiungi il tuo primo acquisto ETF.</p>
+  <a href="/investments/transactions/add" class="btn-primary inline-flex">+ Aggiungi acquisto</a>
+</div>
+{% else %}
+
+<!-- KPI strip -->
+<div class="grid grid-cols-2 gap-3 mb-6" style="grid-template-columns: repeat(4, 1fr)">
+  <div class="card">
+    <p class="text-xs mb-2" style="color:var(--text-muted)">Investito</p>
+    <p class="num text-xl font-medium" style="color:var(--text)">€{{ "{:,.2f}".format(summary.total_invested) }}</p>
+  </div>
+  <div class="card">
+    <p class="text-xs mb-2" style="color:var(--text-muted)">Valore attuale</p>
+    {% if summary.total_market_value is not none %}
+    <p class="num text-xl font-medium" style="color:var(--text)">€{{ "{:,.2f}".format(summary.total_market_value) }}</p>
+    {% else %}
+    <p class="num text-xl font-medium" style="color:var(--text-dim)">—</p>
+    {% endif %}
+  </div>
+  <div class="card">
+    <p class="text-xs mb-2" style="color:var(--text-muted)">P/L</p>
+    {% if summary.total_unrealized_pl is not none %}
+    <p class="num text-xl font-medium" style="color:{% if summary.total_unrealized_pl >= 0 %}var(--emerald){% else %}var(--rose){% endif %}">
+      {{ "€{:+,.2f}".format(summary.total_unrealized_pl) }}
+    </p>
+    {% else %}
+    <p class="num text-xl font-medium" style="color:var(--text-dim)">—</p>
+    {% endif %}
+  </div>
+  <div class="card">
+    <p class="text-xs mb-2" style="color:var(--text-muted)">P/L %</p>
+    {% if summary.total_unrealized_pl_pct is not none %}
+    <p class="num text-xl font-medium" style="color:{% if summary.total_unrealized_pl_pct >= 0 %}var(--emerald){% else %}var(--rose){% endif %}">
+      {{ "{:+.2f}%".format(summary.total_unrealized_pl_pct) }}
+    </p>
+    {% else %}
+    <p class="num text-xl font-medium" style="color:var(--text-dim)">—</p>
+    {% endif %}
+  </div>
+</div>
+
+<div class="grid gap-5 mb-6" style="grid-template-columns: 1fr 300px">
+
+  <!-- Positions table -->
+  <div class="card" style="padding:0">
+    <div class="px-5 py-4" style="border-bottom:1px solid var(--border)">
+      <p class="text-xs font-medium uppercase tracking-wider" style="color:var(--text-muted)">Posizioni</p>
+    </div>
+    <table class="w-full text-sm">
+      <thead>
+        <tr class="text-xs uppercase tracking-wide" style="color:var(--text-dim); border-bottom:1px solid var(--border-subtle)">
+          <th class="text-left px-5 py-3 font-medium">Strumento</th>
+          <th class="text-right px-4 py-3 font-medium">Qtà</th>
+          <th class="text-right px-4 py-3 font-medium">PMC</th>
+          <th class="text-right px-4 py-3 font-medium">Prezzo</th>
+          <th class="text-right px-4 py-3 font-medium">Valore</th>
+          <th class="text-right px-5 py-3 font-medium">P/L</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for pos in summary.positions %}
+      <tr style="border-bottom:1px solid var(--border-subtle)" onmouseover="this.style.background='rgba(0,0,0,0.015)'" onmouseout="this.style.background=''">
+        <td class="px-5 py-3.5">
+          <a href="/investments/instruments/{{ pos.instrument_id }}" style="color:var(--text)">
+            <p class="font-medium text-sm">{{ pos.name }}</p>
+            <p class="text-xs mt-0.5" style="color:var(--text-dim)">{{ pos.ticker }} · {{ pos.isin }}</p>
+          </a>
+        </td>
+        <td class="num px-4 py-3.5 text-right text-sm" style="color:var(--text-muted)">{{ pos.total_quantity }}</td>
+        <td class="num px-4 py-3.5 text-right text-sm" style="color:var(--text-muted)">€{{ "{:,.2f}".format(pos.average_cost_basis) }}</td>
+        <td class="num px-4 py-3.5 text-right text-sm" style="color:var(--text)">
+          {% if pos.last_price is not none %}
+            {{ "€{:,.2f}".format(pos.last_price) }}
+            {% if pos.is_stale %}<span style="color:var(--text-dim)">*</span>{% endif %}
+          {% else %}—{% endif %}
+        </td>
+        <td class="num px-4 py-3.5 text-right text-sm font-medium" style="color:var(--text)">
+          {% if pos.market_value is not none %}€{{ "{:,.2f}".format(pos.market_value) }}{% else %}—{% endif %}
+        </td>
+        <td class="num px-5 py-3.5 text-right text-sm font-medium" style="color:{% if pos.unrealized_pl is not none and pos.unrealized_pl >= 0 %}var(--emerald){% elif pos.unrealized_pl is not none %}var(--rose){% else %}var(--text-dim){% endif %}">
+          {% if pos.unrealized_pl is not none %}
+            {{ "€{:+,.2f}".format(pos.unrealized_pl) }}<br>
+            <span class="text-xs">{{ "{:+.2f}%".format(pos.unrealized_pl_pct) }}</span>
+          {% else %}—{% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Allocation chart -->
+  <div class="card">
+    <p class="text-xs font-medium uppercase tracking-wider mb-4" style="color:var(--text-muted)">Allocazione</p>
+    <canvas id="allocChart"></canvas>
+  </div>
+</div>
+
+<!-- PAC section -->
+{% if summary.pac_positions %}
+<div class="card" style="padding:0">
+  <div class="px-5 py-4" style="border-bottom:1px solid var(--border)">
+    <div class="flex items-center justify-between">
+      <p class="text-xs font-medium uppercase tracking-wider" style="color:var(--text-muted)">PAC</p>
+      <a href="/investments/pac" class="text-xs" style="color:var(--sky)">Vedi tutti →</a>
+    </div>
+  </div>
+  <table class="w-full text-sm">
+    <thead>
+      <tr class="text-xs uppercase tracking-wide" style="color:var(--text-dim); border-bottom:1px solid var(--border-subtle)">
+        <th class="text-left px-5 py-3 font-medium">PAC</th>
+        <th class="text-right px-4 py-3 font-medium">Investito</th>
+        <th class="text-right px-4 py-3 font-medium">Valore</th>
+        <th class="text-right px-5 py-3 font-medium">P/L</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for pp in summary.pac_positions %}
+    <tr style="border-bottom:1px solid var(--border-subtle)">
+      <td class="px-5 py-3.5 font-medium text-sm" style="color:var(--text)">{{ pp.pac_name }}</td>
+      <td class="num px-4 py-3.5 text-right text-sm" style="color:var(--text-muted)">€{{ "{:,.2f}".format(pp.total_invested) }}</td>
+      <td class="num px-4 py-3.5 text-right text-sm" style="color:var(--text)">
+        {% if pp.market_value is not none %}€{{ "{:,.2f}".format(pp.market_value) }}{% else %}—{% endif %}
+      </td>
+      <td class="num px-5 py-3.5 text-right text-sm font-medium" style="color:{% if pp.unrealized_pl is not none and pp.unrealized_pl >= 0 %}var(--emerald){% elif pp.unrealized_pl is not none %}var(--rose){% else %}var(--text-dim){% endif %}">
+        {% if pp.unrealized_pl is not none %}{{ "€{:+,.2f}".format(pp.unrealized_pl) }} / {{ "{:+.2f}%".format(pp.unrealized_pl_pct) }}{% else %}—{% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+<script>
+(function() {
+  const labels = {{ chart_labels | tojson }};
+  const invested = {{ chart_invested | tojson }};
+  const market = {{ chart_market | tojson }};
+  const colors = ['#059669','#0369a1','#7c3aed','#d97706','#e11d48','#0891b2','#65a30d','#9333ea'];
+
+  new Chart(document.getElementById('allocChart'), {
+    type: 'doughnut',
+    data: {
+      labels,
+      datasets: [{
+        data: market,
+        backgroundColor: colors.map(c => c + '22'),
+        borderColor: colors,
+        borderWidth: 1.5,
+        hoverOffset: 4,
+      }]
+    },
+    options: {
+      responsive: true,
+      cutout: '65%',
+      plugins: {
+        legend: {
+          position: 'bottom',
+          labels: { boxWidth: 10, padding: 12, font: { size: 10 } }
+        },
+        tooltip: {
+          callbacks: {
+            label: ctx => `  €${ctx.parsed.toLocaleString('it-IT', {minimumFractionDigits:2})}`
+          }
+        }
+      }
+    }
+  });
+})();
+</script>
+
+{% endif %}
+{% endblock %}

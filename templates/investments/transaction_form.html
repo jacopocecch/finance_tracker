@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+{% block title %}{{ title }} — Ledger{% endblock %}
+{% block content %}
+
+<div class="mb-6">
+  <a href="/investments" class="text-xs btn-ghost inline-flex mb-4" style="color:var(--text-muted)">← Investimenti</a>
+  <h1 class="text-xl font-semibold" style="color:var(--text)">{{ title }}</h1>
+</div>
+
+<div class="card" style="max-width:680px" x-data="{ newInstrument: {{ 'false' if transaction else 'false' }} }">
+  <form method="post" action="{% if transaction %}/investments/transactions/{{ transaction.id }}/edit{% else %}/investments/transactions/add{% endif %}">
+
+    <!-- Instrument selector -->
+    {% if not transaction %}
+    <div class="mb-5">
+      <label class="text-xs font-medium mb-1.5 block" style="color:var(--text-muted)">Strumento *</label>
+      <select name="instrument_id" class="input w-full" @change="newInstrument = ($event.target.value === 'new')">
+        <option value="">— Seleziona —</option>
+        {% for inst in instruments %}
+        <option value="{{ inst.id }}">{{ inst.name }} ({{ inst.ticker }}) — {{ inst.isin }}</option>
+        {% endfor %}
+        <option value="new">+ Nuovo strumento…</option>
+      </select>
+    </div>
+
+    <!-- New instrument fields -->
+    <div x-show="newInstrument" class="mb-5 p-4 rounded-lg" style="background:var(--surface-2);border:1px solid var(--border)">
+      <p class="text-xs font-medium uppercase tracking-wider mb-4" style="color:var(--text-muted)">Nuovo strumento</p>
+      <div class="grid gap-3" style="grid-template-columns:1fr 1fr">
+        <div>
+          <label class="text-xs font-medium mb-1 block" style="color:var(--text-muted)">Nome *</label>
+          <input type="text" name="new_name" placeholder="Vanguard FTSE All-World" class="input w-full">
+        </div>
+        <div>
+          <label class="text-xs font-medium mb-1 block" style="color:var(--text-muted)">ISIN *</label>
+          <input type="text" name="new_isin" placeholder="IE00B3RBWM25" class="input w-full" style="text-transform:uppercase">
+        </div>
+        <div>
+          <label class="text-xs font-medium mb-1 block" style="color:var(--text-muted)">Ticker yfinance *
+            <span class="font-normal normal-case" style="color:var(--text-dim)">es. VWCE.MI</span>
+          </label>
+          <input type="text" name="new_ticker" placeholder="VWCE.MI" class="input w-full">
+        </div>
+        <div>
+          <label class="text-xs font-medium mb-1 block" style="color:var(--text-muted)">Exchange</label>
+          <input type="text" name="new_exchange" placeholder="Borsa Italiana" class="input w-full">
+        </div>
+        <div>
+          <label class="text-xs font-medium mb-1 block" style="color:var(--text-muted)">Valuta quotazione</label>
+          <input type="text" name="new_currency" value="EUR" class="input w-full" style="text-transform:uppercase">
+        </div>
+      </div>
+    </div>
+    {% else %}
+    <!-- In edit mode: instrument is fixed -->
+    <div class="mb-5 px-4 py-3 rounded-lg" style="background:var(--surface-2);border:1px solid var(--border)">
+      <p class="text-xs" style="color:var(--text-muted)">Strumento (non modificabile)</p>
+      <p class="text-sm font-medium mt-0.5" style="color:var(--text)">
+        {% set inst = instruments | selectattr('id', 'equalto', transaction.instrument_id) | first %}
+        {{ inst.name if inst else transaction.instrument_id }} — {{ inst.ticker if inst else '' }}
+      </p>
+    </div>
+    {% endif %}
+
+    <!-- Transaction fields -->
+    <div class="grid gap-4 mb-5" style="grid-template-columns:1fr 1fr 1fr">
+      <div>
+        <label class="text-xs font-medium mb-1.5 block" style="color:var(--text-muted)">Tipo</label>
+        <select name="transaction_type" class="input w-full">
+          <option value="BUY" {% if not transaction or transaction.transaction_type == 'BUY' %}selected{% endif %}>BUY</option>
+          <option value="SELL" {% if transaction and transaction.transaction_type == 'SELL' %}selected{% endif %}>SELL</option>
+        </select>
+      </div>
+      <div>
+        <label class="text-xs font-medium mb-1.5 block" style="color:var(--text-muted)">Data *</label>
+        <input type="date" name="trade_date" value="{{ transaction.trade_date.isoformat() if transaction else today }}" class="input w-full" required>
+      </div>
+      <div>
+        <label class="text-xs font-medium mb-1.5 block" style="color:var(--text-muted)">Broker</label>
+        <input type="text" name="broker_name" value="{{ transaction.broker_name if transaction else 'Fineco' }}" class="input w-full">
+      </div>
+    </div>
+
+    <div class="grid gap-4 mb-5" style="grid-template-columns:1fr 1fr 1fr 1fr">
+      <div>
+        <label class="text-xs font-medium mb-1.5 block" style="color:var(--text-muted)">Quantità *</label>
+        <input type="number" name="quantity" step="0.000001" min="0.000001" value="{{ transaction.quantity if transaction else '' }}" class="input w-full" required>
+      </div>
+      <div>
+        <label class="text-xs font-medium mb-1.5 block" style="color:var(--text-muted)">Prezzo unitario *</label>
+        <input type="number" name="unit_price" step="0.0001" min="0.0001" value="{{ transaction.unit_price if transaction else '' }}" class="input w-full" required>
+      </div>
+      <div>
+        <label class="text-xs font-medium mb-1.5 block" style="color:var(--text-muted)">Commissioni</label>
+        <input type="number" name="fees" step="0.01" min="0" value="{{ transaction.fees if transaction else '0' }}" class="input w-full">
+      </div>
+      <div>
+        <label class="text-xs font-medium mb-1.5 block" style="color:var(--text-muted)">Valuta</label>
+        <input type="text" name="currency" value="{{ transaction.currency if transaction else 'EUR' }}" class="input w-full" style="text-transform:uppercase">
+      </div>
+    </div>
+
+    <!-- PAC -->
+    <div class="mb-5">
+      <label class="text-xs font-medium mb-1.5 block" style="color:var(--text-muted)">PAC (opzionale)</label>
+      <select name="pac_id" class="input w-full">
+        <option value="">— Nessun PAC —</option>
+        {% for pac in pacs %}
+        <option value="{{ pac.id }}" {% if transaction and transaction.pac_id == pac.id %}selected{% endif %}>{{ pac.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <!-- Notes -->
+    <div class="mb-6">
+      <label class="text-xs font-medium mb-1.5 block" style="color:var(--text-muted)">Note</label>
+      <input type="text" name="notes" value="{{ transaction.notes or '' if transaction else '' }}" placeholder="Opzionale" class="input w-full">
+    </div>
+
+    <div class="flex gap-2">
+      <button type="submit" class="btn-primary">Salva</button>
+      <a href="/investments" class="btn-ghost">Annulla</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

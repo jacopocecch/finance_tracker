@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}{{ title }} — Ledger{% endblock %}
+{% block content %}
+
+<div class="mb-6">
+  <a href="/investments/instruments" class="btn-ghost inline-flex mb-4">← Strumenti</a>
+  <h1 class="text-xl font-semibold" style="color:var(--text)">{{ title }}</h1>
+</div>
+
+<div class="card" style="max-width:560px">
+  <form method="post" action="{% if instrument %}/investments/instruments/{{ instrument.id }}/edit{% else %}/investments/instruments/add{% endif %}">
+    <div class="grid gap-4 mb-5" style="grid-template-columns:1fr 1fr">
+      <div class="col-span-2">
+        <label class="text-xs font-medium mb-1.5 block" style="color:var(--text-muted)">Nome *</label>
+        <input type="text" name="name" value="{{ instrument.name if instrument else '' }}" placeholder="Vanguard FTSE All-World UCITS ETF" class="input w-full" required>
+      </div>
+      <div>
+        <label class="text-xs font-medium mb-1.5 block" style="color:var(--text-muted)">ISIN *</label>
+        <input type="text" name="isin" value="{{ instrument.isin if instrument else '' }}" placeholder="IE00B3RBWM25" class="input w-full" style="text-transform:uppercase" {% if instrument %}readonly{% else %}required{% endif %}>
+        {% if instrument %}<p class="text-xs mt-1" style="color:var(--text-dim)">ISIN non modificabile</p>{% endif %}
+      </div>
+      <div>
+        <label class="text-xs font-medium mb-1.5 block" style="color:var(--text-muted)">Tipo</label>
+        <select name="type" class="input w-full">
+          <option value="ETF" {% if not instrument or instrument.type == 'ETF' %}selected{% endif %}>ETF</option>
+          <option value="ETC" {% if instrument and instrument.type == 'ETC' %}selected{% endif %}>ETC</option>
+          <option value="Fondo" {% if instrument and instrument.type == 'Fondo' %}selected{% endif %}>Fondo</option>
+        </select>
+      </div>
+      <div>
+        <label class="text-xs font-medium mb-1.5 block" style="color:var(--text-muted)">
+          Ticker yfinance *
+          <span class="font-normal normal-case" style="color:var(--text-dim)">es. VWCE.MI, IWDA.AS</span>
+        </label>
+        <input type="text" name="ticker" value="{{ instrument.ticker if instrument else '' }}" placeholder="VWCE.MI" class="input w-full" required>
+      </div>
+      <div>
+        <label class="text-xs font-medium mb-1.5 block" style="color:var(--text-muted)">Exchange</label>
+        <input type="text" name="exchange" value="{{ instrument.exchange if instrument else '' }}" placeholder="Borsa Italiana" class="input w-full">
+      </div>
+      <div>
+        <label class="text-xs font-medium mb-1.5 block" style="color:var(--text-muted)">Valuta quotazione</label>
+        <input type="text" name="currency" value="{{ instrument.currency if instrument else 'EUR' }}" class="input w-full" style="text-transform:uppercase">
+      </div>
+    </div>
+
+    <div class="flex gap-2">
+      <button type="submit" class="btn-primary">Salva</button>
+      <a href="{% if instrument %}/investments/instruments/{{ instrument.id }}{% else %}/investments/instruments{% endif %}" class="btn-ghost">Annulla</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

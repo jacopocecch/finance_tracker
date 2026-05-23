@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}{{ title }} — Ledger{% endblock %}
+{% block content %}
+
+<div class="mb-6">
+  <a href="/investments/pac" class="btn-ghost inline-flex mb-4">← PAC</a>
+  <h1 class="text-xl font-semibold" style="color:var(--text)">{{ title }}</h1>
+</div>
+
+<div class="card" style="max-width:560px" x-data="{ components: [{ id: '', weight: '' }] }">
+  <form method="post" action="/investments/pac/add">
+    <div class="mb-5">
+      <label class="text-xs font-medium mb-1.5 block" style="color:var(--text-muted)">Nome PAC *</label>
+      <input type="text" name="name" placeholder="es. PAC Mensile Globale" class="input w-full" required>
+    </div>
+    <div class="mb-5">
+      <label class="text-xs font-medium mb-1.5 block" style="color:var(--text-muted)">Descrizione</label>
+      <input type="text" name="description" placeholder="Opzionale" class="input w-full">
+    </div>
+
+    <!-- Components -->
+    <div class="mb-5">
+      <label class="text-xs font-medium mb-3 block" style="color:var(--text-muted)">Strumenti inclusi</label>
+      <div class="grid text-xs mb-1" style="grid-template-columns:1fr 90px 28px;gap:8px;color:var(--text-dim)">
+        <span>Strumento</span><span>Qtà predefinita</span><span></span>
+      </div>
+      <template x-for="(comp, idx) in components" :key="idx">
+        <div class="flex gap-2 mb-2 items-center">
+          <select name="instrument_ids" class="input flex-1" style="height:38px">
+            <option value="">— Strumento —</option>
+            {% for inst in instruments %}
+            <option value="{{ inst.id }}">{{ inst.ticker }} — {{ inst.name }}</option>
+            {% endfor %}
+          </select>
+          <input type="number" name="target_weights" placeholder="Qtà" step="1" min="0" class="input" style="width:90px;height:38px" x-model="comp.weight">
+          <button type="button" @click="components.splice(idx,1)" class="btn-ghost" style="height:38px;padding:0 10px;color:var(--rose)">✕</button>
+        </div>
+      </template>
+      <button type="button" @click="components.push({id:'',weight:''})" class="btn-ghost mt-1">+ Strumento</button>
+    </div>
+
+    <div class="flex gap-2">
+      <button type="submit" class="btn-primary">Crea PAC</button>
+      <a href="/investments/pac" class="btn-ghost">Annulla</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

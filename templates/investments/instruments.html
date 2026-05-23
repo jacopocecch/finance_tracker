@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}Strumenti — Ledger{% endblock %}
+{% block content %}
+
+<div class="flex items-center justify-between mb-6">
+  <h1 class="text-xl font-semibold" style="color:var(--text)">Strumenti</h1>
+  <a href="/investments/instruments/add" class="btn-primary">+ Strumento</a>
+</div>
+
+<div class="card" style="padding:0">
+  <table class="w-full text-sm">
+    <thead>
+      <tr class="text-xs uppercase tracking-wide" style="color:var(--text-dim); border-bottom:1px solid var(--border)">
+        <th class="text-left px-5 py-3 font-medium">Nome</th>
+        <th class="text-left px-4 py-3 font-medium">ISIN</th>
+        <th class="text-left px-4 py-3 font-medium">Ticker</th>
+        <th class="text-right px-4 py-3 font-medium">Qtà totale</th>
+        <th class="text-right px-4 py-3 font-medium">Investito</th>
+        <th class="text-right px-4 py-3 font-medium">Ultimo prezzo</th>
+        <th class="px-3 py-3"></th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for row in instruments %}
+    {% set inst = row.inst %}
+    {% set quote = row.quote %}
+    <tr style="border-bottom:1px solid var(--border-subtle)" onmouseover="this.style.background='rgba(0,0,0,0.015)'" onmouseout="this.style.background=''">
+      <td class="px-5 py-3.5">
+        <a href="/investments/instruments/{{ inst.id }}" class="font-medium" style="color:var(--text)">{{ inst.name }}</a>
+        <p class="text-xs" style="color:var(--text-dim)">{{ inst.type }} · {{ inst.exchange }}</p>
+      </td>
+      <td class="num px-4 py-3.5 text-xs" style="color:var(--text-muted)">{{ inst.isin }}</td>
+      <td class="num px-4 py-3.5 text-xs" style="color:var(--text-muted)">{{ inst.ticker }}</td>
+      <td class="num px-4 py-3.5 text-right text-sm" style="color:var(--text)">{{ row.total_qty }}</td>
+      <td class="num px-4 py-3.5 text-right text-sm" style="color:var(--text)">{{ "{:,.2f}".format(row.total_invested) }} {{ inst.currency }}</td>
+      <td class="num px-4 py-3.5 text-right text-sm" style="color:var(--text)">
+        {% if quote %}
+          {{ "{:,.2f}".format(quote.price) }} {{ quote.currency }}
+          {% if quote.is_stale %}<span style="color:var(--text-dim)">*</span>{% endif %}
+        {% else %}—{% endif %}
+      </td>
+      <td class="px-3 py-3.5">
+        <a href="/investments/instruments/{{ inst.id }}/edit" class="btn-ghost text-xs px-2 py-1">✏</a>
+      </td>
+    </tr>
+    {% else %}
+    <tr>
+      <td colspan="7" class="px-5 py-14 text-center text-sm" style="color:var(--text-dim)">
+        Nessuno strumento. <a href="/investments/instruments/add" style="color:var(--sky)">Aggiungi →</a>
+      </td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

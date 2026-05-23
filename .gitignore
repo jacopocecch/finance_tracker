@@ -1,0 +1,16 @@
+__pycache__/
+*.pyc
+*.pem
+*.key
+config.py
+finance.db
+.env
+.venv/
+venv/
+key/
+dist/
+build/
+*.egg-info/
+.idea/
+.DS_Store
+.claude/

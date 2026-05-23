@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}PAC — Ledger{% endblock %}
+{% block content %}
+
+<div class="flex items-center justify-between mb-6">
+  <h1 class="text-xl font-semibold" style="color:var(--text)">PAC</h1>
+  <a href="/investments/pac/add" class="btn-primary">+ Nuovo PAC</a>
+</div>
+
+{% if pac_data %}
+<div class="card" style="padding:0">
+  {% for row in pac_data %}
+  <div class="flex items-center justify-between px-5 py-4" style="{% if not loop.last %}border-bottom:1px solid var(--border-subtle){% endif %}">
+    <div>
+      <p class="text-sm font-medium" style="color:var(--text)">{{ row.pac.name }}</p>
+      {% if row.pac.description %}
+      <p class="text-xs mt-0.5" style="color:var(--text-muted)">{{ row.pac.description }}</p>
+      {% endif %}
+      <div class="flex flex-wrap gap-1.5 mt-2">
+        {% for comp in row.components %}
+        {% set inst = row.instruments.get(comp.instrument_id) %}
+        <span class="tag" style="background:var(--surface-2);border:1px solid var(--border);color:var(--text-muted)">
+          {{ inst.ticker if inst else '?' }}{% if comp.target_weight %} <span style="color:var(--text-dim)">× {{ comp.target_weight | int }}</span>{% endif %}
+        </span>
+        {% endfor %}
+      </div>
+    </div>
+    <div class="flex gap-2 items-center">
+      <a href="/investments/pac/{{ row.pac.id }}/execute" class="btn-primary" style="height:36px;display:flex;align-items:center;white-space:nowrap">+ Esegui</a>
+      <form method="post" action="/investments/pac/{{ row.pac.id }}/delete" onsubmit="return confirm('Archiviare {{ row.pac.name }}?')">
+        <button type="submit" class="btn-ghost" style="height:36px;color:var(--rose)">Rimuovi</button>
+      </form>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="card py-20 text-center">
+  <p class="text-sm mb-1" style="color:var(--text-muted)">Nessun PAC attivo.</p>
+  <a href="/investments/pac/add" class="btn-primary inline-flex mt-4">+ Crea PAC</a>
+</div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+{% block title %}Investimenti — Ledger{% endblock %}
+{% block content %}
+
+<!-- Header -->
+<div class="flex items-end justify-between mb-8">
+  <div>
+    <p class="text-xs font-medium uppercase tracking-widest mb-2" style="color:var(--text-muted)">Portafoglio</p>
+    <div class="flex items-baseline gap-2">
+      <span class="num text-2xl" style="color:var(--text-muted)">€</span>
+      <h1 class="num font-medium" style="font-size:3rem;line-height:1;color:var(--sky)">{{ "{:,.0f}".format(total) }}</h1>
+    </div>
+  </div>
+</div>
+
+<!-- Trend chart -->
+<div class="card mb-7">
+  <p class="text-xs font-medium uppercase tracking-wider mb-5" style="color:var(--text-muted)">Andamento — 90 giorni</p>
+  <canvas id="investChart" height="75"></canvas>
+</div>
+
+<!-- Per-account breakdown -->
+{% if accounts %}
+<p class="text-xs font-medium uppercase tracking-wider mb-3" style="color:var(--text-muted)">Conti</p>
+<div class="grid grid-cols-2 gap-4 mb-7">
+  {% for acc in accounts %}
+  <div class="card">
+    <div class="flex items-start justify-between mb-4">
+      <div>
+        <p class="text-xs mb-1" style="color:var(--text-muted)">{{ acc.bank_name }}</p>
+        <p class="text-sm font-medium" style="color:var(--text)">{{ acc.name }}</p>
+      </div>
+      <p class="num text-lg font-medium" style="color:var(--sky)">€{{ "{:,.0f}".format(acc.balance or 0) }}</p>
+    </div>
+    <canvas id="chart_{{ acc.id }}" height="55"></canvas>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="card py-14 text-center mb-7">
+  <p class="text-sm mb-2" style="color:var(--text-muted)">Nessun conto investimento.</p>
+  <a href="/setup" class="text-sm" style="color:var(--sky)">Classifica un conto come "investment" in Setup →</a>
+</div>
+{% endif %}
+
+
+<script>
+(function() {
+  const allData = {{ chart_data | tojson }};
+  const COLORS  = ['#0369a1','#7c3aed','#059669','#ea580c','#db2777'];
+  const GRID    = '#ebebf5';
+
+  new Chart(document.getElementById('investChart'), {
+    type: 'line',
+    data: {
+      labels: allData.labels,
+      datasets: allData.accounts.map((a, i) => ({
+        label: a.name,
+        data: a.data,
+        borderColor: COLORS[i % COLORS.length],
+        borderWidth: 1.5,
+        tension: 0.4,
+        pointRadius: 0,
+        fill: false,
+      }))
+    },
+    options: {
+      responsive: true,
+      interaction: { intersect: false, mode: 'index' },
+      plugins: {
+        legend: { labels: { color: '#55556a', boxWidth: 10, boxHeight: 10 } },
+        tooltip: { callbacks: { label: ctx => '  €' + ctx.parsed.y.toLocaleString('it-IT') } }
+      },
+      scales: {
+        x: { grid: { display: false }, border: { display: false }, ticks: { maxTicksLimit: 8 } },
+        y: { grid: { color: GRID }, border: { display: false }, ticks: { callback: v => '€' + (v/1000).toFixed(0) + 'k' } }
+      }
+    }
+  });
+
+  allData.accounts.forEach((a, i) => {
+    const el = document.getElementById('chart_' + a.id);
+    if (!el) return;
+    new Chart(el, {
+      type: 'line',
+      data: {
+        labels: allData.labels,
+        datasets: [{
+          data: a.data,
+          borderColor: COLORS[i % COLORS.length],
+          borderWidth: 1.5,
+          pointRadius: 0,
+          tension: 0.4,
+          fill: false,
+        }]
+      },
+      options: {
+        responsive: true,
+        plugins: { legend: { display: false }, tooltip: { enabled: false } },
+        scales: {
+          x: { display: false },
+          y: {
+            grid: { color: GRID },
+            border: { display: false },
+            ticks: { maxTicksLimit: 4, callback: v => '€' + (v/1000).toFixed(0) + 'k' }
+          }
+        }
+      }
+    });
+  });
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,149 @@
+{% extends "base.html" %}
+{% block title %}Overview — Ledger{% endblock %}
+{% block content %}
+
+<div x-data="{ hidden: localStorage.getItem('liquidita_hidden') === '1' }"
+     @hidden-changed.window="hidden = $event.detail">
+
+<!-- Hero: Net Worth -->
+<div class="mb-8">
+  <div class="flex items-center gap-3 mb-3">
+    <p class="text-xs font-medium uppercase tracking-widest" style="color:var(--text-muted)">Patrimonio Netto</p>
+    <button @click="hidden = !hidden; localStorage.setItem('liquidita_hidden', hidden ? '1' : '0')"
+            class="text-xs transition-opacity opacity-50 hover:opacity-100" style="color:var(--text-muted)" title="Oscura importi">
+      <span x-text="hidden ? '👁' : '🙈'"></span>
+    </button>
+  </div>
+  <div class="flex items-baseline gap-3">
+    <h1 class="num font-medium" style="font-size:3.5rem;line-height:1;color:var(--text)">
+      <span x-show="!hidden">{{ "{:,.0f}".format(net_worth) }} €</span>
+      <span x-show="hidden" style="letter-spacing:0.15em">•••••• €</span>
+    </h1>
+  </div>
+</div>
+
+<!-- KPI strip -->
+<div class="grid grid-cols-2 gap-3 mb-7" style="max-width:520px">
+  <div class="card">
+    <p class="text-xs mb-3" style="color:var(--text-muted)">Liquidità</p>
+    <p class="num text-2xl font-medium" style="color:var(--text)">
+      <span x-show="!hidden">{{ "{:,.0f}".format(liquidity) }} €</span>
+      <span x-show="hidden" style="letter-spacing:0.1em">•••• €</span>
+    </p>
+    <p class="text-xs mt-1.5" style="color:var(--text-dim)">correnti · risparmio</p>
+  </div>
+  <div class="card">
+    <p class="text-xs mb-3" style="color:var(--text-muted)">Investimenti</p>
+    <p class="num text-2xl font-medium" style="color:var(--sky)">
+      <span x-show="!hidden">{{ "{:,.0f}".format(portfolio_value) }} €</span>
+      <span x-show="hidden" style="letter-spacing:0.1em">•••• €</span>
+    </p>
+    {% if portfolio_pl is not none %}
+    <p class="text-xs mt-1.5 num" style="color:{% if portfolio_pl >= 0 %}var(--emerald){% else %}var(--rose){% endif %}">
+      <span x-show="!hidden">{{ "{:+,.0f}".format(portfolio_pl) }} € {% if portfolio_pl_pct is not none %}({{ "{:+.1f}%".format(portfolio_pl_pct) }}){% endif %}</span>
+      <span x-show="hidden">•••</span>
+    </p>
+    {% else %}
+    <p class="text-xs mt-1.5" style="color:var(--text-dim)">portafoglio ETF</p>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Net Worth Chart -->
+<div class="card mb-7">
+  <div class="flex items-center justify-between mb-5">
+    <p class="text-xs font-medium uppercase tracking-wider" style="color:var(--text-muted)">Liquidità — 90 giorni</p>
+  </div>
+  <div style="position:relative">
+    <canvas id="networthChart" height="72"></canvas>
+    <!-- blur overlay when hidden -->
+    <div x-show="hidden"
+         style="position:absolute;inset:0;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border-radius:8px;display:flex;align-items:center;justify-content:center">
+      <span style="color:var(--text-dim);font-size:13px">nascosto</span>
+    </div>
+  </div>
+</div>
+
+<!-- Accounts -->
+<div>
+  <p class="text-xs font-medium uppercase tracking-wider mb-3" style="color:var(--text-muted)">Conti</p>
+  {% if accounts %}
+  <div class="card" style="padding:0">
+    {% for acc in accounts %}
+    <div class="flex items-center justify-between px-5 py-4" style="{% if not loop.last %}border-bottom:1px solid var(--border-subtle){% endif %}">
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 rounded-lg flex items-center justify-center text-base" style="background:var(--surface-2);border:1px solid var(--border)">
+          {% if acc.type == 'investment' %}📈{% elif acc.type == 'savings' %}🏦{% else %}💳{% endif %}
+        </div>
+        <div>
+          <p class="text-sm font-medium" style="color:var(--text)">{{ acc.display_name or acc.name }}</p>
+          <p class="text-xs mt-0.5" style="color:var(--text-muted)">
+            {{ acc.bank_name }}{% if acc.currency and acc.currency != 'EUR' %} · {{ acc.currency }}{% endif %}
+          </p>
+        </div>
+      </div>
+      <div class="text-right">
+        <p class="num text-sm font-medium" style="color:{% if acc.type == 'investment' %}var(--sky){% else %}var(--text){% endif %}">
+          <span x-show="!hidden">{{ "{:,.0f}".format(acc.balance or 0) }} €</span>
+          <span x-show="hidden" style="letter-spacing:0.1em">•••• €</span>
+        </p>
+        <p class="text-xs mt-0.5" style="color:var(--text-dim)">{{ acc.type }}</p>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="card py-14 text-center">
+    <p class="text-sm mb-2" style="color:var(--text-muted)">Nessun conto connesso.</p>
+    <a href="/setup" class="text-sm" style="color:var(--sky)">Configura banche →</a>
+  </div>
+  {% endif %}
+</div>
+
+</div>{# end x-data #}
+
+<script>
+(function() {
+  const labels = {{ labels | tojson }};
+  const data   = {{ networth_data | tojson }};
+  const ctx    = document.getElementById('networthChart');
+
+  new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        data,
+        borderColor: '#059669',
+        backgroundColor: function(ctx2) {
+          const g = ctx2.chart.ctx.createLinearGradient(0, 0, 0, 220);
+          g.addColorStop(0, 'rgba(5,150,105,0.12)');
+          g.addColorStop(1, 'rgba(5,150,105,0)');
+          return g;
+        },
+        fill: true,
+        tension: 0.4,
+        pointRadius: 0,
+        borderWidth: 1.5,
+      }]
+    },
+    options: {
+      responsive: true,
+      interaction: { intersect: false, mode: 'index' },
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: ctx => '  ' + ctx.parsed.y.toLocaleString('it-IT') + ' €' } }
+      },
+      scales: {
+        x: { grid: { display: false }, border: { display: false }, ticks: { maxTicksLimit: 7 } },
+        y: {
+          grid: { color: '#ebebf5' },
+          border: { display: false },
+          ticks: { callback: v => (v >= 1000 ? (v/1000).toFixed(0)+'k' : v) + ' €' }
+        }
+      }
+    }
+  });
+})();
+</script>
+{% endblock %}

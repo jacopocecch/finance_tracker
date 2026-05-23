@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}Budget — Ledger{% endblock %}
+{% block content %}
+
+<div class="flex items-center justify-between mb-6">
+  <h1 class="text-xl font-semibold" style="color:var(--text)">Budget mensili</h1>
+  <a href="/monthly" class="btn-ghost text-sm">← Mensile</a>
+</div>
+
+<div class="card" style="padding:0">
+  <table class="w-full text-sm">
+    <thead>
+      <tr class="text-xs uppercase tracking-wide" style="color:var(--text-dim); border-bottom:1px solid var(--border)">
+        <th class="text-left px-5 py-3 font-medium">Categoria</th>
+        <th class="text-right px-5 py-3 font-medium">Budget mensile</th>
+        <th class="px-5 py-3"></th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for cat in categories %}
+    {% set b = budgets.get(cat.id) %}
+    <tr style="border-bottom:1px solid var(--border-subtle)" x-data="{ editing: false }">
+      <td class="px-5 py-3">
+        <span class="tag" style="background:{{ cat.color }}18;color:{{ cat.color }};border:1px solid {{ cat.color }}30">
+          {{ cat.icon }} {{ cat.name }}
+        </span>
+      </td>
+      <td class="num px-5 py-3 text-right">
+        <template x-if="!editing">
+          <span style="color:{% if b %}var(--text){% else %}var(--text-dim){% endif %}">
+            {% if b %}{{ "{:,.2f}".format(b.amount) }} €{% else %}—{% endif %}
+          </span>
+        </template>
+        <template x-if="editing">
+          <form method="post" action="/budgets/save" class="inline-flex gap-2 items-center justify-end">
+            <input type="hidden" name="category_id" value="{{ cat.id }}">
+            <input type="number" name="amount" value="{{ b.amount if b else '' }}" placeholder="es. 300" step="0.01" min="0"
+                   class="input text-right" style="width:110px;height:34px;padding:4px 10px">
+            <button type="submit" class="btn-primary text-xs" style="height:34px;padding:4px 12px">Salva</button>
+          </form>
+        </template>
+      </td>
+      <td class="px-5 py-3 text-right">
+        <div class="flex gap-2 justify-end items-center">
+          <button @click="editing = !editing" class="btn-ghost text-xs" style="height:30px;padding:0 10px">
+            <span x-text="editing ? 'Annulla' : 'Modifica'"></span>
+          </button>
+          {% if b %}
+          <form method="post" action="/budgets/{{ b.id }}/delete">
+            <button type="submit" class="btn-ghost text-xs" style="height:30px;padding:0 10px;color:var(--rose)">Rimuovi</button>
+          </form>
+          {% endif %}
+        </div>
+      </td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% endblock %}

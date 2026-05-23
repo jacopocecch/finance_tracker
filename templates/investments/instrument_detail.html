@@ -1,0 +1,119 @@
+{% extends "base.html" %}
+{% block title %}{{ inst.name }} — Ledger{% endblock %}
+{% block content %}
+
+<div class="mb-6">
+  <a href="/investments" class="btn-ghost inline-flex mb-4">← Investimenti</a>
+  <div class="flex items-center justify-between">
+    <div>
+      <h1 class="text-xl font-semibold" style="color:var(--text)">{{ inst.name }}</h1>
+      <p class="text-xs mt-0.5" style="color:var(--text-dim)">{{ inst.type }} · {{ inst.isin }} · {{ inst.ticker }} · {{ inst.exchange }}</p>
+    </div>
+    <div class="flex items-center gap-2">
+      <form method="post" action="/investments/quotes/{{ inst.id }}/refresh">
+        <button type="submit" class="btn-ghost">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+          </svg>
+          Aggiorna
+        </button>
+      </form>
+      <a href="/investments/instruments/{{ inst.id }}/edit" class="btn-ghost">✏ Modifica</a>
+      <a href="/investments/transactions/add" class="btn-primary">+ Acquisto</a>
+    </div>
+  </div>
+</div>
+
+<!-- Quote card -->
+<div class="grid gap-4 mb-6" style="grid-template-columns:repeat(5,1fr)">
+  <div class="card">
+    <p class="text-xs mb-2" style="color:var(--text-muted)">Ultimo prezzo</p>
+    {% if quote %}
+      <p class="num text-xl font-medium" style="color:var(--text)">{{ "{:,.2f}".format(quote.price) }} {{ quote.currency }}</p>
+      <p class="text-xs mt-1" style="color:{% if quote.is_stale %}#d97706{% else %}var(--emerald){% endif %}">
+        {% if quote.is_stale %}● stale{% else %}● aggiornato{% endif %}
+        · {{ quote.quote_timestamp.strftime('%d/%m %H:%M') }} UTC
+      </p>
+    {% else %}
+      <p class="num text-xl" style="color:var(--text-dim)">—</p>
+      <p class="text-xs mt-1" style="color:var(--text-dim)">Nessuna quotazione</p>
+    {% endif %}
+  </div>
+  {% if pos %}
+  <div class="card">
+    <p class="text-xs mb-2" style="color:var(--text-muted)">Quantità</p>
+    <p class="num text-xl font-medium" style="color:var(--text)">{{ pos.total_quantity }}</p>
+  </div>
+  <div class="card">
+    <p class="text-xs mb-2" style="color:var(--text-muted)">PMC</p>
+    <p class="num text-xl font-medium" style="color:var(--text)">{{ "{:,.2f}".format(pos.average_cost_basis) }} {{ inst.currency }}</p>
+  </div>
+  <div class="card">
+    <p class="text-xs mb-2" style="color:var(--text-muted)">Investito</p>
+    <p class="num text-xl font-medium" style="color:var(--text)">{{ "{:,.2f}".format(pos.total_invested) }} {{ inst.currency }}</p>
+  </div>
+  <div class="card">
+    <p class="text-xs mb-2" style="color:var(--text-muted)">P/L</p>
+    {% if pos.unrealized_pl is not none %}
+    <p class="num text-xl font-medium" style="color:{% if pos.unrealized_pl >= 0 %}var(--emerald){% else %}var(--rose){% endif %}">
+      {{ "{:+,.2f}".format(pos.unrealized_pl) }} {{ inst.currency }}
+    </p>
+    <p class="num text-xs mt-1" style="color:{% if pos.unrealized_pl_pct >= 0 %}var(--emerald){% else %}var(--rose){% endif %}">
+      {{ "{:+.2f}%".format(pos.unrealized_pl_pct) }}
+    </p>
+    {% else %}
+    <p class="num text-xl" style="color:var(--text-dim)">—</p>
+    {% endif %}
+  </div>
+  {% endif %}
+</div>
+
+<!-- Transactions -->
+<div class="card" style="padding:0">
+  <div class="px-5 py-4 flex items-center justify-between" style="border-bottom:1px solid var(--border)">
+    <p class="text-xs font-medium uppercase tracking-wider" style="color:var(--text-muted)">Acquisti</p>
+    <a href="/investments/transactions/add" class="btn-ghost text-xs">+ Aggiungi</a>
+  </div>
+  <table class="w-full text-sm">
+    <thead>
+      <tr class="text-xs uppercase tracking-wide" style="color:var(--text-dim); border-bottom:1px solid var(--border-subtle)">
+        <th class="text-left px-5 py-3 font-medium">Data</th>
+        <th class="text-left px-4 py-3 font-medium">Tipo</th>
+        <th class="text-right px-4 py-3 font-medium">Qtà</th>
+        <th class="text-right px-4 py-3 font-medium">Prezzo</th>
+        <th class="text-right px-4 py-3 font-medium">Comm.</th>
+        <th class="text-right px-4 py-3 font-medium">Totale</th>
+        <th class="text-left px-4 py-3 font-medium">PAC</th>
+        <th class="px-3 py-3"></th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for tx in transactions %}
+    <tr style="border-bottom:1px solid var(--border-subtle)">
+      <td class="num px-5 py-3 text-xs" style="color:var(--text-muted)">{{ tx.trade_date.strftime('%d %b %Y') }}</td>
+      <td class="px-4 py-3">
+        <span class="tag text-xs" style="background:{% if tx.transaction_type=='BUY' %}rgba(5,150,105,0.1){% else %}rgba(225,29,72,0.1){% endif %};color:{% if tx.transaction_type=='BUY' %}var(--emerald){% else %}var(--rose){% endif %}">{{ tx.transaction_type }}</span>
+      </td>
+      <td class="num px-4 py-3 text-right text-sm" style="color:var(--text)">{{ tx.quantity }}</td>
+      <td class="num px-4 py-3 text-right text-sm" style="color:var(--text)">{{ "{:,.4f}".format(tx.unit_price) }}</td>
+      <td class="num px-4 py-3 text-right text-sm" style="color:var(--text-muted)">{{ "{:,.2f}".format(tx.fees) }}</td>
+      <td class="num px-4 py-3 text-right text-sm font-medium" style="color:var(--text)">{{ "{:,.2f}".format(tx.quantity * tx.unit_price + tx.fees) }} {{ tx.currency }}</td>
+      <td class="px-4 py-3 text-xs" style="color:var(--text-muted)">{{ pacs_map[tx.pac_id].name if tx.pac_id and tx.pac_id in pacs_map else '—' }}</td>
+      <td class="px-3 py-3">
+        <div class="flex gap-1">
+          <a href="/investments/transactions/{{ tx.id }}/edit" class="btn-ghost text-xs px-2 py-1">✏</a>
+          <form method="post" action="/investments/transactions/{{ tx.id }}/delete" onsubmit="return confirm('Eliminare?')">
+            <button type="submit" class="btn-ghost text-xs px-2 py-1" style="color:var(--rose)">✕</button>
+          </form>
+        </div>
+      </td>
+    </tr>
+    {% else %}
+    <tr>
+      <td colspan="8" class="px-5 py-10 text-center text-sm" style="color:var(--text-dim)">Nessun acquisto</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block title %}Acquisti — Ledger{% endblock %}
+{% block content %}
+
+<div class="flex items-center justify-between mb-6">
+  <h1 class="text-xl font-semibold" style="color:var(--text)">Acquisti</h1>
+  <a href="/investments/transactions/add" class="btn-primary">+ Acquisto</a>
+</div>
+
+<div class="card" style="padding:0">
+  <table class="w-full text-sm">
+    <thead>
+      <tr class="text-xs uppercase tracking-wide" style="color:var(--text-dim); border-bottom:1px solid var(--border)">
+        <th class="text-left px-5 py-3 font-medium">Data</th>
+        <th class="text-left px-5 py-3 font-medium">Strumento</th>
+        <th class="text-left px-3 py-3 font-medium">Tipo</th>
+        <th class="text-right px-4 py-3 font-medium">Qtà</th>
+        <th class="text-right px-4 py-3 font-medium">Prezzo</th>
+        <th class="text-right px-4 py-3 font-medium">Comm.</th>
+        <th class="text-right px-4 py-3 font-medium">Totale</th>
+        <th class="text-left px-4 py-3 font-medium">PAC</th>
+        <th class="px-3 py-3"></th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for tx in transactions %}
+    {% set inst = instruments.get(tx.instrument_id) %}
+    <tr style="border-bottom:1px solid var(--border-subtle)" onmouseover="this.style.background='rgba(0,0,0,0.015)'" onmouseout="this.style.background=''">
+      <td class="num px-5 py-3.5 text-xs" style="color:var(--text-muted); white-space:nowrap">{{ tx.trade_date.strftime('%d %b %Y') }}</td>
+      <td class="px-5 py-3.5">
+        <p class="font-medium text-sm" style="color:var(--text)">{{ inst.name if inst else tx.instrument_id }}</p>
+        <p class="text-xs" style="color:var(--text-dim)">{{ inst.ticker if inst else '' }}</p>
+      </td>
+      <td class="px-3 py-3.5">
+        <span class="tag text-xs" style="background:{% if tx.transaction_type == 'BUY' %}rgba(5,150,105,0.1){% else %}rgba(225,29,72,0.1){% endif %};color:{% if tx.transaction_type == 'BUY' %}var(--emerald){% else %}var(--rose){% endif %};border:1px solid {% if tx.transaction_type == 'BUY' %}rgba(5,150,105,0.2){% else %}rgba(225,29,72,0.2){% endif %}">
+          {{ tx.transaction_type }}
+        </span>
+      </td>
+      <td class="num px-4 py-3.5 text-right text-sm" style="color:var(--text)">{{ tx.quantity }}</td>
+      <td class="num px-4 py-3.5 text-right text-sm" style="color:var(--text)">{{ "{:,.4f}".format(tx.unit_price) }} {{ tx.currency }}</td>
+      <td class="num px-4 py-3.5 text-right text-sm" style="color:var(--text-muted)">{{ "{:,.2f}".format(tx.fees) }}</td>
+      <td class="num px-4 py-3.5 text-right text-sm font-medium" style="color:var(--text)">{{ "{:,.2f}".format(tx.quantity * tx.unit_price + tx.fees) }} {{ tx.currency }}</td>
+      <td class="px-4 py-3.5 text-xs" style="color:var(--text-muted)">{{ pacs[tx.pac_id].name if tx.pac_id and tx.pac_id in pacs else '—' }}</td>
+      <td class="px-3 py-3.5">
+        <div class="flex gap-1">
+          <a href="/investments/transactions/{{ tx.id }}/edit" class="btn-ghost text-xs px-2 py-1">✏</a>
+          <form method="post" action="/investments/transactions/{{ tx.id }}/delete" onsubmit="return confirm('Eliminare questo acquisto?')">
+            <button type="submit" class="btn-ghost text-xs px-2 py-1" style="color:var(--rose)">✕</button>
+          </form>
+        </div>
+      </td>
+    </tr>
+    {% else %}
+    <tr>
+      <td colspan="9" class="px-5 py-14 text-center text-sm" style="color:var(--text-dim)">
+        Nessun acquisto registrato. <a href="/investments/transactions/add" style="color:var(--sky)">Aggiungi →</a>
+      </td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}
