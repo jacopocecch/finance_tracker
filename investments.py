@@ -180,6 +180,7 @@ def instrument_add(
     exchange: str = Form(""),
     currency: str = Form("EUR"),
     type_: str = Form("ETF", alias="type"),
+    is_liquidity: Optional[str] = Form(None),
     session: Session = Depends(get_session),
 ):
     isin = isin.strip().upper()
@@ -194,6 +195,7 @@ def instrument_add(
         exchange=exchange.strip(),
         currency=currency.strip().upper(),
         type=type_,
+        is_liquidity=is_liquidity == "1",
     )
     session.add(inst)
     session.commit()
@@ -264,6 +266,7 @@ def instrument_edit(
     ticker: str = Form(...),
     exchange: str = Form(""),
     currency: str = Form("EUR"),
+    is_liquidity: Optional[str] = Form(None),
     session: Session = Depends(get_session),
 ):
     inst = session.get(Instrument, instrument_id)
@@ -272,6 +275,7 @@ def instrument_edit(
         inst.ticker = ticker.strip()
         inst.exchange = exchange.strip()
         inst.currency = currency.strip().upper()
+        inst.is_liquidity = is_liquidity == "1"
         inst.updated_at = datetime.now(timezone.utc)
         session.commit()
     return RedirectResponse(f"/investments/instruments/{instrument_id}", status_code=303)

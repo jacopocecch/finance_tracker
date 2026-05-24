@@ -44,6 +44,13 @@
       </div>
     </div>
 
+    <div class="flex items-center gap-2 mb-5">
+      <input type="checkbox" name="is_liquidity" id="is_liquidity" value="1"
+             {% if instrument and instrument.is_liquidity %}checked{% endif %}
+             class="w-4 h-4 rounded" style="accent-color:var(--sky)">
+      <label for="is_liquidity" class="text-sm" style="color:var(--text)">Strumento liquido <span class="text-xs" style="color:var(--text-dim)">(es. ETF monetario, fondo liquidità)</span></label>
+    </div>
+
     <div class="flex gap-2">
       <button type="submit" class="btn-primary">Salva</button>
       <a href="{% if instrument %}/investments/instruments/{{ instrument.id }}{% else %}/investments/instruments{% endif %}" class="btn-ghost">Annulla</a>
