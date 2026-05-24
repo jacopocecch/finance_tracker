@@ -232,6 +232,7 @@ def monthly(
     request: Request,
     month: Optional[str] = None,
     cat: Optional[str] = None,
+    tx_type: Optional[str] = None,
     session: Session = Depends(get_session),
 ):
     today = date.today()
@@ -262,10 +263,16 @@ def monthly(
     )
     if cat:
         q = q.where(Transaction.category_id == int(cat))
-    transactions = [_enrich_tx(tx, session) for tx in session.exec(q.order_by(Transaction.date.desc())).all()]
+    all_transactions = [_enrich_tx(tx, session) for tx in session.exec(q.order_by(Transaction.date.desc())).all()]
 
     def _is_transfer(tx) -> bool:
         return tx.category is not None and tx.category.type == "transfer"
+
+    transactions = [tx for tx in all_transactions if not _is_transfer(tx) and tx.amount != 0]
+    if tx_type == "in":
+        transactions = [tx for tx in transactions if tx.amount > 0]
+    elif tx_type == "out":
+        transactions = [tx for tx in transactions if tx.amount < 0]
 
     total_in  = sum(_effective_amount(tx, session) for tx in transactions if tx.amount > 0 and not _is_transfer(tx))
     total_out = abs(sum(_effective_amount(tx, session) for tx in transactions if tx.amount < 0 and not _is_transfer(tx)))
@@ -335,6 +342,7 @@ def monthly(
         "cat_rows": cat_rows,
         "categories": categories,
         "selected_cat": cat or "",
+        "tx_type": tx_type or "",
     })
 
 

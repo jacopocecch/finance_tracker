@@ -30,26 +30,12 @@ function txRow(el) {
 }
 </script>
 
-<!-- Header + count -->
-<div class="flex items-start sm:items-center justify-between mb-6 gap-3">
+<!-- Header -->
+<div class="flex items-center justify-between mb-6 gap-3">
   <h1 class="text-xl font-semibold" style="color:var(--text)">Transazioni</h1>
-  <div class="flex items-center gap-2 sm:gap-3 flex-shrink-0">
-    <span class="num text-sm hidden sm:block" style="color:var(--text-muted)">{{ total }} risultati</span>
-    {% if total > page_size %}
-    <div class="flex items-center gap-1">
-      {% if page > 1 %}
-      <a href="?{{ query_string }}&page={{ page - 1 }}" class="btn-ghost text-xs px-2.5 py-1.5">←</a>
-      {% endif %}
-      <span class="num text-xs px-2" style="color:var(--text-muted)">{{ page }}/{{ (total // page_size) + (1 if total % page_size else 0) }}</span>
-      {% if page * page_size < total %}
-      <a href="?{{ query_string }}&page={{ page + 1 }}" class="btn-ghost text-xs px-2.5 py-1.5">→</a>
-      {% endif %}
-    </div>
-    {% endif %}
-    <form method="post" action="/transactions/detect-transfers">
-      <button type="submit" class="btn-ghost text-xs" style="color:var(--sky)">⇄ Trasferimenti</button>
-    </form>
-  </div>
+  <form method="post" action="/transactions/detect-transfers">
+    <button type="submit" class="btn-ghost text-xs" style="color:var(--sky)">⇄ Trasferimenti</button>
+  </form>
 </div>
 
 <!-- Nuova transazione manuale -->
@@ -100,31 +86,16 @@ function txRow(el) {
 </div>
 {% endif %}
 
-<!-- Type quick-filter buttons -->
-<div class="flex gap-2 mb-3">
-  <a href="/transactions?type=income{% if selected_cat %}&cat={{ selected_cat }}{% endif %}{% if selected_account %}&account={{ selected_account }}{% endif %}{% if date_from %}&from={{ date_from }}{% endif %}{% if date_to %}&to={{ date_to }}{% endif %}"
-     class="btn-ghost text-sm px-4 font-medium flex items-center"
-     style="border-radius:8px; height:38px; {% if selected_type == 'income' %}background:rgba(5,150,105,0.1);color:var(--emerald);border-color:rgba(5,150,105,0.3){% else %}color:var(--emerald);border-color:rgba(5,150,105,0.2){% endif %}">
-    ↑ Entrate
-  </a>
-  <a href="/transactions?type=expense{% if selected_cat %}&cat={{ selected_cat }}{% endif %}{% if selected_account %}&account={{ selected_account }}{% endif %}{% if date_from %}&from={{ date_from }}{% endif %}{% if date_to %}&to={{ date_to }}{% endif %}"
-     class="btn-ghost text-sm px-4 font-medium flex items-center"
-     style="border-radius:8px; height:38px; {% if selected_type == 'expense' %}background:rgba(225,29,72,0.1);color:var(--rose);border-color:rgba(225,29,72,0.3){% else %}color:var(--rose);border-color:rgba(225,29,72,0.2){% endif %}">
-    ↓ Uscite
-  </a>
-</div>
-
 <!-- Filters -->
 <div class="card mb-5">
   <form method="get" action="/transactions" class="flex gap-3 items-end flex-wrap">
-    <input type="hidden" name="type" value="{{ selected_type }}">
     <div class="w-full">
       <label class="text-xs mb-1.5 block font-medium" style="color:var(--text-muted)">Cerca</label>
       <input type="text" name="search" value="{{ search }}" placeholder="Descrizione o esercente…" class="input w-full" style="height:38px">
     </div>
     <div class="flex-1 min-w-36">
       <label class="text-xs mb-1.5 block font-medium" style="color:var(--text-muted)">Categoria</label>
-      <select name="cat" class="input w-full" style="height:38px">
+      <select name="cat" class="input w-full" style="height:38px" onchange="this.form.submit()">
         <option value="">Tutte</option>
         {% for cat in categories %}
         <option value="{{ cat.id }}" {% if selected_cat == cat.id|string %}selected{% endif %}>
@@ -135,13 +106,21 @@ function txRow(el) {
     </div>
     <div class="flex-1 min-w-36">
       <label class="text-xs mb-1.5 block font-medium" style="color:var(--text-muted)">Conto</label>
-      <select name="account" class="input w-full" style="height:38px">
+      <select name="account" class="input w-full" style="height:38px" onchange="this.form.submit()">
         <option value="">Tutti</option>
         {% for acc in accounts %}
         <option value="{{ acc.id }}" {% if selected_account == acc.id|string %}selected{% endif %}>
           {{ acc.display_name or (acc.bank_name ~ ' / ' ~ acc.name) }}
         </option>
         {% endfor %}
+      </select>
+    </div>
+    <div class="flex-1 min-w-28">
+      <label class="text-xs mb-1.5 block font-medium" style="color:var(--text-muted)">Tipo</label>
+      <select name="type" class="input w-full" style="height:38px" onchange="this.form.submit()">
+        <option value=""       {% if selected_type == '' %}selected{% endif %}>Tutti</option>
+        <option value="income" {% if selected_type == 'income' %}selected{% endif %}>↑ Entrate</option>
+        <option value="expense"{% if selected_type == 'expense' %}selected{% endif %}>↓ Uscite</option>
       </select>
     </div>
     <div>
@@ -161,6 +140,21 @@ function txRow(el) {
 
 <!-- Table -->
 <div class="card table-wrap" style="padding:0">
+  <!-- Count + pagination -->
+  <div class="flex items-center justify-between px-4 sm:px-5 py-3" style="border-bottom:1px solid var(--border)">
+    <span class="num text-xs" style="color:var(--text-muted)">{{ total }} risultati</span>
+    {% if total > page_size %}
+    <div class="flex items-center gap-1">
+      {% if page > 1 %}
+      <a href="?{{ query_string }}&page={{ page - 1 }}" class="btn-ghost text-xs px-2.5 py-1.5">←</a>
+      {% endif %}
+      <span class="num text-xs px-2" style="color:var(--text-muted)">{{ page }}/{{ (total // page_size) + (1 if total % page_size else 0) }}</span>
+      {% if page * page_size < total %}
+      <a href="?{{ query_string }}&page={{ page + 1 }}" class="btn-ghost text-xs px-2.5 py-1.5">→</a>
+      {% endif %}
+    </div>
+    {% endif %}
+  </div>
   <table class="w-full text-sm" style="min-width:600px">
     <thead>
       <tr class="text-xs uppercase tracking-wide" style="color:var(--text-dim); border-bottom:1px solid var(--border)">
