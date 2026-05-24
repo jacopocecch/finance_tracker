@@ -106,7 +106,10 @@ def _classify_account_type(name: str) -> str:
 def sync_account(account: Account, session: Session):
     headers = _headers()
     uid = account.external_id
-    date_from = (account.last_sync or (datetime.now() - timedelta(days=90))).date()
+    last_tx_date = session.exec(
+        select(Transaction.date).where(Transaction.account_id == account.id).order_by(Transaction.date.desc())
+    ).first()
+    date_from = last_tx_date or (date.today() - timedelta(days=90))
 
     try:
         # Fetch transactions (paginated)
@@ -162,6 +165,7 @@ def sync_account(account: Account, session: Session):
                     merchant=merchant,
                     category_id=cat_id,
                     raw_data=json.dumps(tx),
+                    created_at=datetime.now(timezone.utc).replace(tzinfo=None),
                 )
                 session.add(new_tx)
 
@@ -193,10 +197,17 @@ def sync_account(account: Account, session: Session):
 
 
 def sync_all():
+    from concurrent.futures import ThreadPoolExecutor, as_completed
     with Session(engine) as session:
         account_ids = [a.id for a in session.exec(select(Account).where(Account.connected == True)).all()]
-    for acc_id in account_ids:
+
+    def _sync_one(acc_id):
         with Session(engine) as session:
             acc = session.get(Account, acc_id)
             if acc:
                 sync_account(acc, session)
+
+    with ThreadPoolExecutor(max_workers=len(account_ids) or 1) as pool:
+        futures = {pool.submit(_sync_one, acc_id): acc_id for acc_id in account_ids}
+        for fut in as_completed(futures):
+            fut.result()  # re-raises any exception

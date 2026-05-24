@@ -4,12 +4,12 @@
 
 <div class="mb-6">
   <a href="/investments/pac" class="btn-ghost inline-flex mb-4">← PAC</a>
-  <div class="flex items-center justify-between">
+  <div class="flex flex-wrap items-center justify-between gap-3">
     <div>
       <h1 class="text-xl font-semibold" style="color:var(--text)">{{ pac.name }}</h1>
       {% if pac.description %}<p class="text-xs mt-0.5" style="color:var(--text-muted)">{{ pac.description }}</p>{% endif %}
     </div>
-    <div class="flex gap-2">
+    <div class="flex flex-wrap gap-2">
       <a href="/investments/pac/{{ pac.id }}/execute" class="btn-primary">+ Esegui PAC</a>
       <form method="post" action="/investments/pac/{{ pac.id }}/delete" onsubmit="return confirm('Archiviare il PAC?')">
         <button type="submit" class="btn-ghost" style="color:var(--rose);border-color:rgba(225,29,72,0.25)">Archivia</button>
@@ -19,7 +19,7 @@
 </div>
 
 <!-- KPI -->
-<div class="grid gap-3 mb-6" style="grid-template-columns:repeat(4,1fr)">
+<div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
   <div class="card">
     <p class="text-xs mb-2" style="color:var(--text-muted)">Investito</p>
     <p class="num text-xl font-medium" style="color:var(--text)">{{ "{:,.2f}".format(position.total_invested) }} €</p>
@@ -67,6 +67,28 @@
   <div class="px-5 py-4" style="border-bottom:1px solid var(--border)">
     <p class="text-xs font-medium uppercase tracking-wider" style="color:var(--text-muted)">Acquisti nel PAC</p>
   </div>
+
+  <!-- Mobile cards -->
+  <div class="sm:hidden">
+    {% for tx in transactions %}
+    {% set inst = instruments_map.get(tx.instrument_id) %}
+    <div class="px-4 py-3 tr-hover" style="border-bottom:1px solid var(--border-subtle)">
+      <div class="flex items-start justify-between gap-2">
+        <div class="min-w-0">
+          <p class="text-sm font-medium" style="color:var(--text)">{{ inst.name if inst else tx.instrument_id }}</p>
+          <p class="text-xs mt-0.5" style="color:var(--text-muted)">{{ inst.ticker if inst else '' }} · {{ tx.trade_date.strftime('%d/%m/%Y') }}</p>
+        </div>
+        <p class="num text-sm font-medium flex-shrink-0" style="color:var(--text)">{{ "{:,.2f}".format(tx.quantity * tx.unit_price + tx.fees) }} {{ tx.currency }}</p>
+      </div>
+      <p class="text-xs mt-1" style="color:var(--text-muted)">Qtà {{ tx.quantity }} · @{{ "{:,.4f}".format(tx.unit_price) }}</p>
+    </div>
+    {% else %}
+    <p class="px-5 py-10 text-center text-sm" style="color:var(--text-dim)">Nessun acquisto</p>
+    {% endfor %}
+  </div>
+
+  <!-- Desktop table -->
+  <div class="hidden sm:block overflow-x-auto">
   <table class="w-full text-sm">
     <thead>
       <tr class="text-xs uppercase tracking-wide" style="color:var(--text-dim); border-bottom:1px solid var(--border-subtle)">
@@ -81,7 +103,7 @@
     {% for tx in transactions %}
     {% set inst = instruments_map.get(tx.instrument_id) or all_instruments | selectattr('id','equalto',tx.instrument_id) | first %}
     <tr style="border-bottom:1px solid var(--border-subtle)">
-      <td class="num px-5 py-3 text-xs" style="color:var(--text-muted)">{{ tx.trade_date.strftime('%d %b %Y') }}</td>
+      <td class="num px-5 py-3 text-xs" style="color:var(--text-muted)">{{ tx.trade_date.strftime('%d/%m/%Y') }}</td>
       <td class="px-4 py-3 text-sm" style="color:var(--text)">{{ inst.name if inst else tx.instrument_id }}<br><span class="text-xs" style="color:var(--text-dim)">{{ inst.ticker if inst else '' }}</span></td>
       <td class="num px-4 py-3 text-right text-sm" style="color:var(--text)">{{ tx.quantity }}</td>
       <td class="num px-4 py-3 text-right text-sm" style="color:var(--text)">{{ "{:,.4f}".format(tx.unit_price) }}</td>
@@ -92,5 +114,6 @@
     {% endfor %}
     </tbody>
   </table>
+  </div>
 </div>
 {% endblock %}

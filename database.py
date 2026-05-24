@@ -35,6 +35,8 @@ class Transaction(SQLModel, table=True):
     transfer_partner_id: Optional[int] = Field(default=None, foreign_key="transaction.id")
     personal_share: Optional[float] = None  # personally-owed portion (positive); None = full amount
     raw_data: str = ""           # JSON blob from Enable Banking
+    is_confirmed: bool = Field(default=False)
+    created_at: Optional[datetime] = Field(default=None)
 
 
 class BalanceSnapshot(SQLModel, table=True):
@@ -229,6 +231,13 @@ def init_db():
             conn.commit()
         if "currency" not in tx_cols:
             conn.execute(text("ALTER TABLE 'transaction' ADD COLUMN currency TEXT NOT NULL DEFAULT 'EUR'"))
+            conn.commit()
+        if "is_confirmed" not in tx_cols:
+            conn.execute(text("ALTER TABLE 'transaction' ADD COLUMN is_confirmed INTEGER NOT NULL DEFAULT 0"))
+            conn.execute(text("UPDATE 'transaction' SET is_confirmed = 1 WHERE category_id IS NOT NULL"))
+            conn.commit()
+        if "created_at" not in tx_cols:
+            conn.execute(text("ALTER TABLE 'transaction' ADD COLUMN created_at DATETIME"))
             conn.commit()
     with engine.connect() as conn:
         acols = [r[1] for r in conn.execute(text("PRAGMA table_info('account')")).fetchall()]

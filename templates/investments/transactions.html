@@ -7,7 +7,41 @@
   <a href="/investments/transactions/add" class="btn-primary">+ Acquisto</a>
 </div>
 
-<div class="card table-wrap" style="padding:0">
+<div class="card" style="padding:0">
+  <!-- Mobile cards -->
+  <div class="sm:hidden">
+    {% for tx in transactions %}
+    {% set inst = instruments.get(tx.instrument_id) %}
+    <div class="px-4 py-3 tr-hover" style="border-bottom:1px solid var(--border-subtle)">
+      <div class="flex items-start justify-between gap-2 mb-1">
+        <div class="min-w-0">
+          <p class="text-sm font-medium truncate" style="color:var(--text)">{{ inst.name if inst else tx.instrument_id }}</p>
+          <div class="flex items-center gap-2 mt-0.5">
+            <span class="tag text-xs" style="background:{% if tx.transaction_type=='BUY' %}rgba(5,150,105,0.1){% else %}rgba(225,29,72,0.1){% endif %};color:{% if tx.transaction_type=='BUY' %}var(--emerald){% else %}var(--rose){% endif %}">{{ tx.transaction_type }}</span>
+            <span class="num text-xs" style="color:var(--text-muted)">{{ tx.trade_date.strftime('%d/%m/%Y') }}</span>
+          </div>
+        </div>
+        <p class="num text-sm font-medium flex-shrink-0" style="color:var(--text)">{{ "{:,.2f}".format(tx.quantity * tx.unit_price + tx.fees) }} {{ tx.currency }}</p>
+      </div>
+      <div class="flex items-center justify-between gap-2 mt-1">
+        <p class="text-xs" style="color:var(--text-muted)">Qtà {{ tx.quantity }} · @{{ "{:,.4f}".format(tx.unit_price) }} · comm. {{ "{:,.2f}".format(tx.fees) }}</p>
+        <div class="flex gap-1 flex-shrink-0">
+          <a href="/investments/transactions/{{ tx.id }}/edit" class="btn-ghost text-xs px-2 py-1">✏</a>
+          <form method="post" action="/investments/transactions/{{ tx.id }}/delete" onsubmit="return confirm('Eliminare questo acquisto?')">
+            <button type="submit" class="btn-ghost text-xs px-2 py-1" style="color:var(--rose)">✕</button>
+          </form>
+        </div>
+      </div>
+    </div>
+    {% else %}
+    <p class="px-5 py-14 text-center text-sm" style="color:var(--text-dim)">
+      Nessun acquisto registrato. <a href="/investments/transactions/add" style="color:var(--sky)">Aggiungi →</a>
+    </p>
+    {% endfor %}
+  </div>
+
+  <!-- Desktop table -->
+  <div class="hidden sm:block overflow-x-auto">
   <table class="w-full text-sm">
     <thead>
       <tr class="text-xs uppercase tracking-wide" style="color:var(--text-dim); border-bottom:1px solid var(--border)">
@@ -26,7 +60,7 @@
     {% for tx in transactions %}
     {% set inst = instruments.get(tx.instrument_id) %}
     <tr class="tr-hover" style="border-bottom:1px solid var(--border-subtle)">
-      <td class="num px-5 py-3.5 text-xs" style="color:var(--text-muted); white-space:nowrap">{{ tx.trade_date.strftime('%d %b %Y') }}</td>
+      <td class="num px-5 py-3.5 text-xs" style="color:var(--text-muted); white-space:nowrap">{{ tx.trade_date.strftime('%d/%m/%Y') }}</td>
       <td class="px-5 py-3.5">
         <p class="font-medium text-sm" style="color:var(--text)">{{ inst.name if inst else tx.instrument_id }}</p>
         <p class="text-xs" style="color:var(--text-dim)">{{ inst.ticker if inst else '' }}</p>
@@ -59,5 +93,6 @@
     {% endfor %}
     </tbody>
   </table>
+  </div>
 </div>
 {% endblock %}

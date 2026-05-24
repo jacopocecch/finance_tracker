@@ -26,7 +26,7 @@
     <!-- New instrument fields -->
     <div x-show="newInstrument" class="mb-5 p-4 rounded-lg" style="background:var(--surface-2);border:1px solid var(--border)">
       <p class="text-xs font-medium uppercase tracking-wider mb-4" style="color:var(--text-muted)">Nuovo strumento</p>
-      <div class="grid gap-3" style="grid-template-columns:1fr 1fr">
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div>
           <label class="text-xs font-medium mb-1 block" style="color:var(--text-muted)">Nome *</label>
           <input type="text" name="new_name" placeholder="Vanguard FTSE All-World" class="input w-full">
@@ -68,7 +68,7 @@
     {% endif %}
 
     <!-- Transaction fields -->
-    <div class="grid gap-4 mb-5" style="grid-template-columns:1fr 1fr 1fr">
+    <div class="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-5">
       <div>
         <label class="text-xs font-medium mb-1.5 block" style="color:var(--text-muted)">Tipo</label>
         <select name="transaction_type" class="input w-full">
@@ -86,7 +86,7 @@
       </div>
     </div>
 
-    <div class="grid gap-4 mb-5" style="grid-template-columns:1fr 1fr 1fr 1fr">
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-5">
       <div>
         <label class="text-xs font-medium mb-1.5 block" style="color:var(--text-muted)">Quantità *</label>
         <input type="number" name="quantity" step="0.000001" min="0.000001" value="{{ transaction.quantity if transaction else '' }}" class="input w-full" required>

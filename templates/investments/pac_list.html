@@ -2,9 +2,12 @@
 {% block title %}PAC — Ledger{% endblock %}
 {% block content %}
 
-<div class="flex items-center justify-between mb-6">
-  <h1 class="text-xl font-semibold" style="color:var(--text)">PAC</h1>
-  <a href="/investments/pac/add" class="btn-primary">+ Nuovo PAC</a>
+<div class="mb-6">
+  <a href="/investments" class="btn-ghost inline-flex mb-4">← Investimenti</a>
+  <div class="flex items-center justify-between">
+    <h1 class="text-xl font-semibold" style="color:var(--text)">PAC</h1>
+    <a href="/investments/pac/add" class="btn-primary">+ Nuovo PAC</a>
+  </div>
 </div>
 
 {% if pac_data %}

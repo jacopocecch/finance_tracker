@@ -15,30 +15,30 @@
   <div x-data="{ open: false }" class="{% if not loop.last %}border-b{% endif %}" style="{% if not loop.last %}border-color:var(--border-subtle){% endif %}">
 
     <!-- Main row -->
-    <div class="px-5 py-4 flex items-center gap-4">
-      <!-- Status dot -->
-      <div class="relative flex-shrink-0">
-        <div class="w-2 h-2 rounded-full" style="background:{% if acc.connected %}var(--emerald){% else %}var(--text-dim){% endif %}"></div>
-        {% if acc.connected %}
-        <div class="absolute inset-0 w-2 h-2 rounded-full animate-ping opacity-60" style="background:var(--emerald)"></div>
-        {% endif %}
-      </div>
-
-      <!-- Info -->
-      <div class="flex-1 min-w-0">
-        <p class="text-sm font-medium" style="color:var(--text)">{{ acc.display_name or (acc.bank_name ~ ' — ' ~ acc.name) }}</p>
-        <p class="text-xs mt-0.5" style="color:var(--text-muted)">
-          {{ acc.bank_name }}
-          {% if acc.currency and acc.currency != 'EUR' %}
-          <span class="tag" style="background:rgba(3,105,161,0.1);color:var(--sky);border:1px solid rgba(3,105,161,0.2);font-size:10px;vertical-align:middle">{{ acc.currency }}</span>
+    <div class="px-4 sm:px-5 py-4 flex flex-col sm:flex-row sm:items-center gap-3">
+      <!-- Status dot + info -->
+      <div class="flex items-center gap-3 flex-1 min-w-0">
+        <div class="relative flex-shrink-0">
+          <div class="w-2 h-2 rounded-full" style="background:{% if acc.connected %}var(--emerald){% else %}var(--text-dim){% endif %}"></div>
+          {% if acc.connected %}
+          <div class="absolute inset-0 w-2 h-2 rounded-full animate-ping opacity-60" style="background:var(--emerald)"></div>
           {% endif %}
-          · Sync: {{ acc.last_sync.strftime('%d/%m/%Y %H:%M') if acc.last_sync else 'mai' }}
-          {% if acc.iban %} · {{ acc.iban[-8:] }}{% endif %}
-        </p>
+        </div>
+        <div class="min-w-0">
+          <p class="text-sm font-medium truncate" style="color:var(--text)">{{ acc.display_name or (acc.bank_name ~ ' — ' ~ acc.name) }}</p>
+          <p class="text-xs mt-0.5" style="color:var(--text-muted)">
+            {{ acc.bank_name }}
+            {% if acc.currency and acc.currency != 'EUR' %}
+            <span class="tag" style="background:rgba(3,105,161,0.1);color:var(--sky);border:1px solid rgba(3,105,161,0.2);font-size:10px;vertical-align:middle">{{ acc.currency }}</span>
+            {% endif %}
+            · Sync: {{ acc.last_sync.strftime('%d/%m/%Y %H:%M') if acc.last_sync else 'mai' }}
+            {% if acc.iban %} · {{ acc.iban[-8:] }}{% endif %}
+          </p>
+        </div>
       </div>
 
       <!-- Actions -->
-      <div class="flex items-center gap-2">
+      <div class="flex flex-wrap items-center gap-2 flex-shrink-0">
         {% if acc.session_id != 'manual' %}
         <form method="post" action="/setup/account/{{ acc.id }}/sync">
           <button type="submit" class="btn-ghost" style="color:var(--sky); border-color:rgba(125,211,252,0.25)">
@@ -65,23 +65,23 @@
     </div>
 
     <!-- Submenu -->
-    <div x-show="open" x-transition:enter="transition ease-out duration-100" x-transition:enter-start="opacity-0 -translate-y-1" x-transition:enter-end="opacity-100 translate-y-0" class="px-5 pb-4 flex flex-wrap gap-2 items-center" style="border-top:1px solid var(--border-subtle); padding-top:12px">
+    <div x-show="open" x-transition:enter="transition ease-out duration-100" x-transition:enter-start="opacity-0 -translate-y-1" x-transition:enter-end="opacity-100 translate-y-0" class="px-4 sm:px-5 pb-4 flex flex-col sm:flex-row sm:flex-wrap gap-2" style="border-top:1px solid var(--border-subtle); padding-top:12px">
       <form method="post" action="/setup/account/{{ acc.id }}/name" class="flex items-center gap-1.5">
-        <input type="text" name="display_name" value="{{ acc.display_name or '' }}" placeholder="Nome conto" class="input text-sm" style="width:150px">
-        <button type="submit" class="btn-ghost">Rinomina</button>
+        <input type="text" name="display_name" value="{{ acc.display_name or '' }}" placeholder="Nome conto" class="input text-sm flex-1 sm:flex-none" style="min-width:0;sm:width:150px">
+        <button type="submit" class="btn-ghost flex-shrink-0">Rinomina</button>
       </form>
       <form method="post" action="/setup/account/{{ acc.id }}/type" class="flex items-center gap-1.5">
-        <select name="type" class="input text-sm">
+        <select name="type" class="input text-sm flex-1 sm:flex-none">
           <option value="checking" {% if acc.type == 'checking' %}selected{% endif %}>💳 Corrente</option>
           <option value="savings" {% if acc.type == 'savings' %}selected{% endif %}>🏦 Risparmio</option>
           <option value="investment" {% if acc.type == 'investment' %}selected{% endif %}>📈 Investimento</option>
         </select>
-        <button type="submit" class="btn-ghost">Salva tipo</button>
+        <button type="submit" class="btn-ghost flex-shrink-0">Salva tipo</button>
       </form>
       {% if acc.session_id == 'manual' %}
       <form method="post" action="/setup/account/{{ acc.id }}/balance" class="flex items-center gap-1.5">
-        <input type="number" name="balance" step="0.01" placeholder="Saldo attuale" class="input text-sm num" style="width:140px">
-        <button type="submit" class="btn-ghost">Aggiorna saldo</button>
+        <input type="number" name="balance" step="0.01" placeholder="Saldo attuale" class="input text-sm num flex-1 sm:flex-none" style="min-width:0">
+        <button type="submit" class="btn-ghost flex-shrink-0">Aggiorna saldo</button>
       </form>
       {% endif %}
     </div>
@@ -115,30 +115,34 @@
     Aggiungi conto manuale
   </button>
   <div x-show="open" x-transition class="mt-4">
-    <form method="post" action="/setup/account/manual" class="flex flex-wrap gap-3 items-end">
-      <div>
-        <label class="text-xs mb-1.5 block font-medium" style="color:var(--text-muted)">Nome conto *</label>
-        <input type="text" name="name" placeholder="es. Conto moglie" required class="input" style="width:160px">
-      </div>
-      <div>
-        <label class="text-xs mb-1.5 block font-medium" style="color:var(--text-muted)">Banca</label>
-        <input type="text" name="bank_name" placeholder="es. Fineco" class="input" style="width:130px">
-      </div>
-      <div>
-        <label class="text-xs mb-1.5 block font-medium" style="color:var(--text-muted)">Tipo</label>
-        <select name="acc_type" class="input">
-          <option value="checking">💳 Corrente</option>
-          <option value="savings">🏦 Risparmio</option>
-          <option value="investment">📈 Investimento</option>
-        </select>
-      </div>
-      <div>
-        <label class="text-xs mb-1.5 block font-medium" style="color:var(--text-muted)">Valuta</label>
-        <input type="text" name="currency" value="EUR" class="input num" style="width:70px">
-      </div>
-      <div>
-        <label class="text-xs mb-1.5 block font-medium" style="color:var(--text-muted)">Saldo iniziale</label>
-        <input type="number" name="initial_balance" value="0" step="0.01" class="input num" style="width:120px">
+    <form method="post" action="/setup/account/manual">
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+        <div>
+          <label class="text-xs mb-1.5 block font-medium" style="color:var(--text-muted)">Nome conto *</label>
+          <input type="text" name="name" placeholder="es. Conto moglie" required class="input w-full">
+        </div>
+        <div>
+          <label class="text-xs mb-1.5 block font-medium" style="color:var(--text-muted)">Banca</label>
+          <input type="text" name="bank_name" placeholder="es. Fineco" class="input w-full">
+        </div>
+        <div>
+          <label class="text-xs mb-1.5 block font-medium" style="color:var(--text-muted)">Tipo</label>
+          <select name="acc_type" class="input w-full">
+            <option value="checking">💳 Corrente</option>
+            <option value="savings">🏦 Risparmio</option>
+            <option value="investment">📈 Investimento</option>
+          </select>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="text-xs mb-1.5 block font-medium" style="color:var(--text-muted)">Valuta</label>
+            <input type="text" name="currency" value="EUR" class="input num w-full">
+          </div>
+          <div>
+            <label class="text-xs mb-1.5 block font-medium" style="color:var(--text-muted)">Saldo iniziale</label>
+            <input type="number" name="initial_balance" value="0" step="0.01" class="input num w-full">
+          </div>
+        </div>
       </div>
       <button type="submit" class="btn-primary">Aggiungi</button>
     </form>

@@ -1,16 +1,14 @@
-import base64
 import json
 import os
-import secrets
 import urllib.parse
 from collections import defaultdict
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Optional
 
 from fastapi import FastAPI, Request, Form, Depends, Query
-from fastapi.responses import HTMLResponse, RedirectResponse, Response, JSONResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import func
@@ -42,31 +40,6 @@ def _tag_text_color(hex_color: str) -> str:
 
 templates.env.filters["tag_text_color"] = _tag_text_color
 
-_AUTH_USER = os.environ.get("APP_USER", "")
-_AUTH_PASS = os.environ.get("APP_PASS", "")
-
-_UNAUTH = Response(
-    content="Unauthorized",
-    status_code=401,
-    headers={"WWW-Authenticate": 'Basic realm="Ledger"'},
-)
-
-
-@app.middleware("http")
-async def basic_auth(request: Request, call_next):
-    if _AUTH_USER and _AUTH_PASS:
-        auth = request.headers.get("Authorization", "")
-        if not auth.startswith("Basic "):
-            return _UNAUTH
-        try:
-            decoded = base64.b64decode(auth[6:]).decode()
-            user, _, pwd = decoded.partition(":")
-        except Exception:
-            return _UNAUTH
-        ok = secrets.compare_digest(user, _AUTH_USER) and secrets.compare_digest(pwd, _AUTH_PASS)
-        if not ok:
-            return _UNAUTH
-    return await call_next(request)
 
 if Path("static").exists():
     app.mount("/static", StaticFiles(directory="static"), name="static")
@@ -381,6 +354,7 @@ def transactions_view(
     to_: Optional[str] = None,
     tx_type: Optional[str] = Query(default=None, alias="type"),
     search: Optional[str] = None,
+    new_since: Optional[str] = None,
     page: int = 1,
     session: Session = Depends(get_session),
 ):
@@ -400,7 +374,6 @@ def transactions_view(
         q = q.where(Transaction.amount < 0)
 
     all_txs = session.exec(q).all()
-
     all_txs = [tx for tx in all_txs if tx.amount != 0]
 
     if search:
@@ -410,10 +383,24 @@ def transactions_view(
             if s in (tx.description or "").lower() or s in (tx.merchant or "").lower()
         ]
 
+    # When new_since is provided, float newly-synced transactions to the top
+    new_since_dt = None
+    if new_since:
+        try:
+            new_since_dt = datetime.fromisoformat(new_since).replace(tzinfo=None)
+            new_txs = sorted(
+                [tx for tx in all_txs if tx.created_at and tx.created_at >= new_since_dt],
+                key=lambda tx: tx.created_at, reverse=True
+            )
+            old_txs = [tx for tx in all_txs if not (tx.created_at and tx.created_at >= new_since_dt)]
+            all_txs = new_txs + old_txs
+        except ValueError:
+            new_since = None
+
     total = len(all_txs)
     txs = [_enrich_tx(tx, session) for tx in all_txs[(page-1)*page_size : page*page_size]]
 
-    qs_parts = {k: v for k, v in {"cat": cat, "account": account, "from": from_, "to": to_, "type": tx_type, "search": search}.items() if v}
+    qs_parts = {k: v for k, v in {"cat": cat, "account": account, "from": from_, "to": to_, "type": tx_type, "search": search, "new_since": new_since}.items() if v}
     query_string = urllib.parse.urlencode(qs_parts)
 
     mapped_merchants = {
@@ -439,6 +426,8 @@ def transactions_view(
         "search": search or "",
         "query_string": query_string,
         "mapped_merchants": mapped_merchants,
+        "new_since": new_since,
+        "new_since_dt": new_since_dt,
     })
 
 
@@ -453,12 +442,23 @@ def update_category(
     tx = session.get(Transaction, tx_id)
     if tx:
         tx.category_id = category_id
+        tx.is_confirmed = True
         session.commit()
     if request.headers.get("X-Fetch"):
         cat = session.get(Category, category_id)
         color = cat.color if cat else "#6b6b88"
-        return JSONResponse({"color": color, "name": cat.name if cat else "Altro", "icon": cat.icon if cat else "❓", "text_color": _tag_text_color(color)})
+        return JSONResponse({"color": color, "name": cat.name if cat else "Altro", "icon": cat.icon if cat else "❓", "text_color": _tag_text_color(color), "is_confirmed": True})
     return RedirectResponse(redirect_to, status_code=303)
+
+
+@app.post("/transactions/{tx_id}/confirm")
+def toggle_confirm(tx_id: int, session: Session = Depends(get_session)):
+    tx = session.get(Transaction, tx_id)
+    if tx:
+        tx.is_confirmed = not tx.is_confirmed
+        session.commit()
+        return JSONResponse({"is_confirmed": tx.is_confirmed})
+    return JSONResponse({"is_confirmed": False})
 
 
 @app.post("/transactions/{tx_id}/share")
@@ -832,6 +832,7 @@ def add_manual_transaction(
         merchant=merchant,
         category_id=category_id,
         raw_data="",
+        created_at=datetime.now(timezone.utc).replace(tzinfo=None),
     )
     session.add(tx)
     # Update balance snapshot
@@ -894,7 +895,16 @@ def detect_transfers(session: Session = Depends(get_session)):
 @app.post("/sync")
 def trigger_sync():
     try:
+        sync_start = datetime.now(timezone.utc).replace(tzinfo=None)
         sync_all()
+        with Session(engine) as s:
+            new_count = len(s.exec(select(Transaction).where(Transaction.created_at >= sync_start)).all())
+        if new_count > 0:
+            word = "nuova" if new_count == 1 else "nuove"
+            link = f"/transactions?new_since={sync_start.isoformat()}"
+            resp = HTMLResponse(f'✓ {new_count} {word}')
+            resp.headers["HX-Redirect"] = link
+            return resp
         return HTMLResponse('✓ Sync completato')
     except Exception as e:
         return HTMLResponse(f'✗ {e}')

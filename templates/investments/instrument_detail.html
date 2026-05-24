@@ -4,12 +4,12 @@
 
 <div class="mb-6">
   <a href="/investments" class="btn-ghost inline-flex mb-4">← Investimenti</a>
-  <div class="flex items-center justify-between">
-    <div>
+  <div class="flex flex-wrap items-start justify-between gap-3">
+    <div class="min-w-0">
       <h1 class="text-xl font-semibold" style="color:var(--text)">{{ inst.name }}</h1>
       <p class="text-xs mt-0.5" style="color:var(--text-dim)">{{ inst.type }} · {{ inst.isin }} · {{ inst.ticker }} · {{ inst.exchange }}</p>
     </div>
-    <div class="flex items-center gap-2">
+    <div class="flex items-center gap-2 flex-wrap">
       <form method="post" action="/investments/quotes/{{ inst.id }}/refresh">
         <button type="submit" class="btn-ghost">
           <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -30,8 +30,8 @@
   </div>
 </div>
 
-<!-- Quote card -->
-<div class="grid gap-4 mb-6" style="grid-template-columns:repeat(5,1fr)">
+<!-- KPI strip -->
+<div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-6">
   <div class="card">
     <p class="text-xs mb-2" style="color:var(--text-muted)">Ultimo prezzo</p>
     {% if quote %}
@@ -80,6 +80,35 @@
     <p class="text-xs font-medium uppercase tracking-wider" style="color:var(--text-muted)">Acquisti</p>
     <a href="/investments/transactions/add" class="btn-ghost text-xs">+ Aggiungi</a>
   </div>
+
+  <!-- Mobile cards -->
+  <div class="sm:hidden">
+    {% for tx in transactions %}
+    <div class="px-4 py-3 tr-hover" style="border-bottom:1px solid var(--border-subtle)">
+      <div class="flex items-start justify-between gap-2 mb-1">
+        <div class="flex items-center gap-2">
+          <span class="tag text-xs" style="background:{% if tx.transaction_type=='BUY' %}rgba(5,150,105,0.1){% else %}rgba(225,29,72,0.1){% endif %};color:{% if tx.transaction_type=='BUY' %}var(--emerald){% else %}var(--rose){% endif %}">{{ tx.transaction_type }}</span>
+          <span class="num text-xs" style="color:var(--text-muted)">{{ tx.trade_date.strftime('%d/%m/%Y') }}</span>
+        </div>
+        <p class="num text-sm font-medium flex-shrink-0" style="color:var(--text)">{{ "{:,.2f}".format(tx.quantity * tx.unit_price + tx.fees) }} {{ tx.currency }}</p>
+      </div>
+      <div class="flex items-center justify-between gap-2">
+        <p class="text-xs" style="color:var(--text-muted)">Qtà {{ tx.quantity }} · @{{ "{:,.4f}".format(tx.unit_price) }} · comm. {{ "{:,.2f}".format(tx.fees) }}</p>
+        <div class="flex gap-1 flex-shrink-0">
+          <a href="/investments/transactions/{{ tx.id }}/edit" class="btn-ghost text-xs px-2 py-1">✏</a>
+          <form method="post" action="/investments/transactions/{{ tx.id }}/delete" onsubmit="return confirm('Eliminare?')">
+            <button type="submit" class="btn-ghost text-xs px-2 py-1" style="color:var(--rose)">✕</button>
+          </form>
+        </div>
+      </div>
+    </div>
+    {% else %}
+    <p class="px-5 py-10 text-center text-sm" style="color:var(--text-dim)">Nessun acquisto</p>
+    {% endfor %}
+  </div>
+
+  <!-- Desktop table -->
+  <div class="hidden sm:block overflow-x-auto">
   <table class="w-full text-sm">
     <thead>
       <tr class="text-xs uppercase tracking-wide" style="color:var(--text-dim); border-bottom:1px solid var(--border-subtle)">
@@ -96,7 +125,7 @@
     <tbody>
     {% for tx in transactions %}
     <tr style="border-bottom:1px solid var(--border-subtle)">
-      <td class="num px-5 py-3 text-xs" style="color:var(--text-muted)">{{ tx.trade_date.strftime('%d %b %Y') }}</td>
+      <td class="num px-5 py-3 text-xs" style="color:var(--text-muted)">{{ tx.trade_date.strftime('%d/%m/%Y') }}</td>
       <td class="px-4 py-3">
         <span class="tag text-xs" style="background:{% if tx.transaction_type=='BUY' %}rgba(5,150,105,0.1){% else %}rgba(225,29,72,0.1){% endif %};color:{% if tx.transaction_type=='BUY' %}var(--emerald){% else %}var(--rose){% endif %}">{{ tx.transaction_type }}</span>
       </td>
@@ -121,5 +150,6 @@
     {% endfor %}
     </tbody>
   </table>
+  </div>
 </div>
 {% endblock %}

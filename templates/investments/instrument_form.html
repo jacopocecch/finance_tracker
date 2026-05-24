@@ -9,8 +9,8 @@
 
 <div class="card" style="max-width:560px">
   <form method="post" action="{% if instrument %}/investments/instruments/{{ instrument.id }}/edit{% else %}/investments/instruments/add{% endif %}">
-    <div class="grid gap-4 mb-5" style="grid-template-columns:1fr 1fr">
-      <div class="col-span-2">
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-5">
+      <div class="sm:col-span-2">
         <label class="text-xs font-medium mb-1.5 block" style="color:var(--text-muted)">Nome *</label>
         <input type="text" name="name" value="{{ instrument.name if instrument else '' }}" placeholder="Vanguard FTSE All-World UCITS ETF" class="input w-full" required>
       </div>

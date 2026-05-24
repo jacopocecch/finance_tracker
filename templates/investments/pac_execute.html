@@ -12,12 +12,12 @@
 
   <!-- Date + broker -->
   <div class="card mb-4">
-    <div class="flex gap-4">
-      <div class="flex-1">
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div>
         <label class="text-xs font-medium mb-1.5 block" style="color:var(--text-muted)">Data acquisto *</label>
         <input type="date" name="trade_date" value="{{ today }}" required class="input w-full">
       </div>
-      <div style="width:180px">
+      <div>
         <label class="text-xs font-medium mb-1.5 block" style="color:var(--text-muted)">Broker</label>
         <input type="text" name="broker_name" value="{{ broker }}" class="input w-full">
       </div>
@@ -26,32 +26,29 @@
 
   <!-- Instruments -->
   {% if components %}
-  <div class="card mb-4" style="padding:0">
-    <!-- Header -->
-    <div class="grid px-5 py-3 text-xs font-medium uppercase tracking-wide" style="grid-template-columns:1fr 100px 120px 100px;gap:12px;color:var(--text-dim);border-bottom:1px solid var(--border)">
-      <span>Strumento</span>
-      <span>Quantità</span>
-      <span>Prezzo unit.</span>
-      <span>Commissioni</span>
-    </div>
-
+  <div class="flex flex-col gap-3 mb-4">
     {% for comp, inst in components %}
     <input type="hidden" name="instrument_ids" value="{{ inst.id }}">
-    <div class="grid px-5 py-4 items-center" style="grid-template-columns:1fr 100px 120px 100px;gap:12px;{% if not loop.last %}border-bottom:1px solid var(--border-subtle){% endif %}">
-      <div>
-        <p class="text-sm font-medium" style="color:var(--text)">{{ inst.ticker }}</p>
-        <p class="text-xs mt-0.5" style="color:var(--text-muted)">{{ inst.name[:40] }}{% if inst.name|length > 40 %}…{% endif %}</p>
+    <div class="card">
+      <p class="text-sm font-medium mb-3" style="color:var(--text)">{{ inst.ticker }} <span class="text-xs font-normal" style="color:var(--text-muted)">{{ inst.name[:50] }}{% if inst.name|length > 50 %}…{% endif %}</span></p>
+      <div class="grid grid-cols-3 gap-3">
+        <div>
+          <label class="text-xs font-medium mb-1 block" style="color:var(--text-muted)">Quantità</label>
+          <input type="number" name="quantities"
+                 value="{{ comp.target_weight | int if comp.target_weight else '' }}"
+                 placeholder="0" step="1" min="0" class="input w-full">
+        </div>
+        <div>
+          <label class="text-xs font-medium mb-1 block" style="color:var(--text-muted)">Prezzo unit.</label>
+          <input type="number" name="unit_prices"
+                 placeholder="0.0000" step="0.0001" min="0" class="input w-full">
+        </div>
+        <div>
+          <label class="text-xs font-medium mb-1 block" style="color:var(--text-muted)">Commissioni</label>
+          <input type="number" name="fees_list"
+                 placeholder="0.00" step="0.01" min="0" value="0" class="input w-full">
+        </div>
       </div>
-      <input type="number" name="quantities"
-             value="{{ comp.target_weight | int if comp.target_weight else '' }}"
-             placeholder="0" step="1" min="0"
-             class="input w-full">
-      <input type="number" name="unit_prices"
-             placeholder="0.0000" step="0.0001" min="0"
-             class="input w-full">
-      <input type="number" name="fees_list"
-             placeholder="0.00" step="0.01" min="0" value="0"
-             class="input w-full">
     </div>
     {% endfor %}
   </div>

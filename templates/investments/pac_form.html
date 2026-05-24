@@ -21,9 +21,6 @@
     <!-- Components -->
     <div class="mb-5">
       <label class="text-xs font-medium mb-3 block" style="color:var(--text-muted)">Strumenti inclusi</label>
-      <div class="grid text-xs mb-1" style="grid-template-columns:1fr 90px 28px;gap:8px;color:var(--text-dim)">
-        <span>Strumento</span><span>Qtà predefinita</span><span></span>
-      </div>
       <template x-for="(comp, idx) in components" :key="idx">
         <div class="flex gap-2 mb-2 items-center">
           <select name="instrument_ids" class="input flex-1">
@@ -32,7 +29,7 @@
             <option value="{{ inst.id }}">{{ inst.ticker }} — {{ inst.name }}</option>
             {% endfor %}
           </select>
-          <input type="number" name="target_weights" placeholder="Qtà" step="1" min="0" class="input" style="width:90px" x-model="comp.weight">
+          <input type="number" name="target_weights" placeholder="Qtà" step="1" min="0" class="input w-20" x-model="comp.weight">
           <button type="button" @click="components.splice(idx,1)" class="btn-ghost" style="color:var(--rose)">✕</button>
         </div>
       </template>
