@@ -27,11 +27,11 @@
     <form method="post" action="/categories/add" class="flex gap-3 flex-wrap items-end">
       <div>
         <label class="text-xs mb-1.5 block font-medium" style="color:var(--text-muted)">Nome *</label>
-        <input type="text" name="name" placeholder="es. Palestra" required class="input" style="height:36px">
+        <input type="text" name="name" placeholder="es. Palestra" required class="input">
       </div>
       <div>
         <label class="text-xs mb-1.5 block font-medium" style="color:var(--text-muted)">Tipo</label>
-        <select name="cat_type" class="input" style="height:36px">
+        <select name="cat_type" class="input">
           <option value="expense">Spesa</option>
           <option value="income">Entrata</option>
           <option value="transfer">Trasferimento</option>
@@ -39,13 +39,13 @@
       </div>
       <div>
         <label class="text-xs mb-1.5 block font-medium" style="color:var(--text-muted)">Icona</label>
-        <input type="text" name="icon" value="💳" class="input" style="height:36px;width:60px">
+        <input type="text" name="icon" value="💳" class="input" style="width:60px">
       </div>
       <div>
         <label class="text-xs mb-1.5 block font-medium" style="color:var(--text-muted)">Colore</label>
         <input type="color" name="color" value="#6B7280" class="rounded-lg" style="height:36px;width:48px;padding:2px;border:1px solid var(--border);background:var(--surface-2)">
       </div>
-      <button type="submit" class="btn-primary text-sm" style="height:36px;padding:0 16px">Aggiungi</button>
+      <button type="submit" class="btn-primary">Aggiungi</button>
     </form>
   </div>
 </div>

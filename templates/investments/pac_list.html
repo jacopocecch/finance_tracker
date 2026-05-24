@@ -26,9 +26,9 @@
       </div>
     </div>
     <div class="flex gap-2 items-center">
-      <a href="/investments/pac/{{ row.pac.id }}/execute" class="btn-primary" style="height:36px;display:flex;align-items:center;white-space:nowrap">+ Esegui</a>
+      <a href="/investments/pac/{{ row.pac.id }}/execute" class="btn-primary" style="white-space:nowrap">+ Esegui</a>
       <form method="post" action="/investments/pac/{{ row.pac.id }}/delete" onsubmit="return confirm('Archiviare {{ row.pac.name }}?')">
-        <button type="submit" class="btn-ghost" style="height:36px;color:var(--rose)">Rimuovi</button>
+        <button type="submit" class="btn-ghost" style="color:var(--rose)">Rimuovi</button>
       </form>
     </div>
   </div>

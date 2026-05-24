@@ -41,7 +41,7 @@
       <div class="flex items-center gap-2">
         {% if acc.session_id != 'manual' %}
         <form method="post" action="/setup/account/{{ acc.id }}/sync">
-          <button type="submit" class="btn-ghost" style="height:36px; color:var(--sky); border-color:rgba(125,211,252,0.25)">
+          <button type="submit" class="btn-ghost" style="color:var(--sky); border-color:rgba(125,211,252,0.25)">
             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
             </svg>
@@ -49,7 +49,7 @@
           </button>
         </form>
         {% endif %}
-        <button @click="open = !open" class="btn-ghost" style="height:36px; color:var(--text-muted)">
+        <button @click="open = !open" class="btn-ghost" style="color:var(--text-muted)">
           <svg class="w-3.5 h-3.5 transition-transform duration-150" :style="open ? 'transform:rotate(180deg)' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
           </svg>
@@ -57,7 +57,7 @@
         </button>
         <form method="post" action="/setup/account/{{ acc.id }}/delete"
               onsubmit="return confirm('Rimuovere {{ acc.bank_name }} — {{ acc.name }}? Verranno cancellate tutte le transazioni associate.')">
-          <button type="submit" class="btn-ghost" style="height:36px; color:var(--rose); border-color:rgba(225,29,72,0.25)">
+          <button type="submit" class="btn-ghost" style="color:var(--rose); border-color:rgba(225,29,72,0.25)">
             Rimuovi
           </button>
         </form>
@@ -67,21 +67,21 @@
     <!-- Submenu -->
     <div x-show="open" x-transition:enter="transition ease-out duration-100" x-transition:enter-start="opacity-0 -translate-y-1" x-transition:enter-end="opacity-100 translate-y-0" class="px-5 pb-4 flex flex-wrap gap-2 items-center" style="border-top:1px solid var(--border-subtle); padding-top:12px">
       <form method="post" action="/setup/account/{{ acc.id }}/name" class="flex items-center gap-1.5">
-        <input type="text" name="display_name" value="{{ acc.display_name or '' }}" placeholder="Nome conto" class="input text-sm" style="width:150px; height:36px; padding-top:0; padding-bottom:0">
-        <button type="submit" class="btn-ghost" style="height:36px">Rinomina</button>
+        <input type="text" name="display_name" value="{{ acc.display_name or '' }}" placeholder="Nome conto" class="input text-sm" style="width:150px">
+        <button type="submit" class="btn-ghost">Rinomina</button>
       </form>
       <form method="post" action="/setup/account/{{ acc.id }}/type" class="flex items-center gap-1.5">
-        <select name="type" class="input text-sm" style="height:36px; padding-top:0; padding-bottom:0">
+        <select name="type" class="input text-sm">
           <option value="checking" {% if acc.type == 'checking' %}selected{% endif %}>💳 Corrente</option>
           <option value="savings" {% if acc.type == 'savings' %}selected{% endif %}>🏦 Risparmio</option>
           <option value="investment" {% if acc.type == 'investment' %}selected{% endif %}>📈 Investimento</option>
         </select>
-        <button type="submit" class="btn-ghost" style="height:36px">Salva tipo</button>
+        <button type="submit" class="btn-ghost">Salva tipo</button>
       </form>
       {% if acc.session_id == 'manual' %}
       <form method="post" action="/setup/account/{{ acc.id }}/balance" class="flex items-center gap-1.5">
-        <input type="number" name="balance" step="0.01" placeholder="Saldo attuale" class="input text-sm num" style="width:140px; height:36px; padding-top:0; padding-bottom:0">
-        <button type="submit" class="btn-ghost" style="height:36px">Aggiorna saldo</button>
+        <input type="number" name="balance" step="0.01" placeholder="Saldo attuale" class="input text-sm num" style="width:140px">
+        <button type="submit" class="btn-ghost">Aggiorna saldo</button>
       </form>
       {% endif %}
     </div>
@@ -118,15 +118,15 @@
     <form method="post" action="/setup/account/manual" class="flex flex-wrap gap-3 items-end">
       <div>
         <label class="text-xs mb-1.5 block font-medium" style="color:var(--text-muted)">Nome conto *</label>
-        <input type="text" name="name" placeholder="es. Conto moglie" required class="input" style="height:36px; width:160px">
+        <input type="text" name="name" placeholder="es. Conto moglie" required class="input" style="width:160px">
       </div>
       <div>
         <label class="text-xs mb-1.5 block font-medium" style="color:var(--text-muted)">Banca</label>
-        <input type="text" name="bank_name" placeholder="es. Fineco" class="input" style="height:36px; width:130px">
+        <input type="text" name="bank_name" placeholder="es. Fineco" class="input" style="width:130px">
       </div>
       <div>
         <label class="text-xs mb-1.5 block font-medium" style="color:var(--text-muted)">Tipo</label>
-        <select name="acc_type" class="input" style="height:36px">
+        <select name="acc_type" class="input">
           <option value="checking">💳 Corrente</option>
           <option value="savings">🏦 Risparmio</option>
           <option value="investment">📈 Investimento</option>
@@ -134,13 +134,13 @@
       </div>
       <div>
         <label class="text-xs mb-1.5 block font-medium" style="color:var(--text-muted)">Valuta</label>
-        <input type="text" name="currency" value="EUR" class="input num" style="height:36px; width:70px">
+        <input type="text" name="currency" value="EUR" class="input num" style="width:70px">
       </div>
       <div>
         <label class="text-xs mb-1.5 block font-medium" style="color:var(--text-muted)">Saldo iniziale</label>
-        <input type="number" name="initial_balance" value="0" step="0.01" class="input num" style="height:36px; width:120px">
+        <input type="number" name="initial_balance" value="0" step="0.01" class="input num" style="width:120px">
       </div>
-      <button type="submit" class="btn-primary" style="height:36px; padding:0 16px">Aggiungi</button>
+      <button type="submit" class="btn-primary">Aggiungi</button>
     </form>
   </div>
 </div>

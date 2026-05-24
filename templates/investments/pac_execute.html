@@ -15,11 +15,11 @@
     <div class="flex gap-4">
       <div class="flex-1">
         <label class="text-xs font-medium mb-1.5 block" style="color:var(--text-muted)">Data acquisto *</label>
-        <input type="date" name="trade_date" value="{{ today }}" required class="input w-full" style="height:38px">
+        <input type="date" name="trade_date" value="{{ today }}" required class="input w-full">
       </div>
       <div style="width:180px">
         <label class="text-xs font-medium mb-1.5 block" style="color:var(--text-muted)">Broker</label>
-        <input type="text" name="broker_name" value="{{ broker }}" class="input w-full" style="height:38px">
+        <input type="text" name="broker_name" value="{{ broker }}" class="input w-full">
       </div>
     </div>
   </div>
@@ -45,13 +45,13 @@
       <input type="number" name="quantities"
              value="{{ comp.target_weight | int if comp.target_weight else '' }}"
              placeholder="0" step="1" min="0"
-             class="input w-full" style="height:38px">
+             class="input w-full">
       <input type="number" name="unit_prices"
              placeholder="0.0000" step="0.0001" min="0"
-             class="input w-full" style="height:38px">
+             class="input w-full">
       <input type="number" name="fees_list"
              placeholder="0.00" step="0.01" min="0" value="0"
-             class="input w-full" style="height:38px">
+             class="input w-full">
     </div>
     {% endfor %}
   </div>

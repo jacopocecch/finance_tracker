@@ -49,7 +49,7 @@ function txRow(el) {
     <form method="post" action="/transactions/new" class="flex flex-wrap gap-3 items-end">
       <div>
         <label class="text-xs mb-1.5 block font-medium" style="color:var(--text-muted)">Conto *</label>
-        <select name="account_id" required class="input" style="height:36px">
+        <select name="account_id" required class="input">
           {% for acc in manual_accounts %}
           <option value="{{ acc.id }}">{{ acc.display_name or acc.name }}</option>
           {% endfor %}
@@ -57,30 +57,30 @@ function txRow(el) {
       </div>
       <div>
         <label class="text-xs mb-1.5 block font-medium" style="color:var(--text-muted)">Data *</label>
-        <input type="date" name="tx_date" required value="{{ today }}" class="input num" style="height:36px">
+        <input type="date" name="tx_date" required value="{{ today }}" class="input num">
       </div>
       <div>
         <label class="text-xs mb-1.5 block font-medium" style="color:var(--text-muted)">Importo * <span style="color:var(--text-dim)">(− uscita)</span></label>
-        <input type="number" name="amount" required step="0.01" placeholder="-45.00" class="input num" style="height:36px; width:120px">
+        <input type="number" name="amount" required step="0.01" placeholder="-45.00" class="input num" style="width:120px">
       </div>
       <div>
         <label class="text-xs mb-1.5 block font-medium" style="color:var(--text-muted)">Descrizione</label>
-        <input type="text" name="description" placeholder="es. Supermercato" class="input" style="height:36px; width:180px">
+        <input type="text" name="description" placeholder="es. Supermercato" class="input" style="width:180px">
       </div>
       <div>
         <label class="text-xs mb-1.5 block font-medium" style="color:var(--text-muted)">Esercente</label>
-        <input type="text" name="merchant" placeholder="es. Esselunga" class="input" style="height:36px; width:140px">
+        <input type="text" name="merchant" placeholder="es. Esselunga" class="input" style="width:140px">
       </div>
       <div>
         <label class="text-xs mb-1.5 block font-medium" style="color:var(--text-muted)">Categoria</label>
-        <select name="category_id" class="input" style="height:36px">
+        <select name="category_id" class="input">
           <option value="">Auto</option>
           {% for cat in categories %}
           <option value="{{ cat.id }}">{{ cat.icon }} {{ cat.name }}</option>
           {% endfor %}
         </select>
       </div>
-      <button type="submit" class="btn-primary" style="height:36px; padding:0 16px">Aggiungi</button>
+      <button type="submit" class="btn-primary">Aggiungi</button>
     </form>
   </div>
 </div>
@@ -91,11 +91,11 @@ function txRow(el) {
   <form method="get" action="/transactions" class="flex gap-3 items-end flex-wrap">
     <div class="w-full">
       <label class="text-xs mb-1.5 block font-medium" style="color:var(--text-muted)">Cerca</label>
-      <input type="text" name="search" value="{{ search }}" placeholder="Descrizione o esercente…" class="input w-full" style="height:38px">
+      <input type="text" name="search" value="{{ search }}" placeholder="Descrizione o esercente…" class="input w-full">
     </div>
     <div class="flex-1 min-w-36">
       <label class="text-xs mb-1.5 block font-medium" style="color:var(--text-muted)">Categoria</label>
-      <select name="cat" class="input w-full" style="height:38px" onchange="this.form.submit()">
+      <select name="cat" class="input w-full" onchange="this.form.submit()">
         <option value="">Tutte</option>
         {% for cat in categories %}
         <option value="{{ cat.id }}" {% if selected_cat == cat.id|string %}selected{% endif %}>
@@ -106,7 +106,7 @@ function txRow(el) {
     </div>
     <div class="flex-1 min-w-36">
       <label class="text-xs mb-1.5 block font-medium" style="color:var(--text-muted)">Conto</label>
-      <select name="account" class="input w-full" style="height:38px" onchange="this.form.submit()">
+      <select name="account" class="input w-full" onchange="this.form.submit()">
         <option value="">Tutti</option>
         {% for acc in accounts %}
         <option value="{{ acc.id }}" {% if selected_account == acc.id|string %}selected{% endif %}>
@@ -117,7 +117,7 @@ function txRow(el) {
     </div>
     <div class="flex-1 min-w-28">
       <label class="text-xs mb-1.5 block font-medium" style="color:var(--text-muted)">Tipo</label>
-      <select name="type" class="input w-full" style="height:38px" onchange="this.form.submit()">
+      <select name="type" class="input w-full" onchange="this.form.submit()">
         <option value=""       {% if selected_type == '' %}selected{% endif %}>Tutti</option>
         <option value="income" {% if selected_type == 'income' %}selected{% endif %}>↑ Entrate</option>
         <option value="expense"{% if selected_type == 'expense' %}selected{% endif %}>↓ Uscite</option>
@@ -125,15 +125,15 @@ function txRow(el) {
     </div>
     <div>
       <label class="text-xs mb-1.5 block font-medium" style="color:var(--text-muted)">Da</label>
-      <input type="date" name="from" value="{{ date_from or '' }}" class="input" style="height:38px">
+      <input type="date" name="from" value="{{ date_from or '' }}" class="input">
     </div>
     <div>
       <label class="text-xs mb-1.5 block font-medium" style="color:var(--text-muted)">A</label>
-      <input type="date" name="to" value="{{ date_to or '' }}" class="input" style="height:38px">
+      <input type="date" name="to" value="{{ date_to or '' }}" class="input">
     </div>
-    <div class="flex gap-2">
-      <button type="submit" class="btn-primary text-sm px-4" style="height:38px">Filtra</button>
-      <a href="/transactions" class="btn-ghost text-sm px-4 flex items-center" style="border-radius:8px;height:38px">Reset</a>
+    <div class="flex gap-2 items-end">
+      <button type="submit" class="btn-primary">Filtra</button>
+      <a href="/transactions" class="btn-ghost">Reset</a>
     </div>
   </form>
 </div>
