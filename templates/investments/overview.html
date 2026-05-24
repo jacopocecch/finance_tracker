@@ -37,6 +37,7 @@
   <a href="/investments/transactions/add" class="btn-primary inline-flex">+ Aggiungi acquisto</a>
 </div>
 {% else %}
+{% set alloc_colors = ['#059669','#0369a1','#7c3aed','#d97706','#e11d48','#0891b2','#65a30d','#9333ea'] %}
 
 <!-- KPI strip -->
 <div class="grid grid-cols-2 gap-3 mb-6" style="grid-template-columns: repeat(4, 1fr)">
@@ -94,11 +95,15 @@
       </thead>
       <tbody>
       {% for pos in summary.positions %}
+      {% set pos_color = alloc_colors[loop.index0 % alloc_colors|length] %}
       <tr class="tr-hover" style="border-bottom:1px solid var(--border-subtle)">
         <td class="px-5 py-3.5">
-          <a href="/investments/instruments/{{ pos.instrument_id }}" style="color:var(--text)">
-            <p class="font-medium text-sm">{{ pos.name }}</p>
-            <p class="text-xs mt-0.5" style="color:var(--text-dim)">{{ pos.ticker }} · {{ pos.isin }}</p>
+          <a href="/investments/instruments/{{ pos.instrument_id }}" style="color:var(--text)" class="flex items-center gap-3">
+            <div class="w-3 h-3 rounded-full flex-shrink-0" style="background:{{ pos_color }}"></div>
+            <div>
+              <p class="font-medium text-sm">{{ pos.name }}</p>
+              <p class="text-xs mt-0.5" style="color:var(--text-dim)">{{ pos.ticker }} · {{ pos.isin }}</p>
+            </div>
           </a>
         </td>
         <td class="num px-4 py-3.5 text-right text-sm" style="color:var(--text-muted)">{{ pos.total_quantity }}</td>
@@ -230,10 +235,7 @@
       responsive: true,
       cutout: '65%',
       plugins: {
-        legend: {
-          position: 'bottom',
-          labels: { boxWidth: 10, padding: 12, font: { size: 10 } }
-        },
+        legend: { display: false },
         tooltip: {
           callbacks: {
             label: ctx => `  €${ctx.parsed.toLocaleString('it-IT', {minimumFractionDigits:2})}`
