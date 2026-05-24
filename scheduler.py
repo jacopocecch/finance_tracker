@@ -1,7 +1,6 @@
 import shutil
 import logging
 from datetime import datetime
-from pathlib import Path
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from sqlmodel import Session
@@ -12,7 +11,7 @@ import config
 log = logging.getLogger(__name__)
 _scheduler = BackgroundScheduler()
 
-BACKUP_DIR = Path("/Users/jacopo/Documents/Backup")
+BACKUP_DIR = config.BACKUP_DIR
 MAX_BACKUPS = 30
 
 

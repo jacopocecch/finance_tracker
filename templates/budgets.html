@@ -7,55 +7,119 @@
   <a href="/monthly" class="btn-ghost text-sm">← Mensile</a>
 </div>
 
-<div class="card" style="padding:0">
-  <table class="w-full text-sm">
-    <thead>
-      <tr class="text-xs uppercase tracking-wide" style="color:var(--text-dim); border-bottom:1px solid var(--border)">
-        <th class="text-left px-5 py-3 font-medium">Categoria</th>
-        <th class="text-right px-5 py-3 font-medium">Budget mensile</th>
-        <th class="px-5 py-3"></th>
-      </tr>
-    </thead>
-    <tbody>
-    {% for cat in categories %}
-    {% set b = budgets.get(cat.id) %}
-    <tr style="border-bottom:1px solid var(--border-subtle)" x-data="{ editing: false }">
-      <td class="px-5 py-3">
-        <span class="tag" style="background:{{ cat.color }}18;color:{{ cat.color }};border:1px solid {{ cat.color }}30">
-          {{ cat.icon }} {{ cat.name }}
-        </span>
-      </td>
-      <td class="num px-5 py-3 text-right">
-        <template x-if="!editing">
-          <span style="color:{% if b %}var(--text){% else %}var(--text-dim){% endif %}">
-            {% if b %}{{ "{:,.2f}".format(b.amount) }} €{% else %}—{% endif %}
-          </span>
-        </template>
-        <template x-if="editing">
-          <form method="post" action="/budgets/save" class="inline-flex gap-2 items-center justify-end">
-            <input type="hidden" name="category_id" value="{{ cat.id }}">
-            <input type="number" name="amount" value="{{ b.amount if b else '' }}" placeholder="es. 300" step="0.01" min="0"
-                   class="input text-right" style="width:110px;height:34px;padding:4px 10px">
-            <button type="submit" class="btn-primary text-xs" style="height:34px;padding:4px 12px">Salva</button>
-          </form>
-        </template>
-      </td>
-      <td class="px-5 py-3 text-right">
-        <div class="flex gap-2 justify-end items-center">
-          <button @click="editing = !editing" class="btn-ghost text-xs" style="height:30px;padding:0 10px">
-            <span x-text="editing ? 'Annulla' : 'Modifica'"></span>
-          </button>
-          {% if b %}
-          <form method="post" action="/budgets/{{ b.id }}/delete">
-            <button type="submit" class="btn-ghost text-xs" style="height:30px;padding:0 10px;color:var(--rose)">Rimuovi</button>
-          </form>
-          {% endif %}
-        </div>
-      </td>
-    </tr>
-    {% endfor %}
-    </tbody>
-  </table>
+<style>
+  .cat-btn {
+    height: 28px; padding: 0 10px; border-radius: 7px; font-size: 11px; font-weight: 500;
+    display: flex; align-items: center; cursor: pointer;
+    transition: background 0.1s, color 0.1s;
+    border: 1px solid var(--border); background: var(--surface-2); color: var(--text-muted); gap: 4px;
+  }
+  .cat-btn:hover { background: var(--border); color: var(--text); }
+  .cat-btn-danger { color: var(--rose); }
+  .cat-btn-danger:hover { background: rgba(225,29,72,0.08); border-color: rgba(225,29,72,0.2); color: var(--rose); }
+  .budget-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+    transition: box-shadow 0.15s ease, transform 0.15s ease;
+  }
+  .budget-card:hover {
+    box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+    transform: translateY(-1px);
+  }
+  .budget-card-accent {
+    height: 3px;
+    width: 100%;
+  }
+  .budget-card-body {
+    padding: 0.9rem 1rem 0.85rem;
+  }
+  .budget-amount {
+    font-family: 'DM Mono', monospace;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.03em;
+    font-size: 1.35rem;
+    font-weight: 600;
+    line-height: 1.2;
+  }
+  .budget-empty {
+    font-family: 'DM Mono', monospace;
+    font-size: 1.1rem;
+    letter-spacing: -0.02em;
+  }
+</style>
+
+{% set sections = [
+  ('expense',  'Uscite',        'var(--rose)',    'rgba(225,29,72,0.12)'),
+  ('income',   'Entrate',       'var(--emerald)', 'rgba(5,150,105,0.12)'),
+  ('transfer', 'Trasferimenti', 'var(--sky)',     'rgba(3,105,161,0.12)'),
+] %}
+
+{% for sec_type, sec_label, sec_color, sec_bg in sections %}
+{% set sec_cats = categories | selectattr('type', 'equalto', sec_type) | list %}
+{% if sec_cats %}
+
+<div class="flex items-center gap-3 mb-3 {% if not loop.first %}mt-6{% endif %}">
+  <span class="text-xs font-semibold uppercase tracking-widest" style="color:{{ sec_color }}">{{ sec_label }}</span>
+  <div class="flex-1 h-px" style="background:var(--border-subtle)"></div>
 </div>
+
+<div class="grid gap-3 mb-2" style="grid-template-columns: repeat(auto-fill, minmax(200px, 1fr))">
+{% for cat in sec_cats %}
+{% set b = budgets.get(cat.id) %}
+<div class="budget-card" x-data="{ editing: false }">
+  <div class="budget-card-accent" style="background:{{ cat.color }}"></div>
+  <div class="budget-card-body">
+
+    <!-- Icon + name -->
+    <div class="flex items-center gap-2 mb-3">
+      <div style="width:30px;height:30px;border-radius:8px;background:{{ cat.color }}18;display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0">
+        {{ cat.icon }}
+      </div>
+      <span class="text-sm font-semibold truncate" style="color:var(--text)">{{ cat.name }}</span>
+    </div>
+
+    <!-- Amount display -->
+    <template x-if="!editing">
+      <p class="mb-3" style="color:{% if b %}var(--text){% else %}var(--text-dim){% endif %}">
+        {% if b %}
+        <span class="budget-amount">{{ "{:,.0f}".format(b.amount) }}</span><span class="text-xs ml-1" style="color:var(--text-muted)">€/mo</span>
+        {% else %}
+        <span class="budget-empty" style="color:var(--text-dim)">—</span>
+        {% endif %}
+      </p>
+    </template>
+    <template x-if="editing">
+      <form method="post" action="/budgets/save" class="mb-3">
+        <input type="hidden" name="category_id" value="{{ cat.id }}">
+        <div class="flex gap-1.5 items-center">
+          <input type="number" name="amount" value="{{ b.amount if b else '' }}" placeholder="300" step="0.01" min="0"
+                 class="input w-full text-right num" style="height:32px;padding:4px 8px;font-size:13px">
+          <button type="submit" class="btn-primary text-xs" style="height:32px;padding:0 10px;white-space:nowrap">Salva</button>
+        </div>
+      </form>
+    </template>
+
+    <!-- Actions -->
+    <div class="flex gap-1.5">
+      <button @click="editing = !editing" class="cat-btn" style="font-size:11px;height:26px;padding:0 9px">
+        <span x-text="editing ? 'Annulla' : 'Modifica'"></span>
+      </button>
+      {% if b %}
+      <form method="post" action="/budgets/{{ b.id }}/delete">
+        <button type="submit" class="cat-btn cat-btn-danger" style="font-size:11px;height:26px;padding:0 9px">Rimuovi</button>
+      </form>
+      {% endif %}
+    </div>
+
+  </div>
+</div>
+{% endfor %}
+</div><!-- /grid -->
+
+{% endif %}
+{% endfor %}<!-- /sections -->
 
 {% endblock %}

@@ -148,7 +148,7 @@ def sync_account(account: Account, session: Session):
                 parsed = parse_transaction(tx, account.bank_name)
                 merchant = parsed["merchant"]
                 desc = parsed["description"]
-                tx_date_str = tx.get("value_date") or tx.get("booking_date")
+                tx_date_str = tx.get("transaction_date") or tx.get("booking_date") or tx.get("value_date")
                 tx_date = date.fromisoformat(tx_date_str) if tx_date_str else date.today()
                 tx_currency = (tx.get("transaction_amount") or {}).get("currency") or account.currency or "EUR"
                 cat_id = categorize(desc, merchant, session)

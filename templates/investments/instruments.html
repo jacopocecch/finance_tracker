@@ -7,7 +7,7 @@
   <a href="/investments/instruments/add" class="btn-primary">+ Strumento</a>
 </div>
 
-<div class="card" style="padding:0">
+<div class="card table-wrap" style="padding:0">
   <table class="w-full text-sm">
     <thead>
       <tr class="text-xs uppercase tracking-wide" style="color:var(--text-dim); border-bottom:1px solid var(--border)">
@@ -24,7 +24,7 @@
     {% for row in instruments %}
     {% set inst = row.inst %}
     {% set quote = row.quote %}
-    <tr style="border-bottom:1px solid var(--border-subtle)" onmouseover="this.style.background='rgba(0,0,0,0.015)'" onmouseout="this.style.background=''">
+    <tr class="tr-hover" style="border-bottom:1px solid var(--border-subtle)">
       <td class="px-5 py-3.5">
         <a href="/investments/instruments/{{ inst.id }}" class="font-medium" style="color:var(--text)">{{ inst.name }}</a>
         <p class="text-xs" style="color:var(--text-dim)">{{ inst.type }} · {{ inst.exchange }}</p>

@@ -39,6 +39,7 @@
 
       <!-- Actions -->
       <div class="flex items-center gap-2">
+        {% if acc.session_id != 'manual' %}
         <form method="post" action="/setup/account/{{ acc.id }}/sync">
           <button type="submit" class="btn-ghost" style="height:36px; color:var(--sky); border-color:rgba(125,211,252,0.25)">
             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -47,6 +48,7 @@
             Sync
           </button>
         </form>
+        {% endif %}
         <button @click="open = !open" class="btn-ghost" style="height:36px; color:var(--text-muted)">
           <svg class="w-3.5 h-3.5 transition-transform duration-150" :style="open ? 'transform:rotate(180deg)' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
@@ -76,6 +78,12 @@
         </select>
         <button type="submit" class="btn-ghost" style="height:36px">Salva tipo</button>
       </form>
+      {% if acc.session_id == 'manual' %}
+      <form method="post" action="/setup/account/{{ acc.id }}/balance" class="flex items-center gap-1.5">
+        <input type="number" name="balance" step="0.01" placeholder="Saldo attuale" class="input text-sm num" style="width:140px; height:36px; padding-top:0; padding-bottom:0">
+        <button type="submit" class="btn-ghost" style="height:36px">Aggiorna saldo</button>
+      </form>
+      {% endif %}
     </div>
   </div>
   {% endfor %}
@@ -97,6 +105,44 @@
     Verrai reindirizzato alla pagina di autorizzazione della banca via PSD2/Open Banking.
     Le credenziali bancarie non transitano mai per questa app.
   </p>
+</div>
+
+<!-- Manual account -->
+<p class="text-xs font-medium uppercase tracking-wider mb-3 mt-7" style="color:var(--text-muted)">Conto manuale</p>
+<div class="card mb-7" x-data="{ open: false }">
+  <button @click="open = !open" class="flex items-center gap-2 text-sm font-medium w-full" style="color:var(--text)">
+    <span x-text="open ? '−' : '+'"></span>
+    Aggiungi conto manuale
+  </button>
+  <div x-show="open" x-transition class="mt-4">
+    <form method="post" action="/setup/account/manual" class="flex flex-wrap gap-3 items-end">
+      <div>
+        <label class="text-xs mb-1.5 block font-medium" style="color:var(--text-muted)">Nome conto *</label>
+        <input type="text" name="name" placeholder="es. Conto moglie" required class="input" style="height:36px; width:160px">
+      </div>
+      <div>
+        <label class="text-xs mb-1.5 block font-medium" style="color:var(--text-muted)">Banca</label>
+        <input type="text" name="bank_name" placeholder="es. Fineco" class="input" style="height:36px; width:130px">
+      </div>
+      <div>
+        <label class="text-xs mb-1.5 block font-medium" style="color:var(--text-muted)">Tipo</label>
+        <select name="acc_type" class="input" style="height:36px">
+          <option value="checking">💳 Corrente</option>
+          <option value="savings">🏦 Risparmio</option>
+          <option value="investment">📈 Investimento</option>
+        </select>
+      </div>
+      <div>
+        <label class="text-xs mb-1.5 block font-medium" style="color:var(--text-muted)">Valuta</label>
+        <input type="text" name="currency" value="EUR" class="input num" style="height:36px; width:70px">
+      </div>
+      <div>
+        <label class="text-xs mb-1.5 block font-medium" style="color:var(--text-muted)">Saldo iniziale</label>
+        <input type="number" name="initial_balance" value="0" step="0.01" class="input num" style="height:36px; width:120px">
+      </div>
+      <button type="submit" class="btn-primary" style="height:36px; padding:0 16px">Aggiungi</button>
+    </form>
+  </div>
 </div>
 
 <!-- Utility actions -->

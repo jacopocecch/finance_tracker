@@ -14,3 +14,5 @@ build/
 .idea/
 .DS_Store
 .claude/
+/backup_db.sh
+/CLAUDE.md

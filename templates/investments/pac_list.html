@@ -8,7 +8,7 @@
 </div>
 
 {% if pac_data %}
-<div class="card" style="padding:0">
+<div class="card table-wrap" style="padding:0">
   {% for row in pac_data %}
   <div class="flex items-center justify-between px-5 py-4" style="{% if not loop.last %}border-bottom:1px solid var(--border-subtle){% endif %}">
     <div>

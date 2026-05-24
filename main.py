@@ -13,6 +13,7 @@ from fastapi import FastAPI, Request, Form, Depends, Query
 from fastapi.responses import HTMLResponse, RedirectResponse, Response, JSONResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
+from sqlalchemy import func
 from sqlmodel import Session, select
 
 import config
@@ -117,8 +118,8 @@ def _effective_amount(tx, session: Session = None) -> float:
     return amount
 
 
-def _balances_by_account(session: Session) -> dict[int, float]:
-    """Latest balance snapshot per account, converted to EUR."""
+def _balances_by_account(session: Session) -> dict[int, dict]:
+    """Latest balance snapshot per account. Returns dict with EUR and native values."""
     accounts = session.exec(select(Account).where(Account.connected == True)).all()
     result = {}
     for acc in accounts:
@@ -128,24 +129,42 @@ def _balances_by_account(session: Session) -> dict[int, float]:
             .order_by(BalanceSnapshot.date.desc())
         ).first()
         if snap:
-            balance = snap.balance
-            if acc.currency and acc.currency != "EUR":
-                balance = _fx.convert(balance, acc.currency, session=session)
-            result[acc.id] = balance
+            native = snap.balance
+            currency = acc.currency or "EUR"
+            if currency != "EUR":
+                eur = _fx.convert(native, currency, session=session)
+            else:
+                eur = native
+            result[acc.id] = {"eur": eur, "native": native, "currency": currency}
         else:
-            result[acc.id] = 0.0
+            result[acc.id] = {"eur": 0.0, "native": 0.0, "currency": acc.currency or "EUR"}
     return result
 
 
+CHART_START_DATE = date(2026, 5, 24)
+
 def _networth_series(session: Session, days: int = 90) -> tuple[list[str], list[float]]:
-    start = date.today() - timedelta(days=days)
-    accounts = session.exec(select(Account).where(Account.connected == True)).all()
+    start = CHART_START_DATE
+    liquidity_accounts = {
+        a.id: a for a in session.exec(
+            select(Account).where(Account.connected == True, Account.type.in_(("checking", "savings")))
+        ).all()
+    }
+    if not liquidity_accounts:
+        return [], []
     snaps = session.exec(
-        select(BalanceSnapshot).where(BalanceSnapshot.date >= start)
+        select(BalanceSnapshot).where(
+            BalanceSnapshot.date >= start,
+            BalanceSnapshot.account_id.in_(list(liquidity_accounts.keys()))
+        )
     ).all()
     by_date: dict[date, float] = defaultdict(float)
     for s in snaps:
-        by_date[s.date] += s.balance
+        acc = liquidity_accounts[s.account_id]
+        balance = s.balance
+        if acc.currency and acc.currency != "EUR":
+            balance = _fx.convert(balance, acc.currency, session=session)
+        by_date[s.date] += balance
     dates = sorted(by_date)
     return (
         [d.strftime("%d/%m") for d in dates],
@@ -162,10 +181,10 @@ def dashboard(request: Request, session: Session = Depends(get_session)):
     labels, networth_data = _networth_series(session)
 
     liquidity = sum(
-        balances.get(a.id, 0) for a in accounts if a.type in ("checking", "savings")
+        balances.get(a.id, {"eur": 0})["eur"] for a in accounts if a.type in ("checking", "savings")
     )
     bank_investments = sum(
-        balances.get(a.id, 0) for a in accounts if a.type == "investment"
+        balances.get(a.id, {"eur": 0})["eur"] for a in accounts if a.type == "investment"
     )
 
     try:
@@ -181,7 +200,10 @@ def dashboard(request: Request, session: Session = Depends(get_session)):
     investments_total = bank_investments + portfolio_value
     net_worth = liquidity + investments_total
 
-    acc_with_balance = [(a, balances.get(a.id, 0)) for a in accounts]
+    acc_with_balance = sorted(
+        [(a, balances.get(a.id, {"eur": 0.0, "native": 0.0, "currency": "EUR"})) for a in accounts],
+        key=lambda x: (x[0].session_id == "manual", -x[1]["eur"])
+    )
 
     return templates.TemplateResponse("dashboard.html", {
         "request": request,
@@ -191,7 +213,15 @@ def dashboard(request: Request, session: Session = Depends(get_session)):
         "portfolio_pl": portfolio_pl,
         "portfolio_pl_pct": portfolio_pl_pct,
         "net_worth": net_worth,
-        "accounts": [type("Acc", (), {**a.__dict__, "balance": b})() for a, b in acc_with_balance],
+        "accounts": [
+            type("Acc", (), {
+                **a.__dict__,
+                "balance": b["eur"],
+                "balance_native": b["native"],
+                "balance_currency": b["currency"],
+            })()
+            for a, b in acc_with_balance
+        ],
         "labels": labels,
         "networth_data": networth_data,
     })
@@ -309,6 +339,18 @@ def monthly(
 
 
 
+def _categories_by_frequency(session: Session) -> list:
+    from sqlalchemy import func
+    counts = dict(
+        session.exec(
+            select(Transaction.category_id, func.count(Transaction.id).label("n"))
+            .group_by(Transaction.category_id)
+        ).all()
+    )
+    cats = session.exec(select(Category)).all()
+    return sorted(cats, key=lambda c: counts.get(c.id, 0), reverse=True)
+
+
 @app.get("/transactions", response_class=HTMLResponse)
 def transactions_view(
     request: Request,
@@ -364,8 +406,10 @@ def transactions_view(
         "total": total,
         "page": page,
         "page_size": page_size,
-        "categories": session.exec(select(Category)).all(),
+        "categories": _categories_by_frequency(session),
         "accounts": session.exec(select(Account).where(Account.connected == True)).all(),
+        "manual_accounts": session.exec(select(Account).where(Account.session_id == "manual")).all(),
+        "today": date.today().isoformat(),
         "selected_cat": cat or "",
         "selected_account": account or "",
         "selected_type": tx_type or "",
@@ -539,7 +583,11 @@ def assign_merchant_category(
             existing.category_id = category_id
         else:
             session.add(MerchantCategory(merchant=key, category_id=category_id))
-        tx.category_id = category_id
+        all_txs = session.exec(
+            select(Transaction).where(func.lower(Transaction.merchant) == key)
+        ).all()
+        for t in all_txs:
+            t.category_id = category_id
         session.commit()
     if request.headers.get("X-Fetch"):
         cat = session.get(Category, category_id)
@@ -559,6 +607,22 @@ def update_merchant_category(
         mc.category_id = category_id
         session.commit()
     return RedirectResponse("/categories", status_code=303)
+
+
+@app.post("/merchant-categories/sync")
+def sync_merchant_categories(session: Session = Depends(get_session)):
+    mappings = session.exec(select(MerchantCategory)).all()
+    updated = 0
+    for mc in mappings:
+        txs = session.exec(
+            select(Transaction).where(func.lower(Transaction.merchant) == mc.merchant)
+        ).all()
+        for tx in txs:
+            if tx.category_id != mc.category_id:
+                tx.category_id = mc.category_id
+                updated += 1
+    session.commit()
+    return RedirectResponse(f"/categories?msg={updated}+transazioni+aggiornate", status_code=303)
 
 
 @app.post("/merchant-categories/{mc_id}/delete")
@@ -674,15 +738,176 @@ def delete_account(account_id: int, session: Session = Depends(get_session)):
     return RedirectResponse("/setup?msg=Conto+rimosso", status_code=303)
 
 
+# ── Manual accounts & transactions ───────────────────────────────────────────
+
+@app.post("/setup/account/manual")
+def create_manual_account(
+    name: str = Form(...),
+    bank_name: str = Form(...),
+    acc_type: str = Form("checking"),
+    currency: str = Form("EUR"),
+    initial_balance: float = Form(0.0),
+    session: Session = Depends(get_session),
+):
+    import uuid as _uuid
+    acc = Account(
+        bank_name=bank_name.strip() or name.strip(),
+        external_id=f"manual_{_uuid.uuid4().hex}",
+        name=name.strip(),
+        display_name=name.strip(),
+        type=acc_type,
+        currency=currency.upper().strip(),
+        session_id="manual",
+        connected=True,
+    )
+    session.add(acc)
+    session.flush()
+    session.add(BalanceSnapshot(account_id=acc.id, date=date.today(), balance=initial_balance))
+    session.commit()
+    return RedirectResponse("/setup?msg=Conto+aggiunto", status_code=303)
+
+
+@app.post("/setup/account/{account_id}/balance")
+def update_manual_balance(
+    account_id: int,
+    balance: float = Form(...),
+    session: Session = Depends(get_session),
+):
+    acc = session.get(Account, account_id)
+    if acc and acc.session_id == "manual":
+        snap = session.exec(
+            select(BalanceSnapshot)
+            .where(BalanceSnapshot.account_id == account_id)
+            .order_by(BalanceSnapshot.date.desc())
+        ).first()
+        if snap and snap.date == date.today():
+            snap.balance = balance
+        else:
+            session.add(BalanceSnapshot(account_id=account_id, date=date.today(), balance=balance))
+        session.commit()
+    return RedirectResponse("/setup?msg=Saldo+aggiornato", status_code=303)
+
+
+@app.post("/transactions/new")
+def add_manual_transaction(
+    account_id: int = Form(...),
+    tx_date: str = Form(...),
+    amount: float = Form(...),
+    description: str = Form(""),
+    merchant: str = Form(""),
+    category_id: Optional[int] = Form(None),
+    session: Session = Depends(get_session),
+):
+    import uuid as _uuid
+    from categorizer import categorize as _cat
+    merchant = merchant.strip() or None
+    description = description.strip()
+    if not category_id:
+        category_id = _cat(description, merchant, session)
+    tx = Transaction(
+        account_id=account_id,
+        external_id=f"manual_{_uuid.uuid4().hex}",
+        date=date.fromisoformat(tx_date),
+        amount=amount,
+        currency="EUR",
+        description=description,
+        merchant=merchant,
+        category_id=category_id,
+        raw_data="",
+    )
+    session.add(tx)
+    # Update balance snapshot
+    snap = session.exec(
+        select(BalanceSnapshot)
+        .where(BalanceSnapshot.account_id == account_id)
+        .order_by(BalanceSnapshot.date.desc())
+    ).first()
+    current_balance = snap.balance if snap else 0.0
+    new_balance = current_balance + amount
+    if snap and snap.date == date.today():
+        snap.balance = new_balance
+    else:
+        session.add(BalanceSnapshot(account_id=account_id, date=date.today(), balance=new_balance))
+    session.commit()
+    return RedirectResponse("/transactions?msg=Transazione+aggiunta", status_code=303)
+
+
 # ── Sync endpoint ─────────────────────────────────────────────────────────────
+
+@app.post("/transactions/detect-transfers")
+def detect_transfers(session: Session = Depends(get_session)):
+    transfer_cat = session.exec(select(Category).where(Category.name == "Trasferimento")).first()
+    if not transfer_cat:
+        return RedirectResponse("/transactions?msg=Categoria+Trasferimento+non+trovata", status_code=303)
+
+    # Candidate transactions: not already linked, not already transfer category
+    candidates = session.exec(
+        select(Transaction).where(
+            Transaction.transfer_partner_id == None,
+            Transaction.category_id != transfer_cat.id,
+        )
+    ).all()
+
+    # Group by (date, abs_amount)
+    from collections import defaultdict
+    by_key: dict = defaultdict(list)
+    for tx in candidates:
+        key = (tx.date, round(abs(tx.amount), 2))
+        by_key[key].append(tx)
+
+    matched = 0
+    for txs in by_key.values():
+        positives = [t for t in txs if t.amount > 0]
+        negatives = [t for t in txs if t.amount < 0]
+        for pos, neg in zip(positives, negatives):
+            # Must be different accounts
+            if pos.account_id == neg.account_id:
+                continue
+            pos.transfer_partner_id = neg.id
+            neg.transfer_partner_id = pos.id
+            pos.category_id = transfer_cat.id
+            neg.category_id = transfer_cat.id
+            matched += 1
+
+    session.commit()
+    return RedirectResponse(f"/transactions?msg={matched}+trasferimenti+rilevati", status_code=303)
+
 
 @app.post("/sync")
 def trigger_sync():
     try:
         sync_all()
-        return HTMLResponse('<p class="text-xs text-emerald-400 px-4 py-2">✓ Sync completato</p>')
+        return HTMLResponse('✓ Sync completato')
     except Exception as e:
-        return HTMLResponse(f'<p class="text-xs text-red-400 px-4 py-2">✗ Errore: {e}</p>')
+        return HTMLResponse(f'✗ {e}')
+
+
+@app.post("/admin/fix-dates")
+def fix_transaction_dates(session: Session = Depends(get_session)):
+    """One-shot: reparse booking_date from raw_data for all transactions."""
+    from datetime import date as date_type
+    txs = session.exec(select(Transaction)).all()
+    updated = 0
+    skipped = 0
+    for tx in txs:
+        if not tx.raw_data:
+            skipped += 1
+            continue
+        try:
+            raw = json.loads(tx.raw_data)
+        except (json.JSONDecodeError, TypeError):
+            skipped += 1
+            continue
+        date_str = raw.get("transaction_date") or raw.get("booking_date") or raw.get("value_date")
+        if not date_str:
+            skipped += 1
+            continue
+        new_date = date_type.fromisoformat(date_str)
+        if tx.date != new_date:
+            tx.date = new_date
+            updated += 1
+    session.commit()
+    return {"updated": updated, "skipped": skipped, "total": len(txs)}
 
 
 if __name__ == "__main__":

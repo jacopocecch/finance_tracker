@@ -20,6 +20,8 @@ SYNC_MINUTE = 0
 
 INVESTMENT_ACCOUNT_KEYWORDS = ["invest", "titoli", "portafoglio", "dossier", "etf", "trading"]
 
+BACKUP_DIR = Path("~/Documents/Backup/finance_tracker").expanduser()
+
 # HTTP Basic Auth — set as environment variables (APP_USER / APP_PASS) before launching.
 # If either is empty the middleware is bypassed (useful for local dev).
 # Example:  APP_USER=jacopo APP_PASS=mysecretpass uvicorn main:app ...

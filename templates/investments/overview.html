@@ -94,7 +94,7 @@
       </thead>
       <tbody>
       {% for pos in summary.positions %}
-      <tr style="border-bottom:1px solid var(--border-subtle)" onmouseover="this.style.background='rgba(0,0,0,0.015)'" onmouseout="this.style.background=''">
+      <tr class="tr-hover" style="border-bottom:1px solid var(--border-subtle)">
         <td class="px-5 py-3.5">
           <a href="/investments/instruments/{{ pos.instrument_id }}" style="color:var(--text)">
             <p class="font-medium text-sm">{{ pos.name }}</p>
@@ -151,7 +151,7 @@
     </thead>
     <tbody>
     {% for pp in summary.pac_positions %}
-    <tr style="border-bottom:1px solid var(--border-subtle)">
+    <tr class="tr-hover" style="border-bottom:1px solid var(--border-subtle)">
       <td class="px-5 py-3.5 font-medium text-sm" style="color:var(--text)">{{ pp.pac_name }}</td>
       <td class="num px-4 py-3.5 text-right text-sm" style="color:var(--text-muted)">€{{ "{:,.2f}".format(pp.total_invested) }}</td>
       <td class="num px-4 py-3.5 text-right text-sm" style="color:var(--text)">

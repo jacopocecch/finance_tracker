@@ -7,7 +7,7 @@
   <a href="/investments/transactions/add" class="btn-primary">+ Acquisto</a>
 </div>
 
-<div class="card" style="padding:0">
+<div class="card table-wrap" style="padding:0">
   <table class="w-full text-sm">
     <thead>
       <tr class="text-xs uppercase tracking-wide" style="color:var(--text-dim); border-bottom:1px solid var(--border)">
@@ -25,7 +25,7 @@
     <tbody>
     {% for tx in transactions %}
     {% set inst = instruments.get(tx.instrument_id) %}
-    <tr style="border-bottom:1px solid var(--border-subtle)" onmouseover="this.style.background='rgba(0,0,0,0.015)'" onmouseout="this.style.background=''">
+    <tr class="tr-hover" style="border-bottom:1px solid var(--border-subtle)">
       <td class="num px-5 py-3.5 text-xs" style="color:var(--text-muted); white-space:nowrap">{{ tx.trade_date.strftime('%d %b %Y') }}</td>
       <td class="px-5 py-3.5">
         <p class="font-medium text-sm" style="color:var(--text)">{{ inst.name if inst else tx.instrument_id }}</p>

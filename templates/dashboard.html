@@ -15,7 +15,7 @@
     </button>
   </div>
   <div class="flex items-baseline gap-3">
-    <h1 class="num font-medium" style="font-size:3.5rem;line-height:1;color:var(--text)">
+    <h1 class="num font-medium" style="font-size:clamp(2rem, 8vw, 3.5rem);line-height:1;color:var(--text)">
       <span x-show="!hidden">{{ "{:,.0f}".format(net_worth) }} €</span>
       <span x-show="hidden" style="letter-spacing:0.15em">•••••• €</span>
     </h1>
@@ -23,7 +23,7 @@
 </div>
 
 <!-- KPI strip -->
-<div class="grid grid-cols-2 gap-3 mb-7" style="max-width:520px">
+<div class="grid grid-cols-2 gap-3 mb-7 sm:max-w-lg">
   <div class="card">
     <p class="text-xs mb-3" style="color:var(--text-muted)">Liquidità</p>
     <p class="num text-2xl font-medium" style="color:var(--text)">
@@ -68,29 +68,48 @@
 <div>
   <p class="text-xs font-medium uppercase tracking-wider mb-3" style="color:var(--text-muted)">Conti</p>
   {% if accounts %}
-  <div class="card" style="padding:0">
-    {% for acc in accounts %}
-    <div class="flex items-center justify-between px-5 py-4" style="{% if not loop.last %}border-bottom:1px solid var(--border-subtle){% endif %}">
-      <div class="flex items-center gap-3">
-        <div class="w-9 h-9 rounded-lg flex items-center justify-center text-base" style="background:var(--surface-2);border:1px solid var(--border)">
-          {% if acc.type == 'investment' %}📈{% elif acc.type == 'savings' %}🏦{% else %}💳{% endif %}
-        </div>
-        <div>
-          <p class="text-sm font-medium" style="color:var(--text)">{{ acc.display_name or acc.name }}</p>
-          <p class="text-xs mt-0.5" style="color:var(--text-muted)">
-            {{ acc.bank_name }}{% if acc.currency and acc.currency != 'EUR' %} · {{ acc.currency }}{% endif %}
-          </p>
-        </div>
+  {% set pie_colors = ['#059669','#0369a1','#7c3aed','#ea580c','#db2777','#0d9488','#d97706'] %}
+  <div class="grid grid-cols-1 sm:grid-cols-2 gap-5 items-start">
+    <!-- Pie chart -->
+    <div class="card">
+      <p class="text-xs font-medium uppercase tracking-wider mb-4" style="color:var(--text-muted)">Distribuzione</p>
+      <div x-show="!hidden">
+        <canvas id="accountsPieChart" height="200"></canvas>
       </div>
-      <div class="text-right">
-        <p class="num text-sm font-medium" style="color:{% if acc.type == 'investment' %}var(--sky){% else %}var(--text){% endif %}">
-          <span x-show="!hidden">{{ "{:,.0f}".format(acc.balance or 0) }} €</span>
-          <span x-show="hidden" style="letter-spacing:0.1em">•••• €</span>
-        </p>
-        <p class="text-xs mt-0.5" style="color:var(--text-dim)">{{ acc.type }}</p>
+      <div x-show="hidden" class="flex items-center justify-center" style="height:200px">
+        <span style="color:var(--text-dim);font-size:13px">nascosto</span>
       </div>
     </div>
-    {% endfor %}
+    <!-- List -->
+    <div class="card" style="padding:0">
+      {% for acc in accounts %}
+      <div class="flex items-center justify-between px-5 py-4" style="{% if not loop.last %}border-bottom:1px solid var(--border-subtle){% endif %}">
+        <div class="flex items-center gap-3">
+          <div class="w-3 h-3 rounded-full flex-shrink-0" style="background:{{ pie_colors[loop.index0 % pie_colors|length] }}"></div>
+          <div>
+            <p class="text-sm font-medium" style="color:var(--text)">{{ acc.display_name or acc.name }}</p>
+            <p class="text-xs mt-0.5" style="color:var(--text-muted)">
+              {{ acc.bank_name }}{% if acc.currency and acc.currency != 'EUR' %} · {{ acc.currency }}{% endif %}
+            </p>
+          </div>
+        </div>
+        <div class="text-right">
+          <p class="num text-sm font-medium" style="color:var(--text)">
+            <span x-show="!hidden">
+              {% if acc.balance_currency != 'EUR' %}
+                {{ "{:,.2f}".format(acc.balance_native or 0) }} {{ acc.balance_currency }}
+                <span class="text-xs font-normal" style="color:var(--text-muted)">(€{{ "{:,.0f}".format(acc.balance or 0) }})</span>
+              {% else %}
+                {{ "{:,.0f}".format(acc.balance or 0) }} €
+              {% endif %}
+            </span>
+            <span x-show="hidden" style="letter-spacing:0.1em">•••• €</span>
+          </p>
+          <p class="text-xs mt-0.5" style="color:var(--text-dim)">{{ {'checking': 'corrente', 'savings': 'risparmio', 'investment': 'investimento'}.get(acc.type, acc.type) }}</p>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
   </div>
   {% else %}
   <div class="card py-14 text-center">
@@ -141,6 +160,30 @@
           border: { display: false },
           ticks: { callback: v => (v >= 1000 ? (v/1000).toFixed(0)+'k' : v) + ' €' }
         }
+      }
+    }
+  });
+})();
+
+// Pie chart distribuzione conti
+(function() {
+  const accs = {{ accounts | map(attribute='display_name') | list | tojson }};
+  const bals = {{ accounts | map(attribute='balance') | list | tojson }};
+  const COLORS = ['#059669','#0369a1','#7c3aed','#ea580c','#db2777','#0d9488','#d97706'];
+  const ctx = document.getElementById('accountsPieChart');
+  if (!ctx || bals.every(b => b === 0)) return;
+  new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels: accs,
+      datasets: [{ data: bals.map(Math.abs), backgroundColor: COLORS.slice(0, accs.length), borderColor: '#f0f0f6', borderWidth: 2, hoverOffset: 4 }]
+    },
+    options: {
+      responsive: true,
+      cutout: '60%',
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: ctx => '  €' + Math.abs(ctx.parsed).toLocaleString('it-IT') } }
       }
     }
   });

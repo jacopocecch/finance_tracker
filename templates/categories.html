@@ -50,15 +50,305 @@
   </div>
 </div>
 
-<!-- Merchant associations -->
+<!-- Category grid -->
+<style>
+  .cat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+    transition: box-shadow 0.15s ease, transform 0.15s ease;
+  }
+  .cat-card:hover {
+    box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+    transform: translateY(-1px);
+  }
+  .cat-card-header {
+    padding: 1rem 1.1rem 0.85rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+  }
+  .cat-card-body {
+    padding: 0 1.1rem 1rem;
+  }
+  .cat-accent-bar {
+    height: 3px;
+    width: 100%;
+  }
+  .cat-icon-wrap {
+    width: 36px;
+    height: 36px;
+    border-radius: 9px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    flex-shrink: 0;
+  }
+  .cat-type-pill {
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    padding: 2px 7px;
+    border-radius: 99px;
+  }
+  .cat-stat {
+    font-size: 11px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    border-radius: 99px;
+    background: var(--surface-2);
+    color: var(--text-dim);
+    border: 1px solid var(--border-subtle);
+  }
+  .cat-actions {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    flex-shrink: 0;
+  }
+  .cat-btn {
+    height: 28px;
+    padding: 0 10px;
+    border-radius: 7px;
+    font-size: 11px;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+    transition: background 0.1s, color 0.1s;
+    border: 1px solid var(--border);
+    background: var(--surface-2);
+    color: var(--text-muted);
+    gap: 4px;
+  }
+  .cat-btn:hover { background: var(--border); color: var(--text); }
+  .cat-btn-danger { color: var(--rose); }
+  .cat-btn-danger:hover { background: rgba(225,29,72,0.08); border-color: rgba(225,29,72,0.2); color: var(--rose); }
+  .cat-expand-panel {
+    border-top: 1px solid var(--border-subtle);
+    padding: 1rem 1.1rem;
+    background: var(--bg);
+  }
+  .cat-section-label {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    margin-bottom: 8px;
+  }
+  .cat-merchant-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 11px;
+    padding: 3px 8px 3px 9px;
+    border-radius: 99px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+  }
+  .cat-rule-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 10px;
+    border-radius: 8px;
+    background: var(--surface);
+    border: 1px solid var(--border-subtle);
+    gap: 8px;
+  }
+  .cat-rule-code {
+    font-size: 11px;
+    font-family: 'DM Mono', monospace;
+    color: var(--text-muted);
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .cat-priority-dot {
+    font-size: 10px;
+    font-family: 'DM Mono', monospace;
+    color: var(--text-dim);
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .cat-add-rule-form {
+    margin-top: 10px;
+    padding: 10px;
+    border-radius: 9px;
+    background: var(--surface);
+    border: 1px solid var(--border-subtle);
+  }
+</style>
+
+{% set sections = [
+  ('expense',  'Uscite',        'var(--rose)',    'rgba(225,29,72,0.12)'),
+  ('income',   'Entrate',       'var(--emerald)', 'rgba(5,150,105,0.12)'),
+  ('transfer', 'Trasferimenti', 'var(--sky)',     'rgba(3,105,161,0.12)'),
+] %}
+
+{% for sec_type, sec_label, sec_color, sec_bg in sections %}
+{% set sec_cats = categories | selectattr('type', 'equalto', sec_type) | list %}
+{% if sec_cats %}
+
+<div class="flex items-center gap-3 mb-3 {% if not loop.first %}mt-6{% endif %}">
+  <span class="text-xs font-semibold uppercase tracking-widest" style="color:{{ sec_color }}">{{ sec_label }}</span>
+  <span class="text-xs num px-1.5 py-0.5 rounded" style="background:{{ sec_bg }};color:{{ sec_color }}">{{ sec_cats | length }}</span>
+  <div class="flex-1 h-px" style="background:var(--border-subtle)"></div>
+</div>
+
+<div class="grid gap-3 mb-2" style="grid-template-columns: repeat(auto-fill, minmax(320px, 1fr))">
+{% for cat in sec_cats %}
+{% set cat_rules = rules_by_cat.get(cat.id, []) %}
+{% set cat_merchants = merchants_by_cat.get(cat.id, []) %}
+{% set type_styles = {
+  'expense': 'background:rgba(225,29,72,0.07);color:var(--rose);border:1px solid rgba(225,29,72,0.15)',
+  'income':  'background:rgba(5,150,105,0.07);color:var(--emerald);border:1px solid rgba(5,150,105,0.15)',
+  'transfer':'background:rgba(3,105,161,0.07);color:var(--sky);border:1px solid rgba(3,105,161,0.15)'
+} %}
+{% set type_labels = {'expense': 'Spesa', 'income': 'Entrata', 'transfer': 'Trasferimento'} %}
+
+<div class="cat-card" x-data="{ rulesOpen: false, addRule: false }">
+  <!-- Colored accent bar -->
+  <div class="cat-accent-bar" style="background:{{ cat.color }}"></div>
+
+  <!-- Header -->
+  <div class="cat-card-header">
+    <!-- Icon + name -->
+    <div class="flex items-center gap-2.5 min-w-0">
+      <div class="cat-icon-wrap" style="background:{{ cat.color }}18">
+        <span>{{ cat.icon }}</span>
+      </div>
+      <div class="min-w-0">
+        <p class="font-semibold text-sm leading-tight truncate" style="color:var(--text)">{{ cat.name }}</p>
+        <div class="flex items-center gap-1.5 mt-0.5 flex-wrap">
+          <span class="cat-type-pill" style="{{ type_styles.get(cat.type, '') }}">
+            {{ type_labels.get(cat.type, cat.type) }}
+          </span>
+          {% if cat_rules %}
+          <span class="cat-stat">
+            <svg width="9" height="9" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 3h10M1 6h7M1 9h5"/></svg>
+            {{ cat_rules | length }}
+          </span>
+          {% endif %}
+          {% if cat_merchants %}
+          <span class="cat-stat">
+            <svg width="9" height="9" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="5" width="10" height="6" rx="1"/><path d="M4 5V3a2 2 0 014 0v2"/></svg>
+            {{ cat_merchants | length }}
+          </span>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <!-- Action buttons -->
+    <div class="cat-actions">
+      <button @click="rulesOpen = !rulesOpen" class="cat-btn">
+        <svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2"
+             :style="rulesOpen ? 'transform:rotate(180deg);transition:transform 0.2s' : 'transition:transform 0.2s'">
+          <path d="M2 4l4 4 4-4"/>
+        </svg>
+        <span x-text="rulesOpen ? 'Chiudi' : 'Regole'"></span>
+      </button>
+      <form method="post" action="/categories/{{ cat.id }}/delete"
+            onsubmit="return confirm('Eliminare {{ cat.name }}? Possibile solo se non ha transazioni.')">
+        <button type="submit" class="cat-btn cat-btn-danger">✕</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Expandable rules panel -->
+  <div x-show="rulesOpen" x-transition class="cat-expand-panel">
+
+    {% if cat_merchants %}
+    <p class="cat-section-label">Esercenti</p>
+    <div class="flex flex-wrap gap-1.5 mb-4">
+      {% for mc in cat_merchants %}
+      <span class="cat-merchant-tag">
+        {{ mc.merchant }}
+        <form method="post" action="/merchant-categories/{{ mc.id }}/delete" class="inline leading-none">
+          <button type="submit" class="opacity-40 hover:opacity-100 leading-none text-xs transition-opacity" style="color:var(--rose)">✕</button>
+        </form>
+      </span>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if cat_rules %}
+    <p class="cat-section-label">Regex</p>
+    <div class="flex flex-col gap-1.5 mb-3">
+      {% for rule in cat_rules %}
+      <div class="cat-rule-row">
+        <code class="cat-rule-code">{{ rule.pattern }}</code>
+        <div class="flex items-center gap-2 flex-shrink-0">
+          <span class="cat-priority-dot">p{{ rule.priority }}</span>
+          <form method="post" action="/rules/{{ rule.id }}/delete">
+            <button type="submit" class="opacity-40 hover:opacity-100 text-xs transition-opacity" style="color:var(--rose)">✕</button>
+          </form>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <p class="text-xs mb-3" style="color:var(--text-dim)">Nessuna regola regex.</p>
+    {% endif %}
+
+    <button @click="addRule = !addRule" class="cat-btn" style="font-size:11px">
+      <span x-text="addRule ? '− Annulla' : '+ Regola'"></span>
+    </button>
+
+    <div x-show="addRule" x-transition>
+      <div class="cat-add-rule-form">
+        <form method="post" action="/categories/{{ cat.id }}/rules/add" class="flex gap-2 items-end flex-wrap">
+          <div class="flex-1 min-w-40">
+            <label class="text-xs mb-1 block" style="color:var(--text-dim)">Pattern (case insensitive)</label>
+            <input type="text" name="pattern" placeholder="es. palestra|gym" required class="input w-full" style="height:32px;font-size:12px">
+          </div>
+          <div>
+            <label class="text-xs mb-1 block" style="color:var(--text-dim)">Priorità</label>
+            <input type="number" name="priority" value="5" min="0" max="10" class="input" style="height:32px;width:62px;font-size:12px">
+          </div>
+          <button type="submit" class="btn-primary text-xs" style="height:32px;padding:0 12px">Salva</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endfor %}
+</div><!-- /grid -->
+
+{% endif %}
+{% endfor %}<!-- /sections -->
+
+<!-- Merchant associations — collapsible panel at the bottom -->
 {% if all_merchants %}
-<div class="mb-6" x-data="{ open: false }">
-  <button @click="open = !open" class="flex items-center gap-2 text-xs font-medium uppercase tracking-wider mb-3 w-full text-left" style="color:var(--text-muted)">
-    <span>Esercenti associati</span>
-    <span class="text-xs" style="color:var(--text-dim)">({{ all_merchants | length }})</span>
-    <svg class="w-3 h-3 ml-auto transition-transform duration-150" :style="open ? 'transform:rotate(180deg)' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+<div x-data="{ open: false }" class="rounded-xl" style="border:1px dashed var(--border)">
+  <button @click="open = !open"
+          class="flex items-center gap-3 w-full text-left px-5 py-4"
+          style="color:var(--text-muted)">
+    <svg class="w-4 h-4 shrink-0 transition-transform duration-200" :style="open ? 'transform:rotate(90deg)' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+    <span class="text-sm font-medium" style="color:var(--text)">Esercenti associati</span>
+    <span class="text-xs px-2 py-0.5 rounded-full" style="background:var(--surface-2);color:var(--text-dim)">{{ all_merchants | length }}</span>
+    <span class="text-xs ml-auto" style="color:var(--text-dim)" x-text="open ? 'Chiudi' : 'Espandi'"></span>
+    <form method="post" action="/merchant-categories/sync" @click.stop>
+      <button type="submit" class="text-xs font-medium px-3 py-1 rounded-lg transition-colors"
+              style="background:rgba(3,105,161,0.08);border:1px solid rgba(3,105,161,0.2);color:var(--sky)">
+        ↺ Sincronizza
+      </button>
+    </form>
   </button>
-  <div x-show="open" x-transition class="card" style="padding:0">
+  <div x-show="open" x-transition style="border-top:1px solid var(--border)">
     {% for mc in all_merchants %}
     {% set cat = cat_map.get(mc.category_id) %}
     <div class="flex items-center justify-between px-5 py-3 {% if not loop.last %}border-b{% endif %}" style="{% if not loop.last %}border-color:var(--border-subtle){% endif %}">
@@ -80,94 +370,5 @@
   </div>
 </div>
 {% endif %}
-
-<!-- Category list -->
-{% for cat in categories %}
-<div class="card mb-3" x-data="{ rulesOpen: false, addRule: false }">
-  <div class="flex items-center justify-between">
-    <div class="flex items-center gap-3">
-      <span class="tag" style="background:{{ cat.color }};color:{{ cat.color | tag_text_color }};border:none;font-size:13px;padding:4px 10px">
-        {{ cat.icon }} {{ cat.name }}
-      </span>
-      <span class="text-xs px-2 py-0.5 rounded-full" style="background:var(--surface-2);color:var(--text-muted)">{{ cat.type }}</span>
-      {% set cat_rules = rules_by_cat.get(cat.id, []) %}
-      {% set cat_merchants = merchants_by_cat.get(cat.id, []) %}
-      {% if cat_rules %}
-      <span class="text-xs" style="color:var(--text-dim)">{{ cat_rules | length }} regol{{ 'a' if cat_rules | length == 1 else 'e' }}</span>
-      {% endif %}
-      {% if cat_merchants %}
-      <span class="text-xs" style="color:var(--text-dim)">{{ cat_merchants | length }} esercent{{ 'e' if cat_merchants | length == 1 else 'i' }}</span>
-      {% endif %}
-    </div>
-    <div class="flex gap-2 items-center">
-      <button @click="rulesOpen = !rulesOpen" class="btn-ghost text-xs" style="height:30px;padding:0 10px">
-        <span x-text="rulesOpen ? 'Nascondi' : 'Regole'"></span>
-      </button>
-      <form method="post" action="/categories/{{ cat.id }}/delete"
-            onsubmit="return confirm('Eliminare {{ cat.name }}? Possibile solo se non ha transazioni.')">
-        <button type="submit" class="btn-ghost text-xs" style="height:30px;padding:0 10px;color:var(--rose)">✕</button>
-      </form>
-    </div>
-  </div>
-
-  <div x-show="rulesOpen" x-transition class="mt-4">
-
-    <!-- Merchant mappings -->
-    {% set cat_merchants = merchants_by_cat.get(cat.id, []) %}
-    {% if cat_merchants %}
-    <p class="text-xs font-medium mb-1.5" style="color:var(--text-dim)">Esercenti associati</p>
-    <div class="mb-3 flex flex-wrap gap-1.5">
-      {% for mc in cat_merchants %}
-      <span class="flex items-center gap-1 tag" style="background:var(--surface-2);border:1px solid var(--border);color:var(--text-muted);padding:4px 8px">
-        <span class="text-xs">{{ mc.merchant }}</span>
-        <form method="post" action="/merchant-categories/{{ mc.id }}/delete" class="inline">
-          <button type="submit" class="text-xs opacity-50 hover:opacity-100 leading-none" style="color:var(--rose)">✕</button>
-        </form>
-      </span>
-      {% endfor %}
-    </div>
-    {% endif %}
-
-    <!-- Regex rules -->
-    {% set cat_rules = rules_by_cat.get(cat.id, []) %}
-    {% if cat_rules %}
-    <p class="text-xs font-medium mb-1.5" style="color:var(--text-dim)">Regole regex</p>
-    <div class="mb-3 flex flex-col gap-1.5">
-      {% for rule in cat_rules %}
-      <div class="flex items-center justify-between px-3 py-2 rounded-lg" style="background:var(--surface-2);border:1px solid var(--border-subtle)">
-        <code class="text-xs" style="color:var(--text-muted);font-family:'DM Mono',monospace">{{ rule.pattern }}</code>
-        <div class="flex items-center gap-3">
-          <span class="text-xs num" style="color:var(--text-dim)">priorità {{ rule.priority }}</span>
-          <form method="post" action="/rules/{{ rule.id }}/delete">
-            <button type="submit" class="text-xs opacity-50 hover:opacity-100" style="color:var(--rose)">✕</button>
-          </form>
-        </div>
-      </div>
-      {% endfor %}
-    </div>
-    {% else %}
-    <p class="text-xs mb-3" style="color:var(--text-dim)">Nessuna regola regex.</p>
-    {% endif %}
-
-    <button @click="addRule = !addRule" class="btn-ghost text-xs" style="height:28px;padding:0 10px">
-      <span x-text="addRule ? '−' : '+ Aggiungi regola'"></span>
-    </button>
-
-    <div x-show="addRule" x-transition class="mt-3">
-      <form method="post" action="/categories/{{ cat.id }}/rules/add" class="flex gap-2 items-end flex-wrap">
-        <div class="flex-1 min-w-48">
-          <label class="text-xs mb-1 block font-medium" style="color:var(--text-muted)">Pattern regex (case insensitive)</label>
-          <input type="text" name="pattern" placeholder="es. palestra|gym|fitness" required class="input w-full" style="height:34px">
-        </div>
-        <div>
-          <label class="text-xs mb-1 block font-medium" style="color:var(--text-muted)">Priorità</label>
-          <input type="number" name="priority" value="5" min="0" max="10" class="input" style="height:34px;width:70px">
-        </div>
-        <button type="submit" class="btn-primary text-xs" style="height:34px;padding:0 12px">Salva</button>
-      </form>
-    </div>
-  </div>
-</div>
-{% endfor %}
 
 {% endblock %}
