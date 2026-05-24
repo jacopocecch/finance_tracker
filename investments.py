@@ -331,6 +331,7 @@ def inv_transaction_add(
     new_ticker: str = Form(""),
     new_exchange: str = Form(""),
     new_currency: str = Form("EUR"),
+    new_is_liquidity: Optional[str] = Form(None),
     # Transaction fields
     transaction_type: str = Form("BUY"),
     broker_name: str = Form("Fineco"),
@@ -366,6 +367,7 @@ def inv_transaction_add(
                 ticker=new_ticker.strip(),
                 exchange=new_exchange.strip(),
                 currency=new_currency.strip().upper(),
+                is_liquidity=new_is_liquidity == "1",
             )
             session.add(inst)
             session.flush()
