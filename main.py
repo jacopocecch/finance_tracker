@@ -20,7 +20,7 @@ import config
 import scheduler
 from database import (
     Account, Transaction, BalanceSnapshot, Category, CategoryRule, MerchantCategory, Budget,
-    engine, init_db, get_session,
+    Instrument, engine, init_db, get_session,
 )
 from sync import build_auth_url, handle_callback, sync_all, sync_account
 from investments import router as investments_router, _build_portfolio_data
@@ -189,14 +189,26 @@ def dashboard(request: Request, session: Session = Depends(get_session)):
 
     try:
         portfolio = _build_portfolio_data(session)
-        portfolio_value = portfolio.total_market_value if portfolio.total_market_value is not None else portfolio.total_invested
+        liquidity_ids = {
+            inst.id for inst in session.exec(
+                select(Instrument).where(Instrument.is_liquidity == True, Instrument.active == True)
+            ).all()
+        }
+        liquidity_etf = sum(
+            (p.market_value or p.total_invested)
+            for p in portfolio.positions if p.instrument_id in liquidity_ids
+        )
+        full_value = portfolio.total_market_value if portfolio.total_market_value is not None else portfolio.total_invested
+        portfolio_value = full_value - liquidity_etf
         portfolio_pl = portfolio.total_unrealized_pl
         portfolio_pl_pct = portfolio.total_unrealized_pl_pct
     except Exception:
+        liquidity_etf = 0.0
         portfolio_value = 0.0
         portfolio_pl = None
         portfolio_pl_pct = None
 
+    liquidity = liquidity + liquidity_etf
     investments_total = bank_investments + portfolio_value
     net_worth = liquidity + investments_total
 
@@ -208,6 +220,7 @@ def dashboard(request: Request, session: Session = Depends(get_session)):
     return templates.TemplateResponse("dashboard.html", {
         "request": request,
         "liquidity": liquidity,
+        "liquidity_etf": liquidity_etf,
         "investments": investments_total,
         "portfolio_value": portfolio_value,
         "portfolio_pl": portfolio_pl,

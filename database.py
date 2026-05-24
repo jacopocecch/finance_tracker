@@ -61,6 +61,7 @@ class Instrument(SQLModel, table=True):
     currency: str = "EUR"
     data_source: str = "yfinance"
     active: bool = True
+    is_liquidity: bool = False
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 
@@ -237,6 +238,11 @@ def init_db():
         fxcols = [r[1] for r in conn.execute(text("PRAGMA table_info('exchange_rate')")).fetchall()]
         if "rate_date" not in fxcols:
             conn.execute(text("ALTER TABLE 'exchange_rate' ADD COLUMN rate_date DATE"))
+            conn.commit()
+    with engine.connect() as conn:
+        instcols = [r[1] for r in conn.execute(text("PRAGMA table_info('instrument')")).fetchall()]
+        if "is_liquidity" not in instcols:
+            conn.execute(text("ALTER TABLE 'instrument' ADD COLUMN is_liquidity INTEGER NOT NULL DEFAULT 0"))
             conn.commit()
     with Session(engine) as session:
         existing_cats = {c.name for c in session.exec(select(Category)).all()}

@@ -18,6 +18,12 @@
           Aggiorna
         </button>
       </form>
+      <form method="post" action="/investments/instruments/{{ inst.id }}/toggle-liquidity">
+        <button type="submit" class="btn-ghost text-xs"
+                style="{% if inst.is_liquidity %}background:rgba(14,165,233,0.1);color:var(--sky);border-color:rgba(14,165,233,0.3){% endif %}">
+          {% if inst.is_liquidity %}💧 Liquidità{% else %}💧 Segna come liquidità{% endif %}
+        </button>
+      </form>
       <a href="/investments/instruments/{{ inst.id }}/edit" class="btn-ghost">✏ Modifica</a>
       <a href="/investments/transactions/add" class="btn-primary">+ Acquisto</a>
     </div>

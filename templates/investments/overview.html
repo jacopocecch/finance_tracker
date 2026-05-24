@@ -131,6 +131,46 @@
   </div>
 </div>
 
+<!-- Liquidità section -->
+{% if liq_positions %}
+<div class="card mb-5" style="padding:0">
+  <div class="px-5 py-4" style="border-bottom:1px solid var(--border)">
+    <p class="text-xs font-medium uppercase tracking-wider" style="color:var(--text-muted)">Liquidità</p>
+  </div>
+  <table class="w-full text-sm">
+    <thead>
+      <tr class="text-xs uppercase tracking-wide" style="color:var(--text-dim); border-bottom:1px solid var(--border-subtle)">
+        <th class="text-left px-5 py-3 font-medium">Strumento</th>
+        <th class="text-right px-4 py-3 font-medium">Qtà</th>
+        <th class="text-right px-4 py-3 font-medium">PMC</th>
+        <th class="text-right px-4 py-3 font-medium">Prezzo</th>
+        <th class="text-right px-5 py-3 font-medium">Valore</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for pos in liq_positions %}
+    <tr class="tr-hover" style="border-bottom:1px solid var(--border-subtle)">
+      <td class="px-5 py-3.5">
+        <a href="/investments/instruments/{{ pos.instrument_id }}" style="color:var(--text)">
+          <p class="font-medium text-sm">{{ pos.name }}</p>
+          <p class="text-xs mt-0.5" style="color:var(--text-dim)">{{ pos.ticker }} · {{ pos.isin }}</p>
+        </a>
+      </td>
+      <td class="num px-4 py-3.5 text-right text-sm" style="color:var(--text-muted)">{{ pos.total_quantity }}</td>
+      <td class="num px-4 py-3.5 text-right text-sm" style="color:var(--text-muted)">€{{ "{:,.2f}".format(pos.average_cost_basis) }}</td>
+      <td class="num px-4 py-3.5 text-right text-sm" style="color:var(--text)">
+        {% if pos.last_price is not none %}{{ "€{:,.2f}".format(pos.last_price) }}{% if pos.is_stale %}<span style="color:var(--text-dim)">*</span>{% endif %}{% else %}—{% endif %}
+      </td>
+      <td class="num px-5 py-3.5 text-right text-sm font-medium" style="color:var(--text)">
+        {% if pos.market_value is not none %}€{{ "{:,.2f}".format(pos.market_value) }}{% else %}—{% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
 <!-- PAC section -->
 {% if summary.pac_positions %}
 <div class="card" style="padding:0">

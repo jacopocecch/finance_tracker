@@ -88,13 +88,23 @@ def overview(request: Request, session: Session = Depends(get_session)):
     summary = _build_portfolio_data(session)
     pacs = session.exec(select(PAC).where(PAC.active == True)).all()
 
-    chart_labels = [p.name for p in summary.positions]
-    chart_invested = [p.total_invested for p in summary.positions]
-    chart_market = [p.market_value or p.total_invested for p in summary.positions]
+    liquidity_ids = {
+        inst.id for inst in session.exec(
+            select(Instrument).where(Instrument.is_liquidity == True, Instrument.active == True)
+        ).all()
+    }
+    inv_positions = [p for p in summary.positions if p.instrument_id not in liquidity_ids]
+    liq_positions = [p for p in summary.positions if p.instrument_id in liquidity_ids]
+    inv_summary = compute_portfolio(inv_positions, summary.pac_positions)
+
+    chart_labels = [p.name for p in inv_positions]
+    chart_invested = [p.total_invested for p in inv_positions]
+    chart_market = [p.market_value or p.total_invested for p in inv_positions]
 
     return templates.TemplateResponse("investments/overview.html", {
         "request": request,
-        "summary": summary,
+        "summary": inv_summary,
+        "liq_positions": liq_positions,
         "pacs": pacs,
         "chart_labels": chart_labels,
         "chart_invested": chart_invested,
@@ -115,6 +125,16 @@ def refresh_quote_one(instrument_id: int, session: Session = Depends(get_session
     inst = session.get(Instrument, instrument_id)
     if inst:
         refresh_quote(inst, session)
+    return RedirectResponse(f"/investments/instruments/{instrument_id}", status_code=303)
+
+
+@router.post("/instruments/{instrument_id}/toggle-liquidity")
+def toggle_liquidity(instrument_id: int, session: Session = Depends(get_session)):
+    inst = session.get(Instrument, instrument_id)
+    if inst:
+        inst.is_liquidity = not inst.is_liquidity
+        session.add(inst)
+        session.commit()
     return RedirectResponse(f"/investments/instruments/{instrument_id}", status_code=303)
 
 

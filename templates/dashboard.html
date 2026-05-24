@@ -30,7 +30,7 @@
       <span x-show="!hidden">{{ "{:,.0f}".format(liquidity) }} €</span>
       <span x-show="hidden" style="letter-spacing:0.1em">•••• €</span>
     </p>
-    <p class="text-xs mt-1.5" style="color:var(--text-dim)">correnti · risparmio</p>
+    <p class="text-xs mt-1.5" style="color:var(--text-dim)">correnti · risparmio{% if liquidity_etf %} · ETF monetari{% endif %}</p>
   </div>
   <div class="card">
     <p class="text-xs mb-3" style="color:var(--text-muted)">Investimenti</p>
