@@ -429,7 +429,7 @@ def transactions_view(
         "page_size": page_size,
         "categories": _categories_by_frequency(session),
         "accounts": session.exec(select(Account).where(Account.connected == True)).all(),
-        "manual_accounts": session.exec(select(Account).where(Account.session_id == "manual")).all(),
+        "manual_accounts": session.exec(select(Account).where(Account.session_id == "manual", Account.deleted == False)).all(),
         "today": date.today().isoformat(),
         "selected_cat": cat or "",
         "selected_account": account or "",
@@ -688,7 +688,7 @@ def reparse_transactions(session: Session = Depends(get_session)):
 
 @app.get("/setup", response_class=HTMLResponse)
 def setup(request: Request, session: Session = Depends(get_session), msg: str = ""):
-    accounts = session.exec(select(Account)).all()
+    accounts = session.exec(select(Account).where(Account.deleted == False)).all()
     return templates.TemplateResponse("setup.html", {
         "request": request,
         "accounts": accounts,
@@ -749,12 +749,9 @@ def sync_one(account_id: int, session: Session = Depends(get_session)):
 def delete_account(account_id: int, session: Session = Depends(get_session)):
     acc = session.get(Account, account_id)
     if acc:
-        session.exec(select(Transaction).where(Transaction.account_id == account_id))
-        for tx in session.exec(select(Transaction).where(Transaction.account_id == account_id)).all():
-            session.delete(tx)
-        for snap in session.exec(select(BalanceSnapshot).where(BalanceSnapshot.account_id == account_id)).all():
-            session.delete(snap)
-        session.delete(acc)
+        acc.deleted = True
+        acc.connected = False
+        session.add(acc)
         session.commit()
     return RedirectResponse("/setup?msg=Conto+rimosso", status_code=303)
 
