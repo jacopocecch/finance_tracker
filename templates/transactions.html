@@ -176,7 +176,8 @@ function txRow(el) {
       <div class="flex items-center justify-between gap-2 mb-1">
         <p class="num text-xs" style="color:var(--text-muted)">
           {{ tx.date.strftime('%d/%m/%Y') }}
-          {% if _is_new %}<span class="inline-block ml-1 px-1.5 rounded text-[10px] font-semibold" style="background:rgba(14,165,233,0.15);color:#0ea5e9">NUOVA</span>{% endif %}
+          {% if tx.status == 'PDNG' %}<span class="inline-block ml-1 px-1.5 rounded text-[10px] font-semibold" style="background:rgba(245,158,11,0.15);color:#f59e0b">PDNG</span>
+          {% elif _is_new %}<span class="inline-block ml-1 px-1.5 rounded text-[10px] font-semibold" style="background:rgba(14,165,233,0.15);color:#0ea5e9">NUOVA</span>{% endif %}
         </p>
         <div class="flex items-center gap-2">
           {% if tx.amount < 0 %}
@@ -192,9 +193,9 @@ function txRow(el) {
         </div>
       </div>
       <!-- Row 2: merchant -->
-      <p class="text-sm font-medium truncate mb-1.5" style="color:var(--text)">{{ tx.merchant or tx.description or '—' }}</p>
+      <p class="text-sm font-medium truncate mb-1.5" style="color:var(--text)" title="{{ tx.merchant or tx.description or '' }}">{{ tx.merchant or tx.description or '—' }}</p>
       {% if tx.merchant and tx.description %}
-      <p class="text-xs truncate mb-1.5" style="color:var(--text-dim)">{{ tx.description }}</p>
+      <p class="text-xs truncate mb-1.5" style="color:var(--text-dim)" title="{{ tx.description }}">{{ tx.description }}</p>
       {% endif %}
       <!-- Row 3: category + associa -->
       <div class="flex items-center gap-2 flex-wrap">
@@ -217,9 +218,17 @@ function txRow(el) {
           </div>
         </div>
         {% if tx.merchant %}
-        <button @click="saveMerchant()" class="tag"
-          :style="isMapped ? 'font-size:10px;padding:2px 8px;cursor:pointer;background:rgba(5,150,105,0.15);border:1px solid rgba(5,150,105,0.35);color:var(--emerald)' : 'font-size:10px;padding:2px 8px;cursor:pointer;background:var(--surface-2);border:1px solid var(--border);color:var(--text-dim)'"
-          x-text="isMapped ? '✓ associato' : '⊕ associa'"></button>
+        <button @click="saveMerchant()" :title="isMapped ? 'Rimuovi associazione esercente' : 'Associa esercente a categoria'"
+          :style="isMapped ? 'color:var(--emerald);opacity:1' : 'color:var(--text-dim);opacity:0.4'"
+          class="hover:opacity-100 transition-opacity">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" style="width:15px;height:15px">
+            <path d="M12.232 4.232a2.5 2.5 0 0 1 3.536 3.536l-1.225 1.224a.75.75 0 0 0 1.061 1.06l1.224-1.224a4 4 0 0 0-5.656-5.656l-3 3a4 4 0 0 0 .225 5.865.75.75 0 0 0 .977-1.138 2.5 2.5 0 0 1-.142-3.667l3-3Z"/>
+            <path d="M11.603 7.963a.75.75 0 0 0-.977 1.138 2.5 2.5 0 0 1 .142 3.667l-3 3a2.5 2.5 0 0 1-3.536-3.536l1.225-1.224a.75.75 0 0 0-1.061-1.06l-1.224 1.224a4 4 0 1 0 5.656 5.656l3-3a4 4 0 0 0-.225-5.865Z"/>
+          </svg>
+        </button>
+        {% endif %}
+        {% if tx.account %}
+        <span class="text-xs ml-auto" style="color:var(--text-dim)">{{ tx.account.display_name or tx.account.bank_name }}</span>
         {% endif %}
       </div>
       <!-- personal share inline form -->
@@ -243,10 +252,10 @@ function txRow(el) {
     <thead>
       <tr class="text-xs uppercase tracking-wide" style="color:var(--text-dim); border-bottom:1px solid var(--border)">
         <th class="text-left px-4 sm:px-5 py-3 font-medium">Data</th>
-        <th class="text-left px-4 sm:px-5 py-3 font-medium">Descrizione</th>
+        <th class="text-left px-4 sm:px-5 py-3 font-medium" style="width:300px">Descrizione</th>
         <th class="text-left px-3 py-3 font-medium">Categoria</th>
-        <th class="px-3 py-3"></th>
-        <th class="text-left px-3 py-3 font-medium">Conto</th>
+        <th class="px-2 py-3 w-8"></th>
+        <th class="text-left px-3 py-3 font-medium" style="width:90px">Conto</th>
         <th class="text-right px-4 sm:px-5 py-3 font-medium">Importo</th>
         <th class="px-3 py-3 w-8"></th>
       </tr>
@@ -261,12 +270,13 @@ function txRow(el) {
         :style="isConfirmed ? 'border-bottom:1px solid var(--border-subtle);background:rgba(16,185,129,0.04)' : 'border-bottom:1px solid var(--border-subtle)'">
       <td class="num px-4 sm:px-5 py-3.5 text-xs" style="color:var(--text-muted); white-space:nowrap">
         {{ tx.date.strftime('%d/%m/%Y') }}
-        {% if _is_new %}<span class="inline-block ml-1.5 px-1.5 py-0.5 rounded text-[10px] font-semibold" style="background:rgba(14,165,233,0.15);color:#0ea5e9;line-height:1.4">NUOVA</span>{% endif %}
+        {% if tx.status == 'PDNG' %}<span class="inline-block ml-1.5 px-1.5 py-0.5 rounded text-[10px] font-semibold" style="background:rgba(245,158,11,0.15);color:#f59e0b;line-height:1.4">PDNG</span>
+        {% elif _is_new %}<span class="inline-block ml-1.5 px-1.5 py-0.5 rounded text-[10px] font-semibold" style="background:rgba(14,165,233,0.15);color:#0ea5e9;line-height:1.4">NUOVA</span>{% endif %}
       </td>
-      <td class="px-4 sm:px-5 py-3.5" style="max-width:200px">
-        <p class="truncate" style="color:var(--text)">{{ tx.merchant or tx.description or '—' }}</p>
+      <td class="px-4 sm:px-5 py-3.5" style="width:300px;max-width:300px">
+        <p class="truncate" style="color:var(--text)" title="{{ tx.merchant or tx.description or '' }}">{{ tx.merchant or tx.description or '—' }}</p>
         {% if tx.merchant and tx.description %}
-        <p class="text-xs truncate mt-0.5" style="color:var(--text-dim)">{{ tx.description }}</p>
+        <p class="text-xs truncate mt-0.5" style="color:var(--text-dim)" title="{{ tx.description }}">{{ tx.description }}</p>
         {% endif %}
       </td>
       <!-- Category cell -->
@@ -296,11 +306,16 @@ function txRow(el) {
         </div>
       </td>
       <!-- Associa cell -->
-      <td class="px-3 py-3.5" style="white-space:nowrap">
+      <td class="px-2 py-3.5 text-center">
         {% if tx.merchant %}
-        <button @click="saveMerchant()" class="tag"
-          :style="isMapped ? 'font-size:10px;padding:2px 8px;cursor:pointer;background:rgba(5,150,105,0.15);border:1px solid rgba(5,150,105,0.35);color:var(--emerald)' : 'font-size:10px;padding:2px 8px;cursor:pointer;background:var(--surface-2);border:1px solid var(--border);color:var(--text-dim)'"
-          x-text="isMapped ? '✓ associato' : '⊕ associa'"></button>
+        <button @click="saveMerchant()" :title="isMapped ? 'Rimuovi associazione esercente' : 'Associa esercente a categoria'"
+          :style="isMapped ? 'color:var(--emerald);opacity:1' : 'color:var(--text-dim);opacity:0.4'"
+          class="hover:opacity-100 transition-opacity">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" style="width:15px;height:15px">
+            <path d="M12.232 4.232a2.5 2.5 0 0 1 3.536 3.536l-1.225 1.224a.75.75 0 0 0 1.061 1.06l1.224-1.224a4 4 0 0 0-5.656-5.656l-3 3a4 4 0 0 0 .225 5.865.75.75 0 0 0 .977-1.138 2.5 2.5 0 0 1-.142-3.667l3-3Z"/>
+            <path d="M11.603 7.963a.75.75 0 0 0-.977 1.138 2.5 2.5 0 0 1 .142 3.667l-3 3a2.5 2.5 0 0 1-3.536-3.536l1.225-1.224a.75.75 0 0 0-1.061-1.06l-1.224 1.224a4 4 0 1 0 5.656 5.656l3-3a4 4 0 0 0-.225-5.865Z"/>
+          </svg>
+        </button>
         {% endif %}
       </td>
       <td class="px-3 py-3.5 text-xs" style="color:var(--text-muted)">{{ (tx.account.display_name or tx.account.bank_name) if tx.account else '—' }}</td>

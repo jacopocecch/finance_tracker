@@ -135,6 +135,34 @@ def sync_account(account: Account, session: Session):
         existing_ids: set[str] = set(session.exec(select(Transaction.external_id)).all())
         seen_ids: set[str] = set()
 
+        def _remittance_str(raw_tx: dict) -> str:
+            ri = raw_tx.get("remittance_information")
+            if isinstance(ri, list):
+                return ri[0] if ri else ""
+            return ri or ""
+
+        def _rem_time(rem: str) -> str | None:
+            # Extract HH:MM from "alle ore HH:MM[:SS]" (ING card remittance)
+            import re as _re
+            m = _re.search(r'alle ore (\d{2}:\d{2})', rem)
+            return m.group(1) if m else None
+
+        # Build PDNG merge map: (date, amount, HH:MM) -> Transaction for this account
+        # Used to upgrade PDNG→BOOK instead of inserting a duplicate
+        pdng_map: dict[tuple, Transaction] = {}
+        for existing_tx in session.exec(
+            select(Transaction).where(Transaction.account_id == account.id)
+        ).all():
+            if existing_tx.raw_data:
+                try:
+                    raw = json.loads(existing_tx.raw_data)
+                    if raw.get("status") == "PDNG":
+                        t = _rem_time(_remittance_str(raw))
+                        if t:
+                            pdng_map[(existing_tx.date, existing_tx.amount, t)] = existing_tx
+                except Exception:
+                    pass
+
         # no_autoflush covers both the insert loop AND the balance query so pending
         # objects are never flushed implicitly mid-function
         with session.no_autoflush:
@@ -151,8 +179,33 @@ def sync_account(account: Account, session: Session):
                 parsed = parse_transaction(tx, account.bank_name)
                 merchant = parsed["merchant"]
                 desc = parsed["description"]
-                tx_date_str = tx.get("transaction_date") or tx.get("booking_date") or tx.get("value_date")
-                tx_date = date.fromisoformat(tx_date_str) if tx_date_str else date.today()
+                tx_date = parsed["date"]
+                if tx_date is None:
+                    tx_date_str = tx.get("transaction_date") or tx.get("booking_date") or tx.get("value_date")
+                    tx_date = date.fromisoformat(tx_date_str) if tx_date_str else date.today()
+
+                # PDNG resolution: match on (date, amount, HH:MM from remittance)
+                tx_status = tx.get("status")
+                rem_str = _remittance_str(tx)
+                t = _rem_time(rem_str)
+                if t:
+                    merge_key = (tx_date, amount, t)
+                    if merge_key in pdng_map:
+                        existing_tx = pdng_map.pop(merge_key)
+                        if tx_status == "BOOK":
+                            # Upgrade PDNG→BOOK in place, keep category/share set by user
+                            existing_tx.external_id = tx_id
+                            existing_tx.raw_data = json.dumps(tx)
+                            existing_tx.merchant = merchant
+                            existing_tx.description = desc
+                            existing_tx.date = tx_date
+                            existing_tx.status = "BOOK"
+                            existing_ids.add(tx_id)
+                        else:
+                            # Cancelled/rejected: remove the pending transaction
+                            session.delete(existing_tx)
+                        continue
+
                 tx_currency = (tx.get("transaction_amount") or {}).get("currency") or account.currency or "EUR"
                 cat_id = categorize(desc, merchant, session)
                 new_tx = Transaction(
@@ -165,6 +218,7 @@ def sync_account(account: Account, session: Session):
                     merchant=merchant,
                     category_id=cat_id,
                     raw_data=json.dumps(tx),
+                    status=tx_status or "BOOK",
                     created_at=datetime.now(timezone.utc).replace(tzinfo=None),
                 )
                 session.add(new_tx)

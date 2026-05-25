@@ -35,6 +35,7 @@ class Transaction(SQLModel, table=True):
     transfer_partner_id: Optional[int] = Field(default=None, foreign_key="transaction.id")
     personal_share: Optional[float] = None  # personally-owed portion (positive); None = full amount
     raw_data: str = ""           # JSON blob from Enable Banking
+    status: str = "BOOK"         # BOOK | PDNG
     is_confirmed: bool = Field(default=False)
     created_at: Optional[datetime] = Field(default=None)
 
@@ -238,6 +239,9 @@ def init_db():
             conn.commit()
         if "created_at" not in tx_cols:
             conn.execute(text("ALTER TABLE 'transaction' ADD COLUMN created_at DATETIME"))
+            conn.commit()
+        if "status" not in tx_cols:
+            conn.execute(text("ALTER TABLE 'transaction' ADD COLUMN status TEXT NOT NULL DEFAULT 'BOOK'"))
             conn.commit()
     with engine.connect() as conn:
         acols = [r[1] for r in conn.execute(text("PRAGMA table_info('account')")).fetchall()]

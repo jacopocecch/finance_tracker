@@ -116,8 +116,9 @@ def _balances_by_account(session: Session) -> dict[int, dict]:
 
 CHART_START_DATE = date(2026, 5, 24)
 
-def _networth_series(session: Session, days: int = 90) -> tuple[list[str], list[float]]:
+def _networth_series(session: Session) -> tuple[list[str], list[float]]:
     start = CHART_START_DATE
+    today = date.today()
     liquidity_accounts = {
         a.id: a for a in session.exec(
             select(Account).where(Account.connected == True, Account.type.in_(("checking", "savings")))
@@ -125,23 +126,45 @@ def _networth_series(session: Session, days: int = 90) -> tuple[list[str], list[
     }
     if not liquidity_accounts:
         return [], []
-    snaps = session.exec(
-        select(BalanceSnapshot).where(
-            BalanceSnapshot.date >= start,
-            BalanceSnapshot.account_id.in_(list(liquidity_accounts.keys()))
-        )
+
+    # Fetch ALL snapshots for these accounts (including before start, for forward-fill)
+    all_snaps = session.exec(
+        select(BalanceSnapshot)
+        .where(BalanceSnapshot.account_id.in_(list(liquidity_accounts.keys())))
+        .order_by(BalanceSnapshot.date)
     ).all()
-    by_date: dict[date, float] = defaultdict(float)
-    for s in snaps:
-        acc = liquidity_accounts[s.account_id]
-        balance = s.balance
-        if acc.currency and acc.currency != "EUR":
-            balance = _fx.convert(balance, acc.currency, session=session)
-        by_date[s.date] += balance
-    dates = sorted(by_date)
+
+    # Group by account, sorted by date
+    by_account: dict[int, list[BalanceSnapshot]] = defaultdict(list)
+    for s in all_snaps:
+        by_account[s.account_id].append(s)
+
+    # For each day in range, forward-fill last known snapshot per account
+    all_dates = [start + timedelta(days=i) for i in range((today - start).days + 1)]
+    result: dict[date, float] = {}
+    for d in all_dates:
+        total = 0.0
+        has_any = False
+        for acc_id, acc in liquidity_accounts.items():
+            last_snap = None
+            for s in by_account.get(acc_id, []):
+                if s.date <= d:
+                    last_snap = s
+                else:
+                    break
+            if last_snap is not None:
+                has_any = True
+                balance = last_snap.balance
+                if acc.currency and acc.currency != "EUR":
+                    balance = _fx.convert(balance, acc.currency, session=session)
+                total += balance
+        if has_any:
+            result[d] = total
+
+    dates = sorted(result)
     return (
         [d.strftime("%d/%m") for d in dates],
-        [round(by_date[d], 2) for d in dates],
+        [round(result[d], 2) for d in dates],
     )
 
 
