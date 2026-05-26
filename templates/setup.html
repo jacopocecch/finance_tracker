@@ -84,6 +84,10 @@
         <button type="submit" class="btn-ghost flex-shrink-0">Aggiorna saldo</button>
       </form>
       {% endif %}
+      <form method="post" action="/setup/account/{{ acc.id }}/threshold" class="flex items-center gap-1.5">
+        <input type="number" name="threshold" step="0.01" placeholder="Soglia saldo (es. 500)" value="{{ acc.balance_threshold if acc.balance_threshold is not none else '' }}" class="input text-sm num flex-1 sm:flex-none" style="min-width:0">
+        <button type="submit" class="btn-ghost flex-shrink-0">Soglia</button>
+      </form>
     </div>
   </div>
   {% endfor %}

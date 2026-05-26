@@ -20,6 +20,7 @@ class Account(SQLModel, table=True):
     last_sync: Optional[datetime] = None
     connected: bool = False
     deleted: bool = False
+    balance_threshold: Optional[float] = None
 
 
 class Transaction(SQLModel, table=True):
@@ -262,6 +263,9 @@ def init_db():
         acccols = [r[1] for r in conn.execute(text("PRAGMA table_info('account')")).fetchall()]
         if "deleted" not in acccols:
             conn.execute(text("ALTER TABLE 'account' ADD COLUMN deleted INTEGER NOT NULL DEFAULT 0"))
+            conn.commit()
+        if "balance_threshold" not in acccols:
+            conn.execute(text("ALTER TABLE 'account' ADD COLUMN balance_threshold REAL"))
             conn.commit()
     with Session(engine) as session:
         existing_cats = {c.name for c in session.exec(select(Category)).all()}

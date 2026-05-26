@@ -91,6 +91,28 @@ def _effective_amount(tx, session: Session = None) -> float:
     return amount
 
 
+def _get_balance_warnings(session: Session) -> list[dict]:
+    accounts = session.exec(
+        select(Account).where(Account.connected == True, Account.deleted == False, Account.balance_threshold != None)
+    ).all()
+    warnings = []
+    for acc in accounts:
+        snap = session.exec(
+            select(BalanceSnapshot)
+            .where(BalanceSnapshot.account_id == acc.id)
+            .order_by(BalanceSnapshot.date.desc())
+        ).first()
+        if snap and snap.balance < acc.balance_threshold:
+            name = acc.display_name or f"{acc.bank_name} — {acc.name}"
+            warnings.append({
+                "name": name,
+                "balance": snap.balance,
+                "threshold": acc.balance_threshold,
+                "currency": acc.currency or "EUR",
+            })
+    return warnings
+
+
 def _balances_by_account(session: Session) -> dict[int, dict]:
     """Latest balance snapshot per account. Returns dict with EUR and native values."""
     accounts = session.exec(select(Account).where(Account.connected == True)).all()
@@ -213,8 +235,11 @@ def dashboard(request: Request, session: Session = Depends(get_session)):
         key=lambda x: (x[0].session_id == "manual", -x[1]["eur"])
     )
 
+    balance_warnings = _get_balance_warnings(session)
+
     return templates.TemplateResponse("dashboard.html", {
         "request": request,
+        "balance_warnings": balance_warnings,
         "liquidity": liquidity,
         "liquidity_etf": liquidity_etf,
         "investments": investments_total,
@@ -806,6 +831,19 @@ def create_manual_account(
     session.add(BalanceSnapshot(account_id=acc.id, date=date.today(), balance=initial_balance))
     session.commit()
     return RedirectResponse("/setup?msg=Conto+aggiunto", status_code=303)
+
+
+@app.post("/setup/account/{account_id}/threshold")
+def update_account_threshold(
+    account_id: int,
+    threshold: Optional[float] = Form(None),
+    session: Session = Depends(get_session),
+):
+    acc = session.get(Account, account_id)
+    if acc:
+        acc.balance_threshold = threshold if threshold is not None and threshold >= 0 else None
+        session.commit()
+    return RedirectResponse("/setup?msg=Soglia+aggiornata", status_code=303)
 
 
 @app.post("/setup/account/{account_id}/balance")

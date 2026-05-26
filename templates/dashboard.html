@@ -2,6 +2,16 @@
 {% block title %}Overview — Ledger{% endblock %}
 {% block content %}
 
+{% if balance_warnings %}
+<div class="mb-5 space-y-2">
+  {% for w in balance_warnings %}
+  <div class="text-xs px-3 py-2 rounded-lg" style="background:rgba(234,179,8,0.08);color:#ca8a04;border:1px solid rgba(234,179,8,0.2)">
+    ⚠ <strong>{{ w.name }}</strong>: saldo {{ "%.2f"|format(w.balance) }} {{ w.currency }} sotto la soglia di {{ "%.2f"|format(w.threshold) }} {{ w.currency }}
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
 <div x-data="{ hidden: localStorage.getItem('liquidita_hidden') === '1' }"
      @hidden-changed.window="hidden = $event.detail">
 
