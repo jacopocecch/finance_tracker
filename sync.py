@@ -147,9 +147,10 @@ def sync_account(account: Account, session: Session):
             m = _re.search(r'alle ore (\d{2}:\d{2})', rem)
             return m.group(1) if m else None
 
-        # Build PDNG merge map: (date, amount, HH:MM) -> Transaction for this account
-        # Used to upgrade PDNG→BOOK instead of inserting a duplicate
+        # Build PDNG merge maps keyed by (date, amount, HH:MM) and fallback (date, amount)
+        # Bank APIs sometimes report PDNG time in UTC and BOOK time in local (±2h drift).
         pdng_map: dict[tuple, Transaction] = {}
+        pdng_map_date_amount: dict[tuple, list] = {}
         for existing_tx in session.exec(
             select(Transaction).where(Transaction.account_id == account.id)
         ).all():
@@ -160,6 +161,8 @@ def sync_account(account: Account, session: Session):
                         t = _rem_time(_remittance_str(raw))
                         if t:
                             pdng_map[(existing_tx.date, existing_tx.amount, t)] = existing_tx
+                        da_key = (existing_tx.date, existing_tx.amount)
+                        pdng_map_date_amount.setdefault(da_key, []).append(existing_tx)
                 except Exception:
                     pass
 
@@ -184,27 +187,41 @@ def sync_account(account: Account, session: Session):
                     tx_date_str = tx.get("transaction_date") or tx.get("booking_date") or tx.get("value_date")
                     tx_date = date.fromisoformat(tx_date_str) if tx_date_str else date.today()
 
-                # PDNG resolution: match on (date, amount, HH:MM from remittance)
+                # PDNG resolution: match on (date, amount, HH:MM from remittance).
+                # Fallback to (date, amount) alone when times differ due to UTC/local drift.
                 tx_status = tx.get("status")
                 rem_str = _remittance_str(tx)
                 t = _rem_time(rem_str)
+                matched_pdng: Transaction | None = None
                 if t:
                     merge_key = (tx_date, amount, t)
                     if merge_key in pdng_map:
-                        existing_tx = pdng_map.pop(merge_key)
-                        if tx_status == "BOOK":
-                            # Upgrade PDNG→BOOK in place, keep category/share set by user
-                            existing_tx.external_id = tx_id
-                            existing_tx.raw_data = json.dumps(tx)
-                            existing_tx.merchant = merchant
-                            existing_tx.description = desc
-                            existing_tx.date = tx_date
-                            existing_tx.status = "BOOK"
-                            existing_ids.add(tx_id)
-                        else:
-                            # Cancelled/rejected: remove the pending transaction
-                            session.delete(existing_tx)
-                        continue
+                        matched_pdng = pdng_map.pop(merge_key)
+                        da_key = (matched_pdng.date, matched_pdng.amount)
+                        pdng_map_date_amount.get(da_key, []).remove(matched_pdng) if matched_pdng in pdng_map_date_amount.get(da_key, []) else None
+                if matched_pdng is None:
+                    # Fallback: unique PDNG on same date+amount (covers UTC/local time drift)
+                    da_key = (tx_date, amount)
+                    candidates = pdng_map_date_amount.get(da_key, [])
+                    if len(candidates) == 1:
+                        matched_pdng = candidates.pop(0)
+                        t_key = _rem_time(_remittance_str(json.loads(matched_pdng.raw_data or "{}")))
+                        if t_key:
+                            pdng_map.pop((matched_pdng.date, matched_pdng.amount, t_key), None)
+                if matched_pdng is not None:
+                    if tx_status == "BOOK":
+                        # Upgrade PDNG→BOOK in place, keep category/share set by user
+                        matched_pdng.external_id = tx_id
+                        matched_pdng.raw_data = json.dumps(tx)
+                        matched_pdng.merchant = merchant
+                        matched_pdng.description = desc
+                        matched_pdng.date = tx_date
+                        matched_pdng.status = "BOOK"
+                        existing_ids.add(tx_id)
+                    else:
+                        # Cancelled/rejected: remove the pending transaction
+                        session.delete(matched_pdng)
+                    continue
 
                 tx_currency = (tx.get("transaction_amount") or {}).get("currency") or account.currency or "EUR"
                 cat_id = categorize(desc, merchant, session)

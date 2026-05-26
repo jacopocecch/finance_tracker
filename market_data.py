@@ -104,19 +104,48 @@ def refresh_quote(instrument, session) -> bool:
 
 
 def refresh_all_quotes(session) -> dict:
-    """Refresh quotes for all active instruments."""
-    from database import Instrument
+    """Refresh quotes for all active instruments. Fetches in parallel, writes serially."""
+    from database import Instrument, MarketQuote
     from sqlmodel import select
+    from concurrent.futures import ThreadPoolExecutor, as_completed
 
     instruments = session.exec(
         select(Instrument).where(Instrument.active == True)
     ).all()
+
+    # Fetch all prices in parallel (network-bound, yfinance is stateless per Ticker)
+    def _fetch(inst):
+        return inst, _provider.fetch_price(inst.ticker)
+
+    results = {}
+    with ThreadPoolExecutor(max_workers=min(len(instruments), 8)) as pool:
+        futures = {pool.submit(_fetch, inst): inst for inst in instruments}
+        for f in as_completed(futures):
+            inst, result = f.result()
+            results[inst.id] = (inst, result)
+
+    # Write serially to avoid SQLite contention
     ok = fail = 0
-    for inst in instruments:
-        if refresh_quote(inst, session):
+    for inst_id, (inst, result) in results.items():
+        for q in session.exec(
+            select(MarketQuote).where(MarketQuote.instrument_id == inst.id)
+        ).all():
+            q.is_stale = True
+            session.add(q)
+        if result is not None:
+            session.add(MarketQuote(
+                instrument_id=inst.id,
+                price=result["price"],
+                currency=result["currency"],
+                quote_timestamp=result["timestamp"],
+                source="yfinance",
+                is_stale=False,
+            ))
+            log.info(f"Quote refreshed: {inst.ticker} = {result['price']} {result['currency']}")
             ok += 1
         else:
             fail += 1
+    session.commit()
     return {"success": ok, "failed": fail}
 
 
