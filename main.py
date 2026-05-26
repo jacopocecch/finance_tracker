@@ -302,7 +302,16 @@ def monthly(
     def _is_transfer(tx) -> bool:
         return tx.category is not None and tx.category.type == "transfer"
 
-    transactions = [tx for tx in all_transactions if not _is_transfer(tx) and tx.amount != 0]
+    def _is_investment(tx) -> bool:
+        return tx.category is not None and tx.category.type == "investment"
+
+    total_invested = abs(sum(
+        _effective_amount(tx, session)
+        for tx in all_transactions
+        if _is_investment(tx) and tx.amount < 0
+    ))
+
+    transactions = [tx for tx in all_transactions if not _is_transfer(tx) and not _is_investment(tx) and tx.amount != 0]
     if tx_type == "in":
         transactions = [tx for tx in transactions if tx.amount > 0]
     elif tx_type == "out":
@@ -365,6 +374,7 @@ def monthly(
         "current_month": current_month,
         "total_in": total_in,
         "total_out": total_out,
+        "total_invested": total_invested,
         "balance": balance,
         "transactions": transactions,
         "weekly_labels": weekly_labels,
@@ -527,7 +537,7 @@ def update_share(
 
 @app.get("/budgets", response_class=HTMLResponse)
 def budgets_view(request: Request, session: Session = Depends(get_session)):
-    categories = session.exec(select(Category).where(Category.type == "expense")).all()
+    categories = session.exec(select(Category).where(Category.type.in_(["expense", "both"]))).all()
     budgets = {b.category_id: b for b in session.exec(select(Budget)).all()}
     return templates.TemplateResponse("budgets.html", {
         "request": request,

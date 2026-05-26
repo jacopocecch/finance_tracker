@@ -174,8 +174,9 @@ DEFAULT_CATEGORIES = [
     ("Sport",         "expense",  "#22D3EE", "🏋️"),
     ("Libri/Fumetti", "expense",  "#A78BFA", "📚"),
     ("Cinema",        "expense",  "#C084FC", "🎬"),
-    ("Regali",        "expense",  "#F472B6", "🎁"),
-    ("Investimento",  "transfer", "#3B82F6", "📈"),
+    ("Regali",        "both",     "#F472B6", "🎁"),
+    ("Vestiti",       "expense",  "#BE185D", "👕"),
+    ("Investimento",  "investment", "#3B82F6", "📈"),
     ("Trasferimento", "transfer", "#9CA3AF", "↔️"),
     ("Altro",         "expense",  "#6B7280", "❓"),
 ]
@@ -191,8 +192,9 @@ NEW_CATEGORIES = [
     ("Viaggi",        "expense",  "#818CF8", "✈️"),
     ("Libri/Fumetti", "expense",  "#A78BFA", "📚"),
     ("Cinema",        "expense",  "#C084FC", "🎬"),
-    ("Regali",        "expense",  "#F472B6", "🎁"),
+    ("Vestiti",       "expense",  "#BE185D", "👕"),
     ("Vendite",       "income",   "#6EE7B7", "🏷️"),
+    ("Regali",        "both",     "#F472B6", "🎁"),
 ]
 
 DEFAULT_RULES = [
@@ -292,6 +294,14 @@ def init_db():
                 old.name = "Pasticceria/Gelateria"
             elif old and target_exists:
                 session.delete(old)
+            # Migrate "Investimento" from transfer → investment type
+            inv = session.exec(select(Category).where(Category.name == "Investimento", Category.type == "transfer")).first()
+            if inv:
+                inv.type = "investment"
+            # Migrate "Regali" from expense → both type
+            reg = session.exec(select(Category).where(Category.name == "Regali", Category.type.in_(["expense", "income"]))).first()
+            if reg:
+                reg.type = "both"
             session.commit()
 
 

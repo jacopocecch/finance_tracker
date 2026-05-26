@@ -37,7 +37,7 @@
 </div>
 
 <!-- KPI strip -->
-<div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-7">
+<div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-7">
   <div class="card">
     <div class="flex items-center gap-2 mb-3">
       <div class="w-1.5 h-1.5 rounded-full" style="background:var(--emerald)"></div>
@@ -51,6 +51,15 @@
       <p class="text-xs" style="color:var(--text-muted)">Uscite</p>
     </div>
     <p class="num text-2xl font-medium" style="color:var(--rose)">-€{{ "{:,.0f}".format(total_out) }}</p>
+  </div>
+  <div class="card">
+    <div class="flex items-center gap-2 mb-3">
+      <div class="w-1.5 h-1.5 rounded-full" style="background:var(--sky)"></div>
+      <p class="text-xs" style="color:var(--text-muted)">Investiti</p>
+    </div>
+    <p class="num text-2xl font-medium" style="color:var(--sky)">
+      {% if total_invested > 0 %}-€{{ "{:,.0f}".format(total_invested) }}{% else %}<span style="color:var(--text-dim)">—</span>{% endif %}
+    </p>
   </div>
   <div class="card">
     <div class="flex items-center gap-2 mb-3">

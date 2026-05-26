@@ -208,7 +208,7 @@ function txRow(el) {
           <div x-show="editing" x-transition @click.outside="editing = false" @keydown.escape.window="editing = false"
                class="absolute z-50 card" style="top:calc(100% + 6px);left:0;width:200px;padding:6px;box-shadow:0 8px 24px rgba(0,0,0,0.18);max-height:260px;overflow-y:auto">
             {% set tx_type = 'income' if tx.amount > 0 else 'expense' %}
-            {% for cat in categories if cat.type == tx_type or cat.type == 'transfer' %}
+            {% for cat in categories if cat.type == tx_type or cat.type == 'transfer' or cat.type == 'both' %}
             <div @click="saveCategory('{{ cat.id }}')" class="tr-hover flex items-center gap-2 px-1.5 py-1 rounded-lg cursor-pointer" style="color:var(--text)"
                  {% if tx.category_id == cat.id %}x-init="$el.style.background='{{ cat.color }}12'"{% endif %}>
               <span class="inline-flex items-center justify-center text-xs flex-shrink-0" style="width:20px;height:20px;border-radius:6px;background:{{ cat.color }}20">{{ cat.icon }}</span>
@@ -293,7 +293,7 @@ function txRow(el) {
                class="absolute z-50 card"
                style="top:calc(100% + 6px);left:0;width:200px;padding:6px;box-shadow:0 8px 24px rgba(0,0,0,0.18);box-sizing:border-box;max-height:260px;overflow-y:auto">
             {% set tx_type = 'income' if tx.amount > 0 else 'expense' %}
-            {% for cat in categories if cat.type == tx_type or cat.type == 'transfer' %}
+            {% for cat in categories if cat.type == tx_type or cat.type == 'transfer' or cat.type == 'both' %}
             <div @click="saveCategory('{{ cat.id }}')" class="tr-hover flex items-center gap-2 px-1.5 py-1 rounded-lg cursor-pointer"
                  style="color:var(--text)"
                  {% if tx.category_id == cat.id %}x-init="$el.style.background='{{ cat.color }}12'"{% endif %}>

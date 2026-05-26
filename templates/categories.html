@@ -34,6 +34,7 @@
         <select name="cat_type" class="input">
           <option value="expense">Spesa</option>
           <option value="income">Entrata</option>
+          <option value="both">Entrate & Uscite</option>
           <option value="transfer">Trasferimento</option>
         </select>
       </div>
@@ -191,9 +192,10 @@
 </style>
 
 {% set sections = [
-  ('expense',  'Uscite',        'var(--rose)',    'rgba(225,29,72,0.12)'),
-  ('income',   'Entrate',       'var(--emerald)', 'rgba(5,150,105,0.12)'),
-  ('transfer', 'Trasferimenti', 'var(--sky)',     'rgba(3,105,161,0.12)'),
+  ('expense',  'Uscite',           'var(--rose)',    'rgba(225,29,72,0.12)'),
+  ('income',   'Entrate',          'var(--emerald)', 'rgba(5,150,105,0.12)'),
+  ('both',     'Entrate & Uscite', 'var(--text-muted)', 'rgba(107,107,136,0.12)'),
+  ('transfer', 'Trasferimenti',    'var(--sky)',     'rgba(3,105,161,0.12)'),
 ] %}
 
 {% for sec_type, sec_label, sec_color, sec_bg in sections %}
@@ -211,11 +213,12 @@
 {% set cat_rules = rules_by_cat.get(cat.id, []) %}
 {% set cat_merchants = merchants_by_cat.get(cat.id, []) %}
 {% set type_styles = {
-  'expense': 'background:rgba(225,29,72,0.07);color:var(--rose);border:1px solid rgba(225,29,72,0.15)',
-  'income':  'background:rgba(5,150,105,0.07);color:var(--emerald);border:1px solid rgba(5,150,105,0.15)',
-  'transfer':'background:rgba(3,105,161,0.07);color:var(--sky);border:1px solid rgba(3,105,161,0.15)'
+  'expense':  'background:rgba(225,29,72,0.07);color:var(--rose);border:1px solid rgba(225,29,72,0.15)',
+  'income':   'background:rgba(5,150,105,0.07);color:var(--emerald);border:1px solid rgba(5,150,105,0.15)',
+  'both':     'background:rgba(107,107,136,0.07);color:var(--text-muted);border:1px solid rgba(107,107,136,0.25)',
+  'transfer': 'background:rgba(3,105,161,0.07);color:var(--sky);border:1px solid rgba(3,105,161,0.15)'
 } %}
-{% set type_labels = {'expense': 'Spesa', 'income': 'Entrata', 'transfer': 'Trasferimento'} %}
+{% set type_labels = {'expense': 'Spesa', 'income': 'Entrata', 'both': 'Entrate & Uscite', 'transfer': 'Trasferimento'} %}
 
 <div class="cat-card" x-data="{ rulesOpen: false, addRule: false }">
   <!-- Colored accent bar -->
