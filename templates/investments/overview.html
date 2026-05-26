@@ -213,63 +213,6 @@
 </div>
 {% endif %}
 
-<!-- PAC section -->
-{% if summary.pac_positions %}
-<div class="card" style="padding:0">
-  <div class="px-5 py-4" style="border-bottom:1px solid var(--border)">
-    <div class="flex items-center justify-between">
-      <p class="text-xs font-medium uppercase tracking-wider" style="color:var(--text-muted)">PAC</p>
-      <a href="/investments/pac" class="text-xs" style="color:var(--sky)">Vedi tutti →</a>
-    </div>
-  </div>
-  <!-- Mobile cards -->
-  <div class="sm:hidden">
-    {% for pp in summary.pac_positions %}
-    <div class="px-4 py-3 tr-hover" style="border-bottom:1px solid var(--border-subtle)">
-      <div class="flex items-start justify-between gap-2 mb-1">
-        <p class="font-medium text-sm" style="color:var(--text)">{{ pp.pac_name }}</p>
-        <p class="num text-sm font-medium flex-shrink-0" style="color:var(--text)">
-          {% if pp.market_value is not none %}€{{ "{:,.0f}".format(pp.market_value) }}{% else %}—{% endif %}
-        </p>
-      </div>
-      <div class="flex items-center justify-between gap-2">
-        <p class="text-xs" style="color:var(--text-muted)">Inv. €{{ "{:,.0f}".format(pp.total_invested) }}</p>
-        <p class="num text-xs font-medium" style="color:{% if pp.unrealized_pl is not none and pp.unrealized_pl >= 0 %}var(--emerald){% elif pp.unrealized_pl is not none %}var(--rose){% else %}var(--text-dim){% endif %}">
-          {% if pp.unrealized_pl is not none %}{{ "{:+.2f}%".format(pp.unrealized_pl_pct) }}{% endif %}
-        </p>
-      </div>
-    </div>
-    {% endfor %}
-  </div>
-  <!-- Desktop table -->
-  <div class="hidden sm:block overflow-x-auto">
-  <table class="w-full text-sm">
-    <thead>
-      <tr class="text-xs uppercase tracking-wide" style="color:var(--text-dim); border-bottom:1px solid var(--border-subtle)">
-        <th class="text-left px-5 py-3 font-medium">PAC</th>
-        <th class="text-right px-4 py-3 font-medium">Investito</th>
-        <th class="text-right px-4 py-3 font-medium">Valore</th>
-        <th class="text-right px-5 py-3 font-medium">P/L</th>
-      </tr>
-    </thead>
-    <tbody>
-    {% for pp in summary.pac_positions %}
-    <tr class="tr-hover" style="border-bottom:1px solid var(--border-subtle)">
-      <td class="px-5 py-3.5 font-medium text-sm" style="color:var(--text)">{{ pp.pac_name }}</td>
-      <td class="num px-4 py-3.5 text-right text-sm" style="color:var(--text-muted)">€{{ "{:,.2f}".format(pp.total_invested) }}</td>
-      <td class="num px-4 py-3.5 text-right text-sm" style="color:var(--text)">
-        {% if pp.market_value is not none %}€{{ "{:,.2f}".format(pp.market_value) }}{% else %}—{% endif %}
-      </td>
-      <td class="num px-5 py-3.5 text-right text-sm font-medium" style="color:{% if pp.unrealized_pl is not none and pp.unrealized_pl >= 0 %}var(--emerald){% elif pp.unrealized_pl is not none %}var(--rose){% else %}var(--text-dim){% endif %}">
-        {% if pp.unrealized_pl is not none %}{{ "€{:+,.2f}".format(pp.unrealized_pl) }} / {{ "{:+.2f}%".format(pp.unrealized_pl_pct) }}{% else %}—{% endif %}
-      </td>
-    </tr>
-    {% endfor %}
-    </tbody>
-  </table>
-  </div>
-</div>
-{% endif %}
 
 <script>
 (function() {

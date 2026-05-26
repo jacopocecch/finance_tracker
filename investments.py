@@ -312,11 +312,25 @@ def inv_transactions_list(request: Request, session: Session = Depends(get_sessi
 def inv_transaction_add_form(request: Request, session: Session = Depends(get_session)):
     instruments = session.exec(select(Instrument).where(Instrument.active == True)).all()
     pacs = session.exec(select(PAC).where(PAC.active == True)).all()
+    inst_map = {i.id: i for i in instruments}
+    pac_components: dict = {}
+    for pac in pacs:
+        comps = session.exec(select(PACComponent).where(PACComponent.pac_id == pac.id)).all()
+        pac_components[pac.id] = [
+            {
+                "instrument_id": c.instrument_id,
+                "ticker": inst_map[c.instrument_id].ticker if c.instrument_id in inst_map else "?",
+                "name": (inst_map[c.instrument_id].name[:48] + "…" if len(inst_map[c.instrument_id].name) > 48 else inst_map[c.instrument_id].name) if c.instrument_id in inst_map else "?",
+                "target_weight": int(c.target_weight) if c.target_weight else 0,
+            }
+            for c in comps
+        ]
     return templates.TemplateResponse("investments/transaction_form.html", {
         "request": request,
         "transaction": None,
         "instruments": instruments,
         "pacs": pacs,
+        "pac_components": pac_components,
         "title": "Nuovo acquisto",
         "today": date.today().isoformat(),
     })
@@ -484,6 +498,9 @@ def pac_add_form(request: Request, session: Session = Depends(get_session)):
         "pac": None,
         "instruments": instruments,
         "title": "Nuovo PAC",
+        "form_action": "/investments/pac/add",
+        "submit_label": "Crea PAC",
+        "initial_components": [{"id": "", "weight": ""}],
     })
 
 
@@ -503,40 +520,56 @@ def pac_add(
         weight = float(w_str) if w_str else None
         session.add(PACComponent(pac_id=pac.id, instrument_id=iid, target_weight=weight))
     session.commit()
-    return RedirectResponse(f"/investments/pac/{pac.id}", status_code=303)
+    return RedirectResponse("/investments/pac", status_code=303)
 
 
-@router.get("/pac/{pac_id}", response_class=HTMLResponse)
-def pac_detail(pac_id: int, request: Request, session: Session = Depends(get_session)):
+@router.get("/pac/{pac_id}/edit", response_class=HTMLResponse)
+def pac_edit_form(pac_id: int, request: Request, session: Session = Depends(get_session)):
     pac = session.get(PAC, pac_id)
     if not pac:
         return RedirectResponse("/investments/pac", status_code=303)
-
+    instruments = session.exec(select(Instrument).where(Instrument.active == True)).all()
     components = session.exec(select(PACComponent).where(PACComponent.pac_id == pac_id)).all()
-    insts = {c.instrument_id: session.get(Instrument, c.instrument_id) for c in components}
-
-    last_prices: dict[int, float] = {}
-    for iid in insts:
-        q = latest_quote(iid, session)
-        if q:
-            last_prices[iid] = q.price
-
-    pac_txs = session.exec(
-        select(InvestmentTransaction).where(InvestmentTransaction.pac_id == pac_id)
-        .order_by(InvestmentTransaction.trade_date.desc())
-    ).all()
-    pp = compute_pac_position(pac_id, pac.name, pac_txs, last_prices)
-    all_instruments = session.exec(select(Instrument).where(Instrument.active == True)).all()
-
-    return templates.TemplateResponse("investments/pac_detail.html", {
+    initial = [
+        {"id": str(c.instrument_id), "weight": str(int(c.target_weight)) if c.target_weight else ""}
+        for c in components
+    ] or [{"id": "", "weight": ""}]
+    return templates.TemplateResponse("investments/pac_form.html", {
         "request": request,
         "pac": pac,
-        "position": pp,
-        "components": components,
-        "instruments_map": insts,
-        "transactions": pac_txs,
-        "all_instruments": all_instruments,
+        "instruments": instruments,
+        "title": f"Modifica {pac.name}",
+        "form_action": f"/investments/pac/{pac_id}/edit",
+        "submit_label": "Salva modifiche",
+        "initial_components": initial,
     })
+
+
+@router.post("/pac/{pac_id}/edit")
+def pac_edit(
+    pac_id: int,
+    name: str = Form(...),
+    description: str = Form(""),
+    instrument_ids: list[int] = Form(default=[]),
+    target_weights: list[str] = Form(default=[]),
+    session: Session = Depends(get_session),
+):
+    pac = session.get(PAC, pac_id)
+    if not pac:
+        return RedirectResponse("/investments/pac", status_code=303)
+    pac.name = name.strip()
+    pac.description = description.strip() or None
+    # Replace components
+    old = session.exec(select(PACComponent).where(PACComponent.pac_id == pac_id)).all()
+    for c in old:
+        session.delete(c)
+    session.flush()
+    for i, iid in enumerate(instrument_ids):
+        w_str = target_weights[i] if i < len(target_weights) else ""
+        weight = float(w_str) if w_str else None
+        session.add(PACComponent(pac_id=pac_id, instrument_id=iid, target_weight=weight))
+    session.commit()
+    return RedirectResponse("/investments/pac", status_code=303)
 
 
 @router.get("/pac/{pac_id}/execute", response_class=HTMLResponse)
@@ -600,7 +633,7 @@ def pac_execute(
         added += 1
 
     session.commit()
-    return RedirectResponse(f"/investments/pac/{pac_id}", status_code=303)
+    return RedirectResponse("/investments", status_code=303)
 
 
 @router.post("/pac/{pac_id}/delete")

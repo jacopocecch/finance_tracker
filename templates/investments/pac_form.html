@@ -7,15 +7,15 @@
   <h1 class="text-xl font-semibold" style="color:var(--text)">{{ title }}</h1>
 </div>
 
-<div class="card" style="max-width:560px" x-data="{ components: [{ id: '', weight: '' }] }">
-  <form method="post" action="/investments/pac/add">
+<div class="card" style="max-width:560px" x-data='{ "components": {{ initial_components | tojson }} }'>
+  <form method="post" action="{{ form_action }}">
     <div class="mb-5">
       <label class="text-xs font-medium mb-1.5 block" style="color:var(--text-muted)">Nome PAC *</label>
-      <input type="text" name="name" placeholder="es. PAC Mensile Globale" class="input w-full" required>
+      <input type="text" name="name" value="{{ pac.name if pac else '' }}" placeholder="es. PAC Mensile Globale" class="input w-full" required>
     </div>
     <div class="mb-5">
       <label class="text-xs font-medium mb-1.5 block" style="color:var(--text-muted)">Descrizione</label>
-      <input type="text" name="description" placeholder="Opzionale" class="input w-full">
+      <input type="text" name="description" value="{{ pac.description if pac and pac.description else '' }}" placeholder="Opzionale" class="input w-full">
     </div>
 
     <!-- Components -->
@@ -23,7 +23,7 @@
       <label class="text-xs font-medium mb-3 block" style="color:var(--text-muted)">Strumenti inclusi</label>
       <template x-for="(comp, idx) in components" :key="idx">
         <div class="flex gap-2 mb-2 items-center">
-          <select name="instrument_ids" class="input flex-1">
+          <select name="instrument_ids" class="input flex-1" x-model="comp.id">
             <option value="">— Strumento —</option>
             {% for inst in instruments %}
             <option value="{{ inst.id }}">{{ inst.ticker }} — {{ inst.name }}</option>
@@ -37,7 +37,7 @@
     </div>
 
     <div class="flex gap-2">
-      <button type="submit" class="btn-primary">Crea PAC</button>
+      <button type="submit" class="btn-primary">{{ submit_label }}</button>
       <a href="/investments/pac" class="btn-ghost">Annulla</a>
     </div>
   </form>

@@ -7,8 +7,22 @@
   <h1 class="text-xl font-semibold" style="color:var(--text)">{{ title }}</h1>
 </div>
 
-<div class="card" style="max-width:680px" x-data="{ newInstrument: {{ 'false' if transaction else 'false' }} }">
-  <form method="post" action="{% if transaction %}/investments/transactions/{{ transaction.id }}/edit{% else %}/investments/transactions/add{% endif %}">
+<div class="card" style="max-width:680px" x-data='{ "newInstrument": false, "mode": "single", "selectedPac": {{ pacs[0].id if pacs else "null" }}, "pacComponents": {{ pac_components | tojson if pac_components is defined else "{}" }} }'>
+
+  {% if not transaction and pacs %}
+  <!-- Mode tabs -->
+  <div class="flex gap-1 mb-5 p-1 rounded-lg" style="background:var(--surface-2);width:fit-content">
+    <button type="button" @click="mode='single'"
+      :class="mode==='single' ? 'btn-primary' : 'btn-ghost'"
+      class="text-xs px-4 py-1.5 rounded-md transition-all">Acquisto singolo</button>
+    <button type="button" @click="mode='pac'"
+      :class="mode==='pac' ? 'btn-primary' : 'btn-ghost'"
+      class="text-xs px-4 py-1.5 rounded-md transition-all">Esegui PAC</button>
+  </div>
+  {% endif %}
+
+  <!-- ── Single instrument form ── -->
+  <form x-show="mode==='single'" method="post" action="{% if transaction %}/investments/transactions/{{ transaction.id }}/edit{% else %}/investments/transactions/add{% endif %}">
 
     <!-- Instrument selector -->
     {% if not transaction %}
@@ -127,5 +141,67 @@
       <a href="/investments" class="btn-ghost">Annulla</a>
     </div>
   </form>
+
+  {% if not transaction and pacs %}
+  <!-- ── PAC execution form ── -->
+  <form x-show="mode==='pac'" method="post" :action="'/investments/pac/' + selectedPac + '/execute'">
+    <!-- PAC selector -->
+    <div class="mb-5">
+      <label class="text-xs font-medium mb-1.5 block" style="color:var(--text-muted)">PAC *</label>
+      <select class="input w-full" x-model="selectedPac">
+        {% for pac in pacs %}
+        <option value="{{ pac.id }}">{{ pac.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <!-- Date + broker -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-5">
+      <div>
+        <label class="text-xs font-medium mb-1.5 block" style="color:var(--text-muted)">Data acquisto *</label>
+        <input type="date" name="trade_date" value="{{ today }}" required class="input w-full">
+      </div>
+      <div>
+        <label class="text-xs font-medium mb-1.5 block" style="color:var(--text-muted)">Broker</label>
+        <input type="text" name="broker_name" value="Fineco" class="input w-full">
+      </div>
+    </div>
+
+    <!-- Instrument rows -->
+    <div class="mb-5">
+      <label class="text-xs font-medium mb-3 block" style="color:var(--text-muted)">Strumenti</label>
+      <template x-for="comp in (pacComponents[selectedPac] || [])" :key="comp.instrument_id">
+        <div class="mb-3">
+          <input type="hidden" name="instrument_ids" :value="comp.instrument_id">
+          <p class="text-sm font-medium mb-2" style="color:var(--text)">
+            <span x-text="comp.ticker"></span>
+            <span class="text-xs font-normal" style="color:var(--text-muted)" x-text="' — ' + comp.name"></span>
+          </p>
+          <div class="grid grid-cols-3 gap-3">
+            <div>
+              <label class="text-xs mb-1 block" style="color:var(--text-dim)">Quantità</label>
+              <input type="number" name="quantities" :value="comp.target_weight || ''" placeholder="0" step="1" min="0" class="input w-full">
+            </div>
+            <div>
+              <label class="text-xs mb-1 block" style="color:var(--text-dim)">Prezzo unit.</label>
+              <input type="number" name="unit_prices" placeholder="0.0000" step="0.0001" min="0" class="input w-full">
+            </div>
+            <div>
+              <label class="text-xs mb-1 block" style="color:var(--text-dim)">Commissioni</label>
+              <input type="number" name="fees_list" placeholder="0.00" step="0.01" min="0" value="0" class="input w-full">
+            </div>
+          </div>
+        </div>
+      </template>
+      <p x-show="(pacComponents[selectedPac] || []).length === 0" class="text-sm" style="color:var(--text-dim)">Nessuno strumento nel PAC.</p>
+    </div>
+
+    <div class="flex gap-2">
+      <button type="submit" class="btn-primary">Registra acquisti</button>
+      <a href="/investments" class="btn-ghost">Annulla</a>
+    </div>
+  </form>
+  {% endif %}
+
 </div>
 {% endblock %}
