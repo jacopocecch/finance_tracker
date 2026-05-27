@@ -6,12 +6,19 @@
 function txRow(el) {
   const s = JSON.parse(el.dataset.state);
   return {
-    editing: false, editShare: false,
+    editing: false, editShare: false, dropUp: false,
     isMapped: s.isMapped,
     catId: s.catId,
     catColor: s.catColor, catName: s.catName, catIcon: s.catIcon, catTextColor: s.catTextColor,
     txId: s.txId,
     isConfirmed: s.isConfirmed,
+    toggleEditing(trigger) {
+      if (!this.editing) {
+        const rect = trigger.closest('.relative').getBoundingClientRect();
+        this.dropUp = (window.innerHeight - rect.bottom) < 280;
+      }
+      this.editing = !this.editing;
+    },
     async saveCategory(catId) {
       const fd = new FormData(); fd.append('category_id', catId);
       const r = await fetch('/transactions/' + this.txId + '/category', {method:'POST', body:fd, headers:{'X-Fetch':'1'}});
@@ -145,8 +152,18 @@ function txRow(el) {
   </form>
 </div>
 
+<!-- Spinner (shown until Alpine initializes) -->
+<div id="tx-spinner" class="card" style="padding:2.5rem;display:flex;align-items:center;justify-content:center;gap:0.75rem">
+  <svg style="width:20px;height:20px;animation:spin 0.8s linear infinite;color:var(--text-muted)" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+    <circle style="opacity:0.25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3"/>
+    <path style="opacity:0.75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+  </svg>
+  <span class="text-sm" style="color:var(--text-muted)">Caricamento…</span>
+</div>
+<style>@keyframes spin { to { transform: rotate(360deg); } }</style>
+
 <!-- Table -->
-<div class="card table-wrap" style="padding:0;overflow-x:auto">
+<div id="tx-table" class="card table-wrap" style="padding:0;overflow-x:auto;display:none">
   <!-- Count + pagination -->
   <div class="flex items-center justify-between px-4 sm:px-5 py-3" style="border-bottom:1px solid var(--border)">
     <span class="num text-xs" style="color:var(--text-muted)">{{ total }} risultati</span>
@@ -200,15 +217,15 @@ function txRow(el) {
       <!-- Row 3: category + associa -->
       <div class="flex items-center gap-2 flex-wrap">
         <div class="relative inline-block">
-          <div @click="editing = !editing" class="cursor-pointer inline-flex items-center gap-1.5"
+          <div @click="toggleEditing($el)" class="cursor-pointer inline-flex items-center gap-1.5"
                :style="`background:${catColor}14;border:1px solid ${catColor}35;border-radius:8px;padding:3px 8px 3px 4px`">
             <span class="inline-flex items-center justify-center text-xs" :style="`width:18px;height:18px;border-radius:5px;background:${catColor}35;flex-shrink:0`" x-text="catIcon"></span>
             <span class="text-xs font-medium" style="color:var(--text)" x-text="catName"></span>
           </div>
           <div x-show="editing" x-transition @click.outside="editing = false" @keydown.escape.window="editing = false"
-               class="absolute z-50 card" style="top:calc(100% + 6px);left:0;width:200px;padding:6px;box-shadow:0 8px 24px rgba(0,0,0,0.18);max-height:260px;overflow-y:auto">
+               class="absolute z-50 card" :style="dropUp ? 'bottom:calc(100% + 6px);left:0;width:200px;padding:6px;box-shadow:0 8px 24px rgba(0,0,0,0.18);max-height:260px;overflow-y:auto' : 'top:calc(100% + 6px);left:0;width:200px;padding:6px;box-shadow:0 8px 24px rgba(0,0,0,0.18);max-height:260px;overflow-y:auto'">
             {% set tx_type = 'income' if tx.amount > 0 else 'expense' %}
-            {% for cat in categories if cat.type == tx_type or cat.type == 'transfer' or cat.type == 'both' %}
+            {% for cat in categories if cat.type == tx_type or cat.type == 'transfer' or cat.type == 'both' or cat.type == 'investment' %}
             <div @click="saveCategory('{{ cat.id }}')" class="tr-hover flex items-center gap-2 px-1.5 py-1 rounded-lg cursor-pointer" style="color:var(--text)"
                  {% if tx.category_id == cat.id %}x-init="$el.style.background='{{ cat.color }}12'"{% endif %}>
               <span class="inline-flex items-center justify-center text-xs flex-shrink-0" style="width:20px;height:20px;border-radius:6px;background:{{ cat.color }}20">{{ cat.icon }}</span>
@@ -282,7 +299,7 @@ function txRow(el) {
       <!-- Category cell -->
       <td class="px-3 py-3.5">
         <div class="relative inline-block">
-          <div @click="editing = !editing" class="cursor-pointer inline-flex items-center gap-1.5"
+          <div @click="toggleEditing($el)" class="cursor-pointer inline-flex items-center gap-1.5"
                :style="`background:${catColor}14;border:1px solid ${catColor}35;border-radius:8px;padding:3px 8px 3px 4px`">
             <span class="inline-flex items-center justify-center text-xs"
                   :style="`width:18px;height:18px;border-radius:5px;background:${catColor}35;flex-shrink:0`"
@@ -291,9 +308,9 @@ function txRow(el) {
           </div>
           <div x-show="editing" x-transition @click.outside="editing = false" @keydown.escape.window="editing = false"
                class="absolute z-50 card"
-               style="top:calc(100% + 6px);left:0;width:200px;padding:6px;box-shadow:0 8px 24px rgba(0,0,0,0.18);box-sizing:border-box;max-height:260px;overflow-y:auto">
+               :style="dropUp ? 'bottom:calc(100% + 6px);left:0;width:200px;padding:6px;box-shadow:0 8px 24px rgba(0,0,0,0.18);box-sizing:border-box;max-height:260px;overflow-y:auto' : 'top:calc(100% + 6px);left:0;width:200px;padding:6px;box-shadow:0 8px 24px rgba(0,0,0,0.18);box-sizing:border-box;max-height:260px;overflow-y:auto'">
             {% set tx_type = 'income' if tx.amount > 0 else 'expense' %}
-            {% for cat in categories if cat.type == tx_type or cat.type == 'transfer' or cat.type == 'both' %}
+            {% for cat in categories if cat.type == tx_type or cat.type == 'transfer' or cat.type == 'both' or cat.type == 'investment' %}
             <div @click="saveCategory('{{ cat.id }}')" class="tr-hover flex items-center gap-2 px-1.5 py-1 rounded-lg cursor-pointer"
                  style="color:var(--text)"
                  {% if tx.category_id == cat.id %}x-init="$el.style.background='{{ cat.color }}12'"{% endif %}>
@@ -376,4 +393,11 @@ function txRow(el) {
   </div>
   {% endif %}
 </div>
+
+<script>
+  document.addEventListener('alpine:initialized', () => {
+    document.getElementById('tx-spinner').style.display = 'none';
+    document.getElementById('tx-table').style.display = '';
+  });
+</script>
 {% endblock %}
