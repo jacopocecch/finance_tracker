@@ -319,7 +319,7 @@ def monthly(
 
     total_in  = sum(_effective_amount(tx, session) for tx in transactions if tx.amount > 0 and not _is_transfer(tx))
     total_out = abs(sum(_effective_amount(tx, session) for tx in transactions if tx.amount < 0 and not _is_transfer(tx)))
-    balance   = total_in - total_out
+    balance   = total_in - total_out - total_invested
 
     # Weekly aggregation (4 weeks)
     weekly_in, weekly_out, weekly_labels = [], [], []
