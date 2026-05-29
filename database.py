@@ -178,6 +178,7 @@ DEFAULT_CATEGORIES = [
     ("Vestiti",       "expense",  "#BE185D", "👕"),
     ("Investimento",  "investment", "#3B82F6", "📈"),
     ("Trasferimento", "transfer", "#9CA3AF", "↔️"),
+    ("Prelievo ATM",  "transfer", "#9CA3AF", "💵"),
     ("Altro",         "expense",  "#6B7280", "❓"),
 ]
 
@@ -195,6 +196,7 @@ NEW_CATEGORIES = [
     ("Vestiti",       "expense",  "#BE185D", "👕"),
     ("Vendite",       "income",   "#6EE7B7", "🏷️"),
     ("Regali",        "both",     "#F472B6", "🎁"),
+    ("Prelievo ATM",  "transfer", "#9CA3AF", "💵"),
 ]
 
 DEFAULT_RULES = [
@@ -219,6 +221,7 @@ DEFAULT_RULES = [
     (r"cinema|uci|the space|multisala",                        "Cinema",         8),
     (r"etf|titol|azion|fondo|fineco invest|directa",           "Investimento",   9),
     (r"revolut|n26|wise|paypal|satispay|bonifico",             "Trasferimento",  5),
+    (r"prelievo|bancomat|sportello atm",                       "Prelievo ATM",  12),
 ]
 
 
@@ -302,6 +305,12 @@ def init_db():
             reg = session.exec(select(Category).where(Category.name == "Regali", Category.type.in_(["expense", "income"]))).first()
             if reg:
                 reg.type = "both"
+            # Add Prelievo ATM rule if missing
+            prelievo_cat = session.exec(select(Category).where(Category.name == "Prelievo ATM")).first()
+            if prelievo_cat:
+                existing_rule = session.exec(select(CategoryRule).where(CategoryRule.category_id == prelievo_cat.id)).first()
+                if not existing_rule:
+                    session.add(CategoryRule(pattern=r"prelievo|bancomat|sportello atm", category_id=prelievo_cat.id, priority=12))
             session.commit()
 
 

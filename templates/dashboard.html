@@ -40,7 +40,7 @@
       <span x-show="!hidden">{{ "{:,.0f}".format(liquidity) }} €</span>
       <span x-show="hidden" style="letter-spacing:0.1em">•••• €</span>
     </p>
-    <p class="text-xs mt-1.5" style="color:var(--text-dim)">correnti · risparmio{% if liquidity_etf %} · ETF monetari{% endif %}</p>
+    <p class="text-xs mt-1.5" style="color:var(--text-dim)">correnti · risparmio · contanti{% if liquidity_etf %} · ETF monetari{% endif %}</p>
   </div>
   <div class="card">
     <p class="text-xs mb-3" style="color:var(--text-muted)">Investimenti</p>
@@ -115,7 +115,7 @@
             </span>
             <span x-show="hidden" style="letter-spacing:0.1em">•••• €</span>
           </p>
-          <p class="text-xs mt-0.5" style="color:var(--text-dim)">{{ {'checking': 'corrente', 'savings': 'risparmio', 'investment': 'investimento'}.get(acc.type, acc.type) }}</p>
+          <p class="text-xs mt-0.5" style="color:var(--text-dim)">{{ {'checking': 'corrente', 'savings': 'risparmio', 'investment': 'investimento', 'cash': 'contanti'}.get(acc.type, acc.type) }}</p>
         </div>
       </div>
       {% endfor %}

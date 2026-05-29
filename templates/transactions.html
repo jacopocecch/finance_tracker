@@ -47,9 +47,25 @@ function txRow(el) {
 <!-- Header -->
 <div class="flex items-center justify-between mb-6 gap-3">
   <h1 class="text-xl font-semibold" style="color:var(--text)">Transazioni</h1>
-  <form method="post" action="/transactions/detect-transfers">
-    <button type="submit" class="btn-ghost text-xs" style="color:var(--sky)">⇄ Trasferimenti</button>
-  </form>
+  <div class="flex items-center gap-2">
+    <form method="post" action="/transactions/detect-transfers">
+      <button type="submit" class="btn-ghost text-xs" style="color:var(--sky)">⇄ Trasferimenti</button>
+    </form>
+    {% if cash_accounts %}
+    <form method="post" action="/transactions/detect-prelievi" class="flex items-center gap-1.5">
+      {% if cash_accounts|length > 1 %}
+      <select name="cash_account_id" class="input text-xs">
+        {% for acc in cash_accounts %}
+        <option value="{{ acc.id }}">{{ acc.display_name or acc.name }}</option>
+        {% endfor %}
+      </select>
+      {% else %}
+      <input type="hidden" name="cash_account_id" value="{{ cash_accounts[0].id }}">
+      {% endif %}
+      <button type="submit" class="btn-ghost text-xs" style="color:var(--sky)">💵 Prelievi</button>
+    </form>
+    {% endif %}
+  </div>
 </div>
 
 <!-- Nuova transazione manuale -->

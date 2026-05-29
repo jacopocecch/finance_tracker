@@ -75,6 +75,7 @@
           <option value="checking" {% if acc.type == 'checking' %}selected{% endif %}>💳 Corrente</option>
           <option value="savings" {% if acc.type == 'savings' %}selected{% endif %}>🏦 Risparmio</option>
           <option value="investment" {% if acc.type == 'investment' %}selected{% endif %}>📈 Investimento</option>
+          <option value="cash" {% if acc.type == 'cash' %}selected{% endif %}>💵 Contanti</option>
         </select>
         <button type="submit" class="btn-ghost flex-shrink-0">Salva tipo</button>
       </form>
@@ -135,6 +136,7 @@
             <option value="checking">💳 Corrente</option>
             <option value="savings">🏦 Risparmio</option>
             <option value="investment">📈 Investimento</option>
+            <option value="cash">💵 Contanti</option>
           </select>
         </div>
         <div class="grid grid-cols-2 gap-3">

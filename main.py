@@ -143,7 +143,7 @@ def _networth_series(session: Session) -> tuple[list[str], list[float]]:
     today = date.today()
     liquidity_accounts = {
         a.id: a for a in session.exec(
-            select(Account).where(Account.connected == True, Account.type.in_(("checking", "savings")))
+            select(Account).where(Account.connected == True, Account.type.in_(("checking", "savings", "cash")))
         ).all()
     }
     if not liquidity_accounts:
@@ -199,7 +199,7 @@ def dashboard(request: Request, session: Session = Depends(get_session)):
     labels, networth_data = _networth_series(session)
 
     liquidity = sum(
-        balances.get(a.id, {"eur": 0})["eur"] for a in accounts if a.type in ("checking", "savings")
+        balances.get(a.id, {"eur": 0})["eur"] for a in accounts if a.type in ("checking", "savings", "cash")
     )
     bank_investments = sum(
         balances.get(a.id, {"eur": 0})["eur"] for a in accounts if a.type == "investment"
@@ -486,6 +486,9 @@ def transactions_view(
         "mapped_merchants": mapped_merchants,
         "new_since": new_since,
         "new_since_dt": new_since_dt,
+        "cash_accounts": session.exec(
+            select(Account).where(Account.type == "cash", Account.deleted == False)
+        ).all(),
     })
 
 
@@ -785,7 +788,7 @@ def update_account_name(account_id: int, display_name: str = Form(...), session:
 @app.post("/setup/account/{account_id}/type")
 def update_account_type(account_id: int, type: str = Form(...), session: Session = Depends(get_session)):
     acc = session.get(Account, account_id)
-    if acc and type in ("checking", "savings", "investment"):
+    if acc and type in ("checking", "savings", "investment", "cash"):
         acc.type = type
         session.commit()
     return RedirectResponse("/setup", status_code=303)
@@ -963,6 +966,76 @@ def detect_transfers(session: Session = Depends(get_session)):
     return RedirectResponse(f"/transactions?msg={matched}+trasferimenti+rilevati", status_code=303)
 
 
+@app.post("/transactions/detect-prelievi")
+def detect_prelievi(
+    cash_account_id: Optional[int] = Form(None),
+    session: Session = Depends(get_session),
+):
+    if cash_account_id:
+        cash_acc = session.get(Account, cash_account_id)
+    else:
+        cash_accs = session.exec(
+            select(Account).where(Account.type == "cash", Account.deleted == False)
+        ).all()
+        if len(cash_accs) != 1:
+            return RedirectResponse("/transactions?msg=Seleziona+conto+contante", status_code=303)
+        cash_acc = cash_accs[0]
+
+    if not cash_acc:
+        return RedirectResponse("/transactions?msg=Conto+contante+non+trovato", status_code=303)
+
+    transfer_cat = session.exec(select(Category).where(Category.name == "Trasferimento")).first()
+    prelievo_cat = session.exec(select(Category).where(Category.name == "Prelievo ATM")).first()
+    if not transfer_cat or not prelievo_cat:
+        return RedirectResponse("/transactions?msg=Categorie+mancanti", status_code=303)
+
+    prelievi = session.exec(
+        select(Transaction).where(
+            Transaction.category_id == prelievo_cat.id,
+            Transaction.transfer_partner_id == None,
+            Transaction.amount < 0,
+        )
+    ).all()
+
+    import uuid as _uuid
+    created = 0
+    for tx in prelievi:
+        cash_tx = Transaction(
+            account_id=cash_acc.id,
+            external_id=f"prelievo_{tx.id}_{_uuid.uuid4().hex[:8]}",
+            date=tx.date,
+            amount=abs(tx.amount),
+            currency=tx.currency,
+            description=f"Prelievo da {tx.description or 'banca'}",
+            category_id=transfer_cat.id,
+            raw_data="",
+            created_at=datetime.now(timezone.utc).replace(tzinfo=None),
+        )
+        session.add(cash_tx)
+        session.flush()
+
+        tx.transfer_partner_id = cash_tx.id
+        tx.category_id = transfer_cat.id
+        cash_tx.transfer_partner_id = tx.id
+
+        snap = session.exec(
+            select(BalanceSnapshot)
+            .where(BalanceSnapshot.account_id == cash_acc.id)
+            .order_by(BalanceSnapshot.date.desc())
+        ).first()
+        current = snap.balance if snap else 0.0
+        new_bal = current + abs(tx.amount)
+        if snap and snap.date == date.today():
+            snap.balance = new_bal
+        else:
+            session.add(BalanceSnapshot(account_id=cash_acc.id, date=date.today(), balance=new_bal))
+
+        created += 1
+
+    session.commit()
+    return RedirectResponse(f"/transactions?msg={created}+prelievi+collegati", status_code=303)
+
+
 @app.post("/sync")
 def trigger_sync():
     try:
@@ -979,6 +1052,49 @@ def trigger_sync():
         return HTMLResponse('✓ Sync completato')
     except Exception as e:
         return HTMLResponse(f'✗ {e}')
+
+
+@app.post("/sync/{account_id}")
+def trigger_sync_one(account_id: int, session: Session = Depends(get_session)):
+    try:
+        acc = session.get(Account, account_id)
+        if not acc:
+            return HTMLResponse('✗ Conto non trovato')
+        sync_start = datetime.now(timezone.utc).replace(tzinfo=None)
+        with Session(engine) as sync_session:
+            acc2 = sync_session.get(Account, account_id)
+            if acc2:
+                sync_account(acc2, sync_session)
+        with Session(engine) as s:
+            new_count = len(s.exec(
+                select(Transaction)
+                .where(Transaction.account_id == account_id, Transaction.created_at >= sync_start)
+            ).all())
+        label = acc.display_name or acc.name
+        if new_count > 0:
+            word = "nuova" if new_count == 1 else "nuove"
+            link = f"/transactions?new_since={sync_start.isoformat()}"
+            resp = HTMLResponse(f'✓ {label}: {new_count} {word}')
+            resp.headers["HX-Redirect"] = link
+            return resp
+        return HTMLResponse(f'✓ {label}: sync ok')
+    except Exception as e:
+        return HTMLResponse(f'✗ {e}')
+
+
+@app.get("/sync/accounts")
+def sync_accounts_dropdown(session: Session = Depends(get_session)):
+    accounts = session.exec(
+        select(Account).where(Account.connected == True, Account.deleted == False)
+    ).all()
+    items = "".join(
+        f'<button hx-post="/sync/{acc.id}" hx-target="#sync-status" hx-swap="innerHTML" '
+        f'hx-on::before-request="document.getElementById(\'sync-spinner\').style.animation=\'spin 1s linear infinite\'; document.getElementById(\'sync-btn\').disabled=true; $el.closest(\'[x-data]\').open=false" '
+        f'hx-on::after-request="document.getElementById(\'sync-spinner\').style.animation=\'\'; document.getElementById(\'sync-btn\').disabled=false" '
+        f'class="sync-dropdown-item">{acc.display_name or acc.name}<span class="sync-dropdown-bank">{acc.bank_name}</span></button>'
+        for acc in accounts
+    )
+    return HTMLResponse(items or '<span style="padding:8px 12px;color:var(--text-muted);font-size:0.75rem">Nessun conto connesso</span>')
 
 
 @app.post("/admin/fix-dates")
