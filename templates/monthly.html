@@ -129,7 +129,11 @@
         <p class="text-sm font-medium truncate" style="color:var(--text)">{{ tx.merchant or tx.description or '—' }}</p>
         <p class="text-xs mt-0.5" style="color:var(--text-muted)">{{ tx.date.strftime('%d/%m') }}</p>
       </div>
-      <p class="num text-sm font-medium flex-shrink-0" style="color:{% if tx.amount >= 0 %}var(--emerald){% else %}var(--rose){% endif %}">{{ "€{:+,.2f}".format(tx.amount) }}</p>
+      {% set is_foreign = tx.currency and tx.currency != 'EUR' %}
+      <div class="text-right flex-shrink-0">
+        <p class="num text-sm font-medium" style="color:{% if tx.amount >= 0 %}var(--emerald){% else %}var(--rose){% endif %}">{{ "{:+,.2f}".format(tx.amount) }} {{ tx.currency | currency_symbol if is_foreign else '€' }}</p>
+        {% if is_foreign and tx.eur_amount is not none %}<p class="num text-xs" style="color:var(--text-muted)">≈ {{ "{:+,.2f}".format(tx.eur_amount) }} €</p>{% endif %}
+      </div>
     </div>
     <div class="mt-1.5">
       {% if tx.category %}
@@ -173,7 +177,9 @@
     </td>
     <td class="px-3 py-3 text-xs" style="color:var(--text-muted)">{{ tx.account.bank_name if tx.account else '—' }}</td>
     <td class="num px-4 sm:px-5 py-3 text-right text-sm font-medium" style="color:{% if tx.amount >= 0 %}var(--emerald){% else %}var(--rose){% endif %}; white-space:nowrap">
-      {{ "€{:+,.2f}".format(tx.amount) }}
+      {% set is_foreign = tx.currency and tx.currency != 'EUR' %}
+      {{ "{:+,.2f}".format(tx.amount) }} {{ tx.currency | currency_symbol if is_foreign else '€' }}
+      {% if is_foreign and tx.eur_amount is not none %}<div class="num text-xs" style="color:var(--text-muted)">≈ {{ "{:+,.2f}".format(tx.eur_amount) }} €</div>{% endif %}
     </td>
   </tr>
   {% else %}

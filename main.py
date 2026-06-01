@@ -40,6 +40,16 @@ def _tag_text_color(hex_color: str) -> str:
 
 templates.env.filters["tag_text_color"] = _tag_text_color
 
+_CURRENCY_SYMBOLS = {"EUR": "€", "USD": "$", "GBP": "£", "JPY": "¥", "CHF": "CHF",
+                     "SEK": "kr", "NOK": "kr", "DKK": "kr", "PLN": "zł", "CZK": "Kč",
+                     "HUF": "Ft", "RON": "lei", "TRY": "₺", "CNY": "¥", "HKD": "HK$",
+                     "SGD": "S$", "AUD": "A$", "CAD": "C$", "NZD": "NZ$", "MXN": "MX$"}
+
+def _currency_symbol(code: str) -> str:
+    return _CURRENCY_SYMBOLS.get((code or "EUR").upper(), code or "€")
+
+templates.env.filters["currency_symbol"] = _currency_symbol
+
 
 if Path("static").exists():
     app.mount("/static", StaticFiles(directory="static"), name="static")
@@ -80,12 +90,19 @@ def _effective_amount(tx, session: Session = None) -> float:
     """Expense amount in EUR, respecting personal_share and FX conversion."""
     amount = tx.amount
     cur = getattr(tx, 'currency', 'EUR') or 'EUR'
-    if cur != "EUR" and session:
-        tx_date = getattr(tx, 'date', None)
-        if tx_date:
-            amount = _fx.convert_on(amount, cur, tx_date, session=session)
-        else:
-            amount = _fx.convert(amount, cur, session=session)
+    if cur != "EUR":
+        eur_amount = getattr(tx, 'eur_amount', None)
+        if eur_amount is not None:
+            ps = getattr(tx, 'personal_share', None)
+            if amount < 0 and ps is not None and amount != 0:
+                return -(eur_amount * abs(ps / amount))
+            return eur_amount
+        if session:
+            tx_date = getattr(tx, 'date', None)
+            if tx_date:
+                amount = _fx.convert_on(amount, cur, tx_date, session=session)
+            else:
+                amount = _fx.convert(amount, cur, session=session)
     if amount < 0 and getattr(tx, 'personal_share', None) is not None:
         return -tx.personal_share
     return amount
@@ -1123,6 +1140,24 @@ def fix_transaction_dates(session: Session = Depends(get_session)):
             updated += 1
     session.commit()
     return {"updated": updated, "skipped": skipped, "total": len(txs)}
+
+
+@app.post("/admin/backfill-eur-amounts")
+def backfill_eur_amounts(session: Session = Depends(get_session)):
+    """One-shot: compute eur_amount for existing non-EUR transactions that lack it."""
+    txs = session.exec(
+        select(Transaction).where(Transaction.currency != "EUR", Transaction.eur_amount == None)
+    ).all()
+    updated = 0
+    failed = 0
+    for tx in txs:
+        try:
+            tx.eur_amount = _fx.convert_on(tx.amount, tx.currency, tx.date, session=session)
+            updated += 1
+        except Exception:
+            failed += 1
+    session.commit()
+    return {"updated": updated, "failed": failed, "total": len(txs)}
 
 
 if __name__ == "__main__":

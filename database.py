@@ -35,6 +35,7 @@ class Transaction(SQLModel, table=True):
     category_id: Optional[int] = Field(default=None, foreign_key="category.id")
     transfer_partner_id: Optional[int] = Field(default=None, foreign_key="transaction.id")
     personal_share: Optional[float] = None  # personally-owed portion (positive); None = full amount
+    eur_amount: Optional[float] = None      # EUR equivalent at transaction date; None = native is EUR
     raw_data: str = ""           # JSON blob from Enable Banking
     status: str = "BOOK"         # BOOK | PDNG
     is_confirmed: bool = Field(default=False)
@@ -248,6 +249,9 @@ def init_db():
             conn.commit()
         if "status" not in tx_cols:
             conn.execute(text("ALTER TABLE 'transaction' ADD COLUMN status TEXT NOT NULL DEFAULT 'BOOK'"))
+            conn.commit()
+        if "eur_amount" not in tx_cols:
+            conn.execute(text("ALTER TABLE 'transaction' ADD COLUMN eur_amount REAL"))
             conn.commit()
     with engine.connect() as conn:
         acols = [r[1] for r in conn.execute(text("PRAGMA table_info('account')")).fetchall()]

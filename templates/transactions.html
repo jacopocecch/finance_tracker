@@ -213,10 +213,21 @@ function txRow(el) {
           {% elif _is_new %}<span class="inline-block ml-1 px-1.5 rounded text-[10px] font-semibold" style="background:rgba(14,165,233,0.15);color:#0ea5e9">NUOVA</span>{% endif %}
         </p>
         <div class="flex items-center gap-2">
+          {% set is_foreign = tx.currency and tx.currency != 'EUR' %}
           {% if tx.amount < 0 %}
-          <span @click="editShare = !editShare" class="num text-sm font-medium" style="color:var(--rose);cursor:pointer">{{ "{:+,.2f}".format(tx.amount) }} €</span>
+          <div class="text-right">
+            <span @click="editShare = !editShare" class="num text-sm font-medium" style="color:var(--rose);cursor:pointer">{{ "{:+,.2f}".format(tx.amount) }} {{ tx.currency | currency_symbol if is_foreign else '€' }}</span>
+            {% if is_foreign and tx.eur_amount is not none %}
+            <div class="num text-xs" style="color:var(--text-muted)">≈ {{ "{:+,.2f}".format(tx.eur_amount) }} €</div>
+            {% endif %}
+          </div>
           {% else %}
-          <span class="num text-sm font-medium" style="color:var(--emerald)">{{ "{:+,.2f}".format(tx.amount) }} €</span>
+          <div class="text-right">
+            <span class="num text-sm font-medium" style="color:var(--emerald)">{{ "{:+,.2f}".format(tx.amount) }} {{ tx.currency | currency_symbol if is_foreign else '€' }}</span>
+            {% if is_foreign and tx.eur_amount is not none %}
+            <div class="num text-xs" style="color:var(--text-muted)">≈ {{ "{:+,.2f}".format(tx.eur_amount) }} €</div>
+            {% endif %}
+          </div>
           {% endif %}
           <button @click="toggleConfirm()" :style="isConfirmed ? 'color:#10b981' : 'color:var(--text-dim);opacity:0.4'" class="hover:opacity-100 transition-opacity flex-shrink-0">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" style="width:16px;height:16px">
@@ -353,9 +364,17 @@ function txRow(el) {
       </td>
       <td class="px-3 py-3.5 text-xs" style="color:var(--text-muted)">{{ (tx.account.display_name or tx.account.bank_name) if tx.account else '—' }}</td>
       <td class="num px-4 sm:px-5 py-3.5 text-right font-medium" style="white-space:nowrap">
+        {% set is_foreign = tx.currency and tx.currency != 'EUR' %}
         {% if tx.amount < 0 %}
         <div>
+          {% if is_foreign %}
+          <span @click="editShare = !editShare" style="color:var(--rose);cursor:pointer" title="Clicca per modificare quota personale">{{ "{:+,.2f}".format(tx.amount) }} {{ tx.currency | currency_symbol }}</span>
+          {% if tx.eur_amount is not none %}
+          <div class="text-xs" style="color:var(--text-muted)">≈ {{ "{:+,.2f}".format(tx.eur_amount) }} €</div>
+          {% endif %}
+          {% else %}
           <span @click="editShare = !editShare" style="color:var(--rose);cursor:pointer" title="Clicca per modificare quota personale">{{ "{:+,.2f}".format(tx.amount) }} €</span>
+          {% endif %}
           {% if tx.personal_share is not none %}
           <span class="tag ml-1" style="background:rgba(3,105,161,0.1);color:var(--sky);border:1px solid rgba(3,105,161,0.2);font-size:10px" title="Quota personale">{{ "{:.2f}".format(tx.personal_share) }} €</span>
           {% endif %}
@@ -368,7 +387,14 @@ function txRow(el) {
           </form>
         </template>
         {% else %}
+        {% if is_foreign %}
+        <span style="color:var(--emerald)">{{ "{:+,.2f}".format(tx.amount) }} {{ tx.currency | currency_symbol }}</span>
+        {% if tx.eur_amount is not none %}
+        <div class="text-xs" style="color:var(--text-muted)">≈ {{ "{:+,.2f}".format(tx.eur_amount) }} €</div>
+        {% endif %}
+        {% else %}
         <span style="color:var(--emerald)">{{ "{:+,.2f}".format(tx.amount) }} €</span>
+        {% endif %}
         {% endif %}
       </td>
       <td class="px-3 py-3.5 text-center" style="width:36px">

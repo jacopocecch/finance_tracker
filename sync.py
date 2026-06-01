@@ -11,6 +11,7 @@ from database import Account, Transaction, BalanceSnapshot, engine
 from categorizer import categorize
 from parsers import parse_transaction
 import config
+import fx as _fx
 
 log = logging.getLogger(__name__)
 
@@ -225,6 +226,12 @@ def sync_account(account: Account, session: Session):
 
                 tx_currency = (tx.get("transaction_amount") or {}).get("currency") or account.currency or "EUR"
                 cat_id = categorize(desc, merchant, session)
+                eur_amount = None
+                if tx_currency != "EUR":
+                    try:
+                        eur_amount = _fx.convert_on(amount, tx_currency, tx_date, session=session)
+                    except Exception:
+                        pass
                 new_tx = Transaction(
                     account_id=account.id,
                     external_id=tx_id,
@@ -234,6 +241,7 @@ def sync_account(account: Account, session: Session):
                     description=desc,
                     merchant=merchant,
                     category_id=cat_id,
+                    eur_amount=eur_amount,
                     raw_data=json.dumps(tx),
                     status=tx_status or "BOOK",
                     created_at=datetime.now(timezone.utc).replace(tzinfo=None),
