@@ -132,8 +132,10 @@ def sync_account(account: Account, session: Session):
             if not continuation_key:
                 break
 
-        # Pre-fetch all known external_ids globally (unique constraint is global)
-        existing_ids: set[str] = set(session.exec(select(Transaction.external_id)).all())
+        # Pre-fetch external_ids for this account only (unique constraint is per-account)
+        existing_ids: set[str] = set(session.exec(
+            select(Transaction.external_id).where(Transaction.account_id == account.id)
+        ).all())
         seen_ids: set[str] = set()
 
         def _remittance_str(raw_tx: dict) -> str:
@@ -218,6 +220,14 @@ def sync_account(account: Account, session: Session):
                         matched_pdng.description = desc
                         matched_pdng.date = tx_date
                         matched_pdng.status = "BOOK"
+                        existing_ids.add(tx_id)
+                    elif tx_status == "PDNG":
+                        # Still pending — refresh data, keep category/share set by user
+                        matched_pdng.external_id = tx_id
+                        matched_pdng.raw_data = json.dumps(tx)
+                        matched_pdng.merchant = merchant
+                        matched_pdng.description = desc
+                        matched_pdng.date = tx_date
                         existing_ids.add(tx_id)
                     else:
                         # Cancelled/rejected: remove the pending transaction

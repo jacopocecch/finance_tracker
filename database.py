@@ -24,9 +24,10 @@ class Account(SQLModel, table=True):
 
 
 class Transaction(SQLModel, table=True):
+    __table_args__ = (UniqueConstraint("account_id", "external_id", name="uq_transaction_account_external"),)
     id: Optional[int] = Field(default=None, primary_key=True)
     account_id: int = Field(foreign_key="account.id")
-    external_id: str = Field(unique=True)  # Enable Banking transaction ID
+    external_id: str  # Enable Banking transaction ID — unique per account, not globally
     date: date
     amount: float                # negative = expense
     currency: str = "EUR"
@@ -229,6 +230,46 @@ DEFAULT_RULES = [
 def init_db():
     SQLModel.metadata.create_all(engine)  # creates MerchantCategory if missing
     from sqlalchemy import text
+    # Migrate external_id unique constraint from global → per-account composite.
+    # SQLite auto-indexes tied to inline UNIQUE cannot be dropped, so we recreate the table.
+    with engine.connect() as conn:
+        indexes = {r[1]: r[2] for r in conn.execute(text("PRAGMA index_list('transaction')")).fetchall()}
+        has_old_global = "sqlite_autoindex_transaction_1" in indexes
+        has_new_composite = any(
+            set(r[2] for r in conn.execute(text(f"PRAGMA index_info('{n}')")).fetchall()) == {"account_id", "external_id"}
+            for n in indexes
+        )
+        if has_old_global and not has_new_composite:
+            conn.execute(text("PRAGMA foreign_keys = OFF"))
+            conn.execute(text("""
+                CREATE TABLE "transaction_new" (
+                    id INTEGER NOT NULL,
+                    account_id INTEGER NOT NULL,
+                    external_id VARCHAR NOT NULL,
+                    date DATE NOT NULL,
+                    amount FLOAT NOT NULL,
+                    description VARCHAR NOT NULL,
+                    merchant VARCHAR,
+                    category_id INTEGER,
+                    raw_data VARCHAR NOT NULL,
+                    transfer_partner_id INTEGER REFERENCES 'transaction_new'(id),
+                    personal_share REAL,
+                    currency TEXT NOT NULL DEFAULT 'EUR',
+                    is_confirmed INTEGER NOT NULL DEFAULT 0,
+                    created_at DATETIME,
+                    status TEXT NOT NULL DEFAULT 'BOOK',
+                    eur_amount REAL,
+                    PRIMARY KEY (id),
+                    FOREIGN KEY(account_id) REFERENCES account (id),
+                    FOREIGN KEY(category_id) REFERENCES category (id),
+                    UNIQUE (account_id, external_id)
+                )
+            """))
+            conn.execute(text('INSERT INTO "transaction_new" SELECT * FROM "transaction"'))
+            conn.execute(text('DROP TABLE "transaction"'))
+            conn.execute(text('ALTER TABLE "transaction_new" RENAME TO "transaction"'))
+            conn.execute(text("PRAGMA foreign_keys = ON"))
+            conn.commit()
     with engine.connect() as conn:
         tx_cols = [r[1] for r in conn.execute(text("PRAGMA table_info('transaction')")).fetchall()]
         if "transfer_partner_id" not in tx_cols:
