@@ -19,9 +19,14 @@
       <!-- Status dot + info -->
       <div class="flex items-center gap-3 flex-1 min-w-0">
         <div class="relative flex-shrink-0">
-          <div class="w-2 h-2 rounded-full" style="background:{% if acc.connected %}var(--emerald){% else %}var(--text-dim){% endif %}"></div>
-          {% if acc.connected %}
+          {% if acc.sync_error %}
+          <div class="w-2 h-2 rounded-full" style="background:var(--rose)"></div>
+          <div class="absolute inset-0 w-2 h-2 rounded-full animate-ping opacity-60" style="background:var(--rose)"></div>
+          {% elif acc.connected %}
+          <div class="w-2 h-2 rounded-full" style="background:var(--emerald)"></div>
           <div class="absolute inset-0 w-2 h-2 rounded-full animate-ping opacity-60" style="background:var(--emerald)"></div>
+          {% else %}
+          <div class="w-2 h-2 rounded-full" style="background:var(--text-dim)"></div>
           {% endif %}
         </div>
         <div class="min-w-0">
@@ -34,6 +39,9 @@
             · Sync: {{ acc.last_sync.strftime('%d/%m/%Y %H:%M') if acc.last_sync else 'mai' }}
             {% if acc.iban %} · {{ acc.iban[-8:] }}{% endif %}
           </p>
+          {% if acc.sync_error %}
+          <p class="text-xs mt-0.5" style="color:var(--rose)">{{ acc.sync_error }}</p>
+          {% endif %}
         </div>
       </div>
 

@@ -223,7 +223,7 @@ function txRow(el) {
           </div>
           {% else %}
           <div class="text-right">
-            <span class="num text-sm font-medium" style="color:var(--emerald)">{{ "{:+,.2f}".format(tx.amount) }} {{ tx.currency | currency_symbol if is_foreign else '€' }}</span>
+            <span @click="editShare = !editShare" class="num text-sm font-medium" style="color:var(--emerald);cursor:pointer" title="Clicca per segnare come rimborso">{{ "{:+,.2f}".format(tx.amount) }} {{ tx.currency | currency_symbol if is_foreign else '€' }}</span>
             {% if is_foreign and tx.eur_amount is not none %}
             <div class="num text-xs" style="color:var(--text-muted)">≈ {{ "{:+,.2f}".format(tx.eur_amount) }} €</div>
             {% endif %}
@@ -275,13 +275,26 @@ function txRow(el) {
         <span class="text-xs ml-auto" style="color:var(--text-dim)">{{ tx.account.display_name or tx.account.bank_name }}</span>
         {% endif %}
       </div>
-      <!-- personal share inline form -->
+      <!-- personal share / reimbursement inline form -->
       {% if tx.amount < 0 %}
       <template x-if="editShare">
         <form method="post" action="/transactions/{{ tx.id }}/share" class="mt-2 flex gap-1">
           <input type="hidden" name="redirect_to" value="{{ request.url }}">
           <input type="number" name="personal_share" value="{{ tx.personal_share or '' }}" placeholder="quota €" step="0.01" min="0" class="input text-xs" style="width:90px;padding:3px 6px;height:28px">
           <button type="submit" class="btn-primary text-xs" style="padding:3px 8px;height:28px">✓</button>
+        </form>
+      </template>
+      {% endif %}
+      {% if tx.amount > 0 %}
+      {% if tx.is_reimbursement %}
+      <span class="tag mt-1 inline-block" style="background:rgba(245,158,11,0.1);color:var(--amber);border:1px solid rgba(245,158,11,0.2);font-size:10px">rimborso</span>
+      {% endif %}
+      <template x-if="editShare">
+        <form method="post" action="/transactions/{{ tx.id }}/reimbursement" class="mt-2 flex gap-1">
+          <input type="hidden" name="redirect_to" value="{{ request.url }}">
+          <button type="submit" class="btn-primary text-xs" style="padding:3px 8px;height:28px;{% if tx.is_reimbursement %}background:var(--amber){% endif %}">
+            {% if tx.is_reimbursement %}✗ rimborso{% else %}rimborso{% endif %}
+          </button>
         </form>
       </template>
       {% endif %}
@@ -388,13 +401,24 @@ function txRow(el) {
         </template>
         {% else %}
         {% if is_foreign %}
-        <span style="color:var(--emerald)">{{ "{:+,.2f}".format(tx.amount) }} {{ tx.currency | currency_symbol }}</span>
+        <span @click="editShare = !editShare" style="color:var(--emerald);cursor:pointer" title="Clicca per segnare come rimborso">{{ "{:+,.2f}".format(tx.amount) }} {{ tx.currency | currency_symbol }}</span>
         {% if tx.eur_amount is not none %}
         <div class="text-xs" style="color:var(--text-muted)">≈ {{ "{:+,.2f}".format(tx.eur_amount) }} €</div>
         {% endif %}
         {% else %}
-        <span style="color:var(--emerald)">{{ "{:+,.2f}".format(tx.amount) }} €</span>
+        <span @click="editShare = !editShare" style="color:var(--emerald);cursor:pointer" title="Clicca per segnare come rimborso">{{ "{:+,.2f}".format(tx.amount) }} €</span>
         {% endif %}
+        {% if tx.is_reimbursement %}
+        <span class="tag ml-1" style="background:rgba(245,158,11,0.1);color:var(--amber);border:1px solid rgba(245,158,11,0.2);font-size:10px" title="Rimborso — non conta come entrata">rimborso</span>
+        {% endif %}
+        <template x-if="editShare">
+          <form method="post" action="/transactions/{{ tx.id }}/reimbursement" class="mt-1 flex gap-1 justify-end">
+            <input type="hidden" name="redirect_to" value="{{ request.url }}">
+            <button type="submit" class="btn-primary text-xs" style="padding:3px 8px;height:28px;{% if tx.is_reimbursement %}background:var(--amber){% endif %}">
+              {% if tx.is_reimbursement %}✗ rimosso{% else %}rimborso{% endif %}
+            </button>
+          </form>
+        </template>
         {% endif %}
       </td>
       <td class="px-3 py-3.5 text-center" style="width:36px">

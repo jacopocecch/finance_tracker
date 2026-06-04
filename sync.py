@@ -18,6 +18,19 @@ log = logging.getLogger(__name__)
 API_ORIGIN = "https://api.enablebanking.com"
 
 
+def _format_sync_error(e: Exception) -> str:
+    if isinstance(e, requests.HTTPError) and e.response is not None:
+        try:
+            body = e.response.json()
+            code = body.get("code", e.response.status_code)
+            error = body.get("error", "")
+            msg = body.get("message", "") or str(body.get("detail", ""))
+            return f"{code} {error}: {msg}".strip(": ")
+        except Exception:
+            return f"{e.response.status_code}: {e.response.text[:200]}"
+    return str(e)[:300]
+
+
 def _make_jwt() -> str:
     iat = int(datetime.now().timestamp())
     payload = {
@@ -278,11 +291,17 @@ def sync_account(account: Account, session: Session):
                     ))
 
         account.last_sync = datetime.now(timezone.utc)
+        account.sync_error = None
         session.commit()
         log.info(f"Synced {account.bank_name} / {account.name}")
     except Exception as e:
         log.error(f"Sync failed for {account.bank_name} / {account.name}: {e}")
         session.rollback()
+        try:
+            account.sync_error = _format_sync_error(e)
+            session.commit()
+        except Exception:
+            pass
 
 
 def sync_all():
@@ -299,4 +318,7 @@ def sync_all():
     with ThreadPoolExecutor(max_workers=len(account_ids) or 1) as pool:
         futures = {pool.submit(_sync_one, acc_id): acc_id for acc_id in account_ids}
         for fut in as_completed(futures):
-            fut.result()  # re-raises any exception
+            try:
+                fut.result()
+            except Exception as exc:
+                log.error(f"sync_all: account {futures[fut]} raised {exc}")

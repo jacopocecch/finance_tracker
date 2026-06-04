@@ -18,6 +18,7 @@ class Account(SQLModel, table=True):
     currency: str = "EUR"
     session_id: str = ""         # Enable Banking session ID (from /sessions)
     last_sync: Optional[datetime] = None
+    sync_error: Optional[str] = None
     connected: bool = False
     deleted: bool = False
     balance_threshold: Optional[float] = None
@@ -40,6 +41,7 @@ class Transaction(SQLModel, table=True):
     raw_data: str = ""           # JSON blob from Enable Banking
     status: str = "BOOK"         # BOOK | PDNG
     is_confirmed: bool = Field(default=False)
+    is_reimbursement: bool = Field(default=False)
     created_at: Optional[datetime] = Field(default=None)
 
 
@@ -294,10 +296,16 @@ def init_db():
         if "eur_amount" not in tx_cols:
             conn.execute(text("ALTER TABLE 'transaction' ADD COLUMN eur_amount REAL"))
             conn.commit()
+        if "is_reimbursement" not in tx_cols:
+            conn.execute(text("ALTER TABLE 'transaction' ADD COLUMN is_reimbursement INTEGER NOT NULL DEFAULT 0"))
+            conn.commit()
     with engine.connect() as conn:
         acols = [r[1] for r in conn.execute(text("PRAGMA table_info('account')")).fetchall()]
         if "display_name" not in acols:
             conn.execute(text("ALTER TABLE 'account' ADD COLUMN display_name TEXT"))
+            conn.commit()
+        if "sync_error" not in acols:
+            conn.execute(text("ALTER TABLE 'account' ADD COLUMN sync_error TEXT"))
             conn.commit()
     with engine.connect() as conn:
         fxcols = [r[1] for r in conn.execute(text("PRAGMA table_info('exchange_rate')")).fetchall()]

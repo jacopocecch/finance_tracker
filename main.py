@@ -334,7 +334,7 @@ def monthly(
     elif tx_type == "out":
         transactions = [tx for tx in transactions if tx.amount < 0]
 
-    total_in  = sum(_effective_amount(tx, session) for tx in transactions if tx.amount > 0 and not _is_transfer(tx))
+    total_in  = sum(_effective_amount(tx, session) for tx in transactions if tx.amount > 0 and not _is_transfer(tx) and not tx.is_reimbursement)
     total_out = abs(sum(_effective_amount(tx, session) for tx in transactions if tx.amount < 0 and not _is_transfer(tx)))
     balance   = total_in - total_out - total_invested
 
@@ -344,7 +344,7 @@ def monthly(
         w_start = first_day + timedelta(weeks=week)
         w_end   = min(w_start + timedelta(days=6), last_day)
         w_txs   = [tx for tx in transactions if w_start <= tx.date <= w_end and not _is_transfer(tx)]
-        weekly_in.append(round(sum(_effective_amount(t, session) for t in w_txs if t.amount > 0), 2))
+        weekly_in.append(round(sum(_effective_amount(t, session) for t in w_txs if t.amount > 0 and not t.is_reimbursement), 2))
         weekly_out.append(round(abs(sum(_effective_amount(t, session) for t in w_txs if t.amount < 0)), 2))
         weekly_labels.append(f"Sett {week+1}")
 
@@ -537,6 +537,19 @@ def toggle_confirm(tx_id: int, session: Session = Depends(get_session)):
         session.commit()
         return JSONResponse({"is_confirmed": tx.is_confirmed})
     return JSONResponse({"is_confirmed": False})
+
+
+@app.post("/transactions/{tx_id}/reimbursement")
+def toggle_reimbursement(
+    tx_id: int,
+    redirect_to: str = Form(default="/transactions"),
+    session: Session = Depends(get_session),
+):
+    tx = session.get(Transaction, tx_id)
+    if tx:
+        tx.is_reimbursement = not tx.is_reimbursement
+        session.commit()
+    return RedirectResponse(redirect_to, status_code=303)
 
 
 @app.post("/transactions/{tx_id}/share")
@@ -765,13 +778,13 @@ def reparse_transactions(session: Session = Depends(get_session)):
 # ── Setup ─────────────────────────────────────────────────────────────────────
 
 @app.get("/setup", response_class=HTMLResponse)
-def setup(request: Request, session: Session = Depends(get_session), msg: str = ""):
+def setup(request: Request, session: Session = Depends(get_session), msg: str = "", msg_type: str = "info"):
     accounts = session.exec(select(Account).where(Account.deleted == False)).all()
     return templates.TemplateResponse("setup.html", {
         "request": request,
         "accounts": accounts,
         "supported_banks": SUPPORTED_BANKS,
-        "flash": {"message": msg, "type": "info"} if msg else None,
+        "flash": {"message": msg, "type": msg_type} if msg else None,
     })
 
 
@@ -820,6 +833,11 @@ def sync_one(account_id: int, session: Session = Depends(get_session)):
             acc2 = sync_session.get(Account, account_id)
             if acc2:
                 sync_account(acc2, sync_session)
+        with Session(_engine) as s:
+            acc_fresh = s.get(Account, account_id)
+        if acc_fresh and acc_fresh.sync_error:
+            from urllib.parse import quote
+            return RedirectResponse(f"/setup?msg={quote(acc_fresh.sync_error)}&msg_type=error", status_code=303)
     return RedirectResponse("/setup?msg=Sync+completato", status_code=303)
 
 
@@ -1060,6 +1078,13 @@ def trigger_sync():
         sync_all()
         with Session(engine) as s:
             new_count = len(s.exec(select(Transaction).where(Transaction.created_at >= sync_start)).all())
+            failed = s.exec(
+                select(Account).where(Account.sync_error != None, Account.connected == True)
+            ).all()
+        if failed:
+            names = ", ".join(a.display_name or a.bank_name for a in failed)
+            suffix = f" ({new_count} nuove)" if new_count > 0 else ""
+            return HTMLResponse(f'✗ Errore: {names}{suffix}')
         if new_count > 0:
             word = "nuova" if new_count == 1 else "nuove"
             link = f"/transactions?new_since={sync_start.isoformat()}"
@@ -1088,6 +1113,10 @@ def trigger_sync_one(account_id: int, session: Session = Depends(get_session)):
                 .where(Transaction.account_id == account_id, Transaction.created_at >= sync_start)
             ).all())
         label = acc.display_name or acc.name
+        with Session(engine) as s:
+            acc_fresh = s.get(Account, account_id)
+        if acc_fresh and acc_fresh.sync_error:
+            return HTMLResponse(f'✗ {label}: {acc_fresh.sync_error}')
         if new_count > 0:
             word = "nuova" if new_count == 1 else "nuove"
             link = f"/transactions?new_since={sync_start.isoformat()}"
@@ -1107,7 +1136,7 @@ def sync_accounts_dropdown(session: Session = Depends(get_session)):
     items = "".join(
         f'<button hx-post="/sync/{acc.id}" hx-target="#sync-status" hx-swap="innerHTML" '
         f'hx-on::before-request="document.getElementById(\'sync-spinner\').style.animation=\'spin 1s linear infinite\'; document.getElementById(\'sync-btn\').disabled=true; $el.closest(\'[x-data]\').open=false" '
-        f'hx-on::after-request="document.getElementById(\'sync-spinner\').style.animation=\'\'; document.getElementById(\'sync-btn\').disabled=false" '
+        f'hx-on::after-request="document.getElementById(\'sync-spinner\').style.animation=\'\'; document.getElementById(\'sync-btn\').disabled=false; var t=event.detail.xhr.responseText; if(t&&t.trim().startsWith(\'✗\')) showToast(t.trim().slice(2).trim(),\'error\')" '
         f'class="sync-dropdown-item">{acc.display_name or acc.name}<span class="sync-dropdown-bank">{acc.bank_name}</span></button>'
         for acc in accounts
     )
