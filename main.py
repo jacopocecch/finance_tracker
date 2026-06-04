@@ -1131,7 +1131,11 @@ def trigger_sync_one(account_id: int, session: Session = Depends(get_session)):
 @app.get("/sync/accounts")
 def sync_accounts_dropdown(session: Session = Depends(get_session)):
     accounts = session.exec(
-        select(Account).where(Account.connected == True, Account.deleted == False)
+        select(Account).where(
+            Account.connected == True,
+            Account.deleted == False,
+            Account.session_id != "manual",
+        )
     ).all()
     items = "".join(
         f'<button hx-post="/sync/{acc.id}" hx-target="#sync-status" hx-swap="innerHTML" '

@@ -307,7 +307,11 @@ def sync_account(account: Account, session: Session):
 def sync_all():
     from concurrent.futures import ThreadPoolExecutor, as_completed
     with Session(engine) as session:
-        account_ids = [a.id for a in session.exec(select(Account).where(Account.connected == True)).all()]
+        account_ids = [
+            a.id for a in session.exec(
+                select(Account).where(Account.connected == True, Account.session_id != "manual")
+            ).all()
+        ]
 
     def _sync_one(acc_id):
         with Session(engine) as session:
