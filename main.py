@@ -1079,7 +1079,7 @@ def trigger_sync():
         with Session(engine) as s:
             new_count = len(s.exec(select(Transaction).where(Transaction.created_at >= sync_start)).all())
             failed = s.exec(
-                select(Account).where(Account.sync_error != None, Account.connected == True)
+                select(Account).where(Account.sync_error != None, Account.connected == True, Account.session_id != "manual")
             ).all()
         if failed:
             names = ", ".join(a.display_name or a.bank_name for a in failed)
