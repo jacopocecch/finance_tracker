@@ -145,6 +145,10 @@ def sync_account(account: Account, session: Session):
             if not continuation_key:
                 break
 
+        pdng_count = sum(1 for t in all_txs if t.get("status") == "PDNG")
+        book_count = sum(1 for t in all_txs if t.get("status") == "BOOK")
+        print(f"[sync] {account.name}: {len(all_txs)} total from API — {book_count} BOOK, {pdng_count} PDNG", flush=True)
+
         # Pre-fetch external_ids for this account only (unique constraint is per-account)
         existing_ids: set[str] = set(session.exec(
             select(Transaction.external_id).where(Transaction.account_id == account.id)

@@ -1138,13 +1138,57 @@ def sync_accounts_dropdown(session: Session = Depends(get_session)):
         )
     ).all()
     items = "".join(
-        f'<button hx-post="/sync/{acc.id}" hx-target="#sync-status" hx-swap="innerHTML" '
-        f'hx-on::before-request="document.getElementById(\'sync-spinner\').style.animation=\'spin 1s linear infinite\'; document.getElementById(\'sync-btn\').disabled=true; $el.closest(\'[x-data]\').open=false" '
-        f'hx-on::after-request="document.getElementById(\'sync-spinner\').style.animation=\'\'; document.getElementById(\'sync-btn\').disabled=false; var t=event.detail.xhr.responseText; if(t&&t.trim().startsWith(\'✗\')) showToast(t.trim().slice(2).trim(),\'error\')" '
+        f'<button onclick="window.dispatchEvent(new CustomEvent(\'sync-run\',{{detail:{{accountId:{acc.id}}}}}))" '
         f'class="sync-dropdown-item">{acc.display_name or acc.name}<span class="sync-dropdown-bank">{acc.bank_name}</span></button>'
         for acc in accounts
     )
     return HTMLResponse(items or '<span style="padding:8px 12px;color:var(--text-muted);font-size:0.75rem">Nessun conto connesso</span>')
+
+
+@app.get("/sync/list")
+def sync_list(account_id: Optional[int] = None, session: Session = Depends(get_session)):
+    """Accounts to sync, for the blocking progress modal. Optional single account."""
+    q = select(Account).where(
+        Account.connected == True,
+        Account.deleted == False,
+        Account.session_id != "manual",
+    )
+    if account_id is not None:
+        q = q.where(Account.id == account_id)
+    accounts = session.exec(q).all()
+    since = datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
+    return JSONResponse({
+        "since": since,
+        "accounts": [
+            {"id": a.id, "label": a.display_name or a.name, "bank": a.bank_name}
+            for a in accounts
+        ],
+    })
+
+
+@app.post("/sync/run/{account_id}")
+def sync_run_one(account_id: int, since: str):
+    """Sync a single account, return JSON progress result (no redirect)."""
+    sync_start = datetime.fromisoformat(since)
+    label = str(account_id)
+    try:
+        with Session(engine) as sync_session:
+            acc = sync_session.get(Account, account_id)
+            if not acc:
+                return JSONResponse({"ok": False, "label": label, "error": "Conto non trovato"})
+            label = acc.display_name or acc.name
+            sync_account(acc, sync_session)
+        with Session(engine) as s:
+            new_count = len(s.exec(
+                select(Transaction)
+                .where(Transaction.account_id == account_id, Transaction.created_at >= sync_start)
+            ).all())
+            acc_fresh = s.get(Account, account_id)
+        if acc_fresh and acc_fresh.sync_error:
+            return JSONResponse({"ok": False, "label": label, "error": acc_fresh.sync_error})
+        return JSONResponse({"ok": True, "label": label, "new_count": new_count})
+    except Exception as e:
+        return JSONResponse({"ok": False, "label": label, "error": str(e)})
 
 
 @app.post("/admin/fix-dates")
