@@ -46,8 +46,55 @@
         <label class="text-xs mb-1.5 block font-medium" style="color:var(--text-muted)">Colore</label>
         <input type="color" name="color" value="#6B7280" class="rounded-lg" style="height:36px;width:48px;padding:2px;border:1px solid var(--border);background:var(--surface-2)">
       </div>
+      <div>
+        <label class="text-xs mb-1.5 block font-medium" style="color:var(--text-muted)">Macrocategoria</label>
+        <select name="macrocategory_id" class="input">
+          <option value="">— nessuna —</option>
+          {% for m in macros %}<option value="{{ m.id }}">{{ m.name }}</option>{% endfor %}
+        </select>
+      </div>
       <button type="submit" class="btn-primary">Aggiungi</button>
     </form>
+    <p class="text-xs mt-2" style="color:var(--text-dim)">Assegnando una macrocategoria, il colore viene generato come sfumatura del suo colore base.</p>
+  </div>
+</div>
+
+<!-- Macrocategories -->
+<div class="card mb-6" x-data="{ open: false }">
+  <button @click="open = !open" class="flex items-center gap-2 text-sm font-medium w-full" style="color:var(--text)">
+    <span x-text="open ? '−' : '+'"></span>
+    Macrocategorie
+    <span class="text-xs num px-1.5 py-0.5 rounded ml-1" style="background:var(--surface-2);color:var(--text-dim)">{{ macros | length }}</span>
+  </button>
+  <div x-show="open" x-transition class="mt-4">
+    <form method="post" action="/macros/add" class="flex gap-3 flex-wrap items-end mb-4">
+      <div>
+        <label class="text-xs mb-1.5 block font-medium" style="color:var(--text-muted)">Nome *</label>
+        <input type="text" name="name" placeholder="es. Cibo" required class="input">
+      </div>
+      <div>
+        <label class="text-xs mb-1.5 block font-medium" style="color:var(--text-muted)">Colore base</label>
+        <input type="color" name="color" value="#10B981" class="rounded-lg" style="height:36px;width:48px;padding:2px;border:1px solid var(--border);background:var(--surface-2)">
+      </div>
+      <button type="submit" class="btn-primary">Aggiungi</button>
+    </form>
+    {% for m in macros %}
+    {% set m_cats = cats_by_macro.get(m.id, []) %}
+    <div class="flex items-center gap-3 py-2 flex-wrap" style="border-top:1px solid var(--border-subtle)">
+      <span class="cat-icon-wrap" style="width:24px;height:24px;border-radius:6px;background:{{ m.color }}"></span>
+      <span class="font-medium text-sm" style="color:var(--text)">{{ m.name }}</span>
+      <span class="text-xs num px-1.5 py-0.5 rounded" style="background:var(--surface-2);color:var(--text-dim)">{{ m_cats | length }} cat.</span>
+      <form method="post" action="/macros/{{ m.id }}/recolor" class="flex items-center gap-1.5">
+        <input type="color" name="color" value="{{ m.color }}" class="rounded-lg" style="height:30px;width:40px;padding:2px;border:1px solid var(--border);background:var(--surface-2)">
+        <button type="submit" class="cat-btn">Applica sfumature</button>
+      </form>
+      {% if not m_cats %}
+      <form method="post" action="/macros/{{ m.id }}/delete" onsubmit="return confirm('Eliminare la macrocategoria {{ m.name }}?')">
+        <button type="submit" class="cat-btn cat-btn-danger">✕</button>
+      </form>
+      {% endif %}
+    </div>
+    {% endfor %}
   </div>
 </div>
 
@@ -271,6 +318,15 @@
 
   <!-- Expandable rules panel -->
   <div x-show="rulesOpen" x-transition class="cat-expand-panel">
+
+    <p class="cat-section-label">Macrocategoria</p>
+    <form method="post" action="/categories/{{ cat.id }}/assign" class="flex items-center gap-2 mb-4">
+      <select name="macrocategory_id" class="input" style="height:32px;font-size:12px">
+        <option value="" {% if not cat.macrocategory_id %}selected{% endif %}>— nessuna —</option>
+        {% for m in macros %}<option value="{{ m.id }}" {% if cat.macrocategory_id == m.id %}selected{% endif %}>{{ m.name }}</option>{% endfor %}
+      </select>
+      <button type="submit" class="cat-btn" style="font-size:11px">Assegna</button>
+    </form>
 
     {% if cat_merchants %}
     <p class="cat-section-label">Esercenti</p>

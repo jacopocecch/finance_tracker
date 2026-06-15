@@ -52,12 +52,21 @@ class BalanceSnapshot(SQLModel, table=True):
     balance: float
 
 
+class MacroCategory(SQLModel, table=True):
+    __tablename__ = "macro_category"
+    id: Optional[int] = Field(default=None, primary_key=True)
+    name: str = Field(unique=True)
+    color: str = "#6B7280"       # base hue; leaves render as shades of this
+    sort: int = 0
+
+
 class Category(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     name: str = Field(unique=True)
     type: str = "expense"        # income | expense | transfer
     color: str = "#6B7280"       # tailwind gray-500 default
     icon: str = "💳"
+    macrocategory_id: Optional[int] = Field(default=None, foreign_key="macro_category.id")
 
 
 class Instrument(SQLModel, table=True):
@@ -316,6 +325,11 @@ def init_db():
         instcols = [r[1] for r in conn.execute(text("PRAGMA table_info('instrument')")).fetchall()]
         if "is_liquidity" not in instcols:
             conn.execute(text("ALTER TABLE 'instrument' ADD COLUMN is_liquidity INTEGER NOT NULL DEFAULT 0"))
+            conn.commit()
+    with engine.connect() as conn:
+        ccols = [r[1] for r in conn.execute(text("PRAGMA table_info('category')")).fetchall()]
+        if "macrocategory_id" not in ccols:
+            conn.execute(text("ALTER TABLE 'category' ADD COLUMN macrocategory_id INTEGER REFERENCES 'macro_category'(id)"))
             conn.commit()
     with engine.connect() as conn:
         acccols = [r[1] for r in conn.execute(text("PRAGMA table_info('account')")).fetchall()]

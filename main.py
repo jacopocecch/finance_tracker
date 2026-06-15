@@ -18,8 +18,9 @@ import config
 import scheduler
 from database import (
     Account, Transaction, BalanceSnapshot, Category, CategoryRule, MerchantCategory, Budget,
-    Instrument, engine, init_db, get_session,
+    Instrument, MacroCategory, engine, init_db, get_session,
 )
+from colors import derive_leaf_colors
 from sync import build_auth_url, handle_callback, sync_all, sync_account
 from investments import router as investments_router, _build_portfolio_data
 import fx as _fx
@@ -352,11 +353,13 @@ def monthly(
     cat_totals: dict[str, float] = defaultdict(float)
     cat_id_map: dict[str, int] = {}
     cat_colors_map: dict[str, str] = {}
+    cat_macro_map: dict[str, Optional[int]] = {}
     for tx in transactions:
         if tx.amount < 0 and tx.category and not _is_transfer(tx):
             cat_totals[tx.category.name] += abs(_effective_amount(tx, session))
             cat_colors_map[tx.category.name] = tx.category.color
             cat_id_map[tx.category.name] = tx.category.id
+            cat_macro_map[tx.category.name] = tx.category.macrocategory_id
 
     budgets_map = {
         b.category_id: b.amount
@@ -371,10 +374,20 @@ def monthly(
             "name": name,
             "total": round(total, 2),
             "color": cat_colors_map[name],
+            "macro_id": cat_macro_map[name],
             "budget": budget_amount,
             "pct": min(round(total / budget_amount * 100), 100) if budget_amount else None,
         })
-    cat_rows.sort(key=lambda r: r["total"], reverse=True)
+    # Keep same-macro shades together: order groups by their combined total,
+    # then rows within a group by total. Ungrouped categories sort by own total.
+    macro_totals: dict[Optional[int], float] = defaultdict(float)
+    for r in cat_rows:
+        macro_totals[r["macro_id"]] += r["total"]
+    cat_rows.sort(key=lambda r: (
+        -(macro_totals[r["macro_id"]] if r["macro_id"] else r["total"]),
+        r["macro_id"] or 0,
+        -r["total"],
+    ))
 
     cat_labels = [r["name"] for r in cat_rows]
     cat_data   = [r["total"] for r in cat_rows]
@@ -620,6 +633,10 @@ def categories_view(request: Request, session: Session = Depends(get_session)):
     for m in merchants:
         merchants_by_cat[m.category_id].append(m)
     cat_map = {c.id: c for c in categories}
+    macros = session.exec(select(MacroCategory).order_by(MacroCategory.sort, MacroCategory.name)).all()
+    cats_by_macro: dict[Optional[int], list] = defaultdict(list)
+    for c in categories:
+        cats_by_macro[c.macrocategory_id].append(c)
     return templates.TemplateResponse("categories.html", {
         "request": request,
         "categories": categories,
@@ -627,7 +644,23 @@ def categories_view(request: Request, session: Session = Depends(get_session)):
         "merchants_by_cat": dict(merchants_by_cat),
         "all_merchants": merchants,
         "cat_map": cat_map,
+        "macros": macros,
+        "cats_by_macro": dict(cats_by_macro),
     })
+
+
+def _recolor_macro(macro_id: int, session: Session):
+    """Repaint a macro's child categories as evenly-spread shades of its hue."""
+    macro = session.get(MacroCategory, macro_id)
+    if not macro:
+        return
+    children = session.exec(
+        select(Category).where(Category.macrocategory_id == macro_id).order_by(Category.id)
+    ).all()
+    shades = derive_leaf_colors(macro.color, len(children))
+    for cat, shade in zip(children, shades):
+        cat.color = shade
+        session.add(cat)
 
 
 @app.post("/categories/add")
@@ -636,10 +669,70 @@ def add_category(
     cat_type: str = Form(default="expense"),
     color: str = Form(default="#6B7280"),
     icon: str = Form(default="💳"),
+    macrocategory_id: Optional[int] = Form(default=None),
     session: Session = Depends(get_session),
 ):
-    session.add(Category(name=name.strip(), type=cat_type, color=color, icon=icon))
+    macro_id = macrocategory_id or None
+    cat = Category(name=name.strip(), type=cat_type, color=color, icon=icon, macrocategory_id=macro_id)
+    session.add(cat)
     session.commit()
+    if macro_id:
+        _recolor_macro(macro_id, session)
+        session.commit()
+    return RedirectResponse("/categories", status_code=303)
+
+
+@app.post("/categories/{cat_id}/assign")
+def assign_category_macro(
+    cat_id: int,
+    macrocategory_id: Optional[int] = Form(default=None),
+    session: Session = Depends(get_session),
+):
+    cat = session.get(Category, cat_id)
+    if cat:
+        old_macro = cat.macrocategory_id
+        new_macro = macrocategory_id or None
+        cat.macrocategory_id = new_macro
+        session.add(cat)
+        session.commit()
+        for mid in {old_macro, new_macro}:
+            if mid:
+                _recolor_macro(mid, session)
+        session.commit()
+    return RedirectResponse("/categories", status_code=303)
+
+
+@app.post("/macros/add")
+def add_macro(
+    name: str = Form(...),
+    color: str = Form(default="#6B7280"),
+    session: Session = Depends(get_session),
+):
+    session.add(MacroCategory(name=name.strip(), color=color))
+    session.commit()
+    return RedirectResponse("/categories", status_code=303)
+
+
+@app.post("/macros/{macro_id}/recolor")
+def recolor_macro(macro_id: int, color: str = Form(default=None), session: Session = Depends(get_session)):
+    macro = session.get(MacroCategory, macro_id)
+    if macro:
+        if color:
+            macro.color = color
+            session.add(macro)
+        _recolor_macro(macro_id, session)
+        session.commit()
+    return RedirectResponse("/categories", status_code=303)
+
+
+@app.post("/macros/{macro_id}/delete")
+def delete_macro(macro_id: int, session: Session = Depends(get_session)):
+    children = session.exec(select(Category).where(Category.macrocategory_id == macro_id)).all()
+    if not children:
+        macro = session.get(MacroCategory, macro_id)
+        if macro:
+            session.delete(macro)
+            session.commit()
     return RedirectResponse("/categories", status_code=303)
 
 
