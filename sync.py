@@ -118,6 +118,13 @@ def _classify_account_type(name: str) -> str:
 
 
 def sync_account(account: Account, session: Session):
+    # Manual accounts have no bank connection — never sync them, and clear any
+    # stale sync_error left over from before they were excluded.
+    if account.session_id == "manual":
+        if account.sync_error is not None:
+            account.sync_error = None
+            session.commit()
+        return
     headers = _headers()
     uid = account.external_id
     last_tx_date = session.exec(

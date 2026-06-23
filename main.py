@@ -565,6 +565,25 @@ def toggle_reimbursement(
     return RedirectResponse(redirect_to, status_code=303)
 
 
+@app.post("/transactions/{tx_id}/delete")
+def delete_transaction(
+    tx_id: int,
+    redirect_to: str = Form(default="/transactions"),
+    session: Session = Depends(get_session),
+):
+    tx = session.get(Transaction, tx_id)
+    # Safety: only pending (PDNG) transactions can be deleted manually
+    if tx and tx.status == "PDNG":
+        # Unlink any transfer partner first to avoid dangling reference
+        if tx.transfer_partner_id:
+            partner = session.get(Transaction, tx.transfer_partner_id)
+            if partner:
+                partner.transfer_partner_id = None
+        session.delete(tx)
+        session.commit()
+    return RedirectResponse(redirect_to, status_code=303)
+
+
 @app.post("/transactions/{tx_id}/share")
 def update_share(
     tx_id: int,

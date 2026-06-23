@@ -316,6 +316,9 @@ def init_db():
         if "sync_error" not in acols:
             conn.execute(text("ALTER TABLE 'account' ADD COLUMN sync_error TEXT"))
             conn.commit()
+        # Clear stale sync errors on manual accounts (they are never synced)
+        conn.execute(text("UPDATE 'account' SET sync_error = NULL WHERE session_id = 'manual' AND sync_error IS NOT NULL"))
+        conn.commit()
     with engine.connect() as conn:
         fxcols = [r[1] for r in conn.execute(text("PRAGMA table_info('exchange_rate')")).fetchall()]
         if "rate_date" not in fxcols:
