@@ -420,6 +420,121 @@ def monthly(
     })
 
 
+@app.get("/yearly", response_class=HTMLResponse)
+def yearly(
+    request: Request,
+    year: Optional[int] = None,
+    cat: Optional[str] = None,
+    session: Session = Depends(get_session),
+):
+    today = date.today()
+    if year is None:
+        year = today.year
+    current_year = today.year
+
+    first_day = date(year, 1, 1)
+    last_day = date(year, 12, 31)
+
+    q = select(Transaction).where(
+        Transaction.date >= first_day,
+        Transaction.date <= last_day,
+    )
+    if cat:
+        q = q.where(Transaction.category_id == int(cat))
+    all_transactions = [_enrich_tx(tx, session) for tx in session.exec(q.order_by(Transaction.date.desc())).all()]
+
+    def _is_transfer(tx) -> bool:
+        return tx.category is not None and tx.category.type == "transfer"
+
+    def _is_investment(tx) -> bool:
+        return tx.category is not None and tx.category.type == "investment"
+
+    total_invested = abs(sum(
+        _effective_amount(tx, session)
+        for tx in all_transactions
+        if _is_investment(tx) and tx.amount < 0
+    ))
+
+    transactions = [tx for tx in all_transactions if not _is_transfer(tx) and not _is_investment(tx) and tx.amount != 0]
+
+    total_in  = sum(_effective_amount(tx, session) for tx in transactions if tx.amount > 0 and not tx.is_reimbursement)
+    total_out = abs(sum(_effective_amount(tx, session) for tx in transactions if tx.amount < 0))
+    balance   = total_in - total_out - total_invested
+
+    # Monthly aggregation (12 months)
+    month_names_short = ["Gen","Feb","Mar","Apr","Mag","Giu",
+                         "Lug","Ago","Set","Ott","Nov","Dic"]
+    monthly_in  = [0.0] * 12
+    monthly_out = [0.0] * 12
+    for tx in transactions:
+        idx = tx.date.month - 1
+        amt = _effective_amount(tx, session)
+        if tx.amount > 0 and not tx.is_reimbursement:
+            monthly_in[idx] += amt
+        elif tx.amount < 0:
+            monthly_out[idx] += abs(amt)
+    monthly_in  = [round(v, 2) for v in monthly_in]
+    monthly_out = [round(v, 2) for v in monthly_out]
+
+    # Months elapsed in the selected year (for monthly average)
+    if year < current_year:
+        months_elapsed = 12
+    elif year == current_year:
+        months_elapsed = today.month
+    else:
+        months_elapsed = 1
+
+    # Category breakdown (expenses only)
+    cat_totals: dict[str, float] = defaultdict(float)
+    cat_colors_map: dict[str, str] = {}
+    cat_macro_map: dict[str, Optional[int]] = {}
+    for tx in transactions:
+        if tx.amount < 0 and tx.category:
+            cat_totals[tx.category.name] += abs(_effective_amount(tx, session))
+            cat_colors_map[tx.category.name] = tx.category.color
+            cat_macro_map[tx.category.name] = tx.category.macrocategory_id
+
+    cat_rows = []
+    for name, total in cat_totals.items():
+        cat_rows.append({
+            "name": name,
+            "total": round(total, 2),
+            "color": cat_colors_map[name],
+            "macro_id": cat_macro_map[name],
+            "monthly_avg": round(total / months_elapsed, 2),
+            "pct_of_out": round(total / total_out * 100, 1) if total_out else 0,
+        })
+    cat_rows.sort(key=lambda r: -r["total"])
+
+    cat_labels = [r["name"] for r in cat_rows]
+    cat_data   = [r["total"] for r in cat_rows]
+    cat_colors = [r["color"] for r in cat_rows]
+
+    categories = session.exec(select(Category)).all()
+
+    return templates.TemplateResponse("yearly.html", {
+        "request": request,
+        "year": year,
+        "prev_year": year - 1,
+        "next_year": year + 1,
+        "current_year": current_year,
+        "total_in": total_in,
+        "total_out": total_out,
+        "total_invested": total_invested,
+        "balance": balance,
+        "avg_in": total_in / months_elapsed,
+        "avg_out": total_out / months_elapsed,
+        "monthly_labels": month_names_short,
+        "monthly_in": monthly_in,
+        "monthly_out": monthly_out,
+        "cat_labels": cat_labels,
+        "cat_data": cat_data,
+        "cat_colors": cat_colors,
+        "cat_rows": cat_rows,
+        "categories": categories,
+        "selected_cat": cat or "",
+    })
+
 
 def _categories_by_frequency(session: Session) -> list:
     from sqlalchemy import func

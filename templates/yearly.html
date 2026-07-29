@@ -1,0 +1,191 @@
+{% extends "base.html" %}
+{% block title %}{{ year }} — Ledger{% endblock %}
+{% block content %}
+
+<!-- Year nav -->
+<div class="flex flex-wrap items-center justify-between gap-3 mb-7">
+  <div class="flex items-center gap-3 sm:gap-4">
+    <div class="flex items-center gap-1">
+      <a href="/yearly?year={{ prev_year }}"
+         class="w-8 h-8 rounded-lg flex items-center justify-center text-sm transition-colors btn-ghost"
+         style="border:1px solid var(--border)">‹</a>
+      <a href="/yearly?year={{ next_year }}"
+         class="w-8 h-8 rounded-lg flex items-center justify-center text-sm transition-colors btn-ghost {% if next_year > current_year %}opacity-25 pointer-events-none{% endif %}"
+         style="border:1px solid var(--border)">›</a>
+    </div>
+    <h1 class="text-xl font-semibold" style="color:var(--text)">{{ year }}</h1>
+  </div>
+
+  <!-- Filters -->
+  <form hx-get="/yearly" hx-target="body" hx-push-url="true" hx-trigger="change from:select"
+        class="flex items-center gap-2">
+    <input type="hidden" name="year" value="{{ year }}">
+    <select name="cat" class="input text-xs" style="padding:6px 10px">
+      <option value="">Tutte le categorie</option>
+      {% for c in categories %}
+      <option value="{{ c.id }}" {% if selected_cat == c.id|string %}selected{% endif %}>
+        {{ c.icon }} {{ c.name }}
+      </option>
+      {% endfor %}
+    </select>
+  </form>
+</div>
+
+<!-- KPI strip -->
+<div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-7">
+  <div class="card">
+    <div class="flex items-center gap-2 mb-3">
+      <div class="w-1.5 h-1.5 rounded-full" style="background:var(--emerald)"></div>
+      <p class="text-xs" style="color:var(--text-muted)">Entrate</p>
+    </div>
+    <p class="num text-2xl font-medium" style="color:var(--emerald)">+€{{ "{:,.0f}".format(total_in) }}</p>
+    <p class="num text-xs mt-1" style="color:var(--text-muted)">~€{{ "{:,.0f}".format(avg_in) }}/mese</p>
+  </div>
+  <div class="card">
+    <div class="flex items-center gap-2 mb-3">
+      <div class="w-1.5 h-1.5 rounded-full" style="background:var(--rose)"></div>
+      <p class="text-xs" style="color:var(--text-muted)">Uscite</p>
+    </div>
+    <p class="num text-2xl font-medium" style="color:var(--rose)">-€{{ "{:,.0f}".format(total_out) }}</p>
+    <p class="num text-xs mt-1" style="color:var(--text-muted)">~€{{ "{:,.0f}".format(avg_out) }}/mese</p>
+  </div>
+  <div class="card">
+    <div class="flex items-center gap-2 mb-3">
+      <div class="w-1.5 h-1.5 rounded-full" style="background:var(--sky)"></div>
+      <p class="text-xs" style="color:var(--text-muted)">Investiti</p>
+    </div>
+    <p class="num text-2xl font-medium" style="color:var(--sky)">
+      {% if total_invested > 0 %}-€{{ "{:,.0f}".format(total_invested) }}{% else %}<span style="color:var(--text-dim)">—</span>{% endif %}
+    </p>
+  </div>
+  <div class="card">
+    <div class="flex items-center gap-2 mb-3">
+      <div class="w-1.5 h-1.5 rounded-full" style="background:{% if balance >= 0 %}var(--emerald){% else %}var(--rose){% endif %}"></div>
+      <p class="text-xs" style="color:var(--text-muted)">Saldo</p>
+    </div>
+    <p class="num text-2xl font-medium" style="color:{% if balance >= 0 %}var(--emerald){% else %}var(--rose){% endif %}">
+      {{ "€{:+,.0f}".format(balance) }}
+    </p>
+  </div>
+</div>
+
+<!-- Charts -->
+<div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-7">
+  <div class="card">
+    <p class="text-xs font-medium uppercase tracking-wider mb-4" style="color:var(--text-muted)">Mesi</p>
+    <canvas id="monthlyChart" height="190"></canvas>
+  </div>
+  <div class="card">
+    <p class="text-xs font-medium uppercase tracking-wider mb-4" style="color:var(--text-muted)">Categorie</p>
+    <canvas id="catChart" height="190"></canvas>
+  </div>
+</div>
+
+<!-- Category breakdown table -->
+{% if cat_rows %}
+<div class="card table-wrap mb-7" style="padding:0">
+  <div class="px-4 sm:px-5 py-4" style="border-bottom:1px solid var(--border)">
+    <p class="text-xs font-medium uppercase tracking-wider" style="color:var(--text-muted)">Spese per categoria</p>
+  </div>
+  <div class="overflow-x-auto">
+  <table class="w-full text-sm" style="min-width:420px">
+    <thead>
+      <tr class="text-xs uppercase tracking-wide" style="color:var(--text-dim); border-bottom:1px solid var(--border)">
+        <th class="text-left px-4 sm:px-5 py-3 font-medium">Categoria</th>
+        <th class="text-right px-3 py-3 font-medium">Totale</th>
+        <th class="text-right px-3 py-3 font-medium">Media/mese</th>
+        <th class="text-right px-4 sm:px-5 py-3 font-medium">% uscite</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for row in cat_rows %}
+    <tr class="tr-hover" style="border-bottom:1px solid var(--border-subtle)">
+      <td class="px-4 sm:px-5 py-3">
+        <span class="tag text-xs" style="background:{{ row.color }}22;border:1px solid {{ row.color }}44;color:var(--text)">
+          {{ row.name }}
+        </span>
+      </td>
+      <td class="num px-3 py-3 text-right font-medium" style="color:var(--text)">€{{ "{:,.0f}".format(row.total) }}</td>
+      <td class="num px-3 py-3 text-right text-xs" style="color:var(--text-muted)">€{{ "{:,.0f}".format(row.monthly_avg) }}</td>
+      <td class="num px-4 sm:px-5 py-3 text-right text-xs" style="color:var(--text-muted)">{{ row.pct_of_out }}%</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</div>
+{% endif %}
+
+<script>
+(function() {
+  const GRID = '#ebebf5';
+
+  new Chart(document.getElementById('monthlyChart'), {
+    type: 'bar',
+    data: {
+      labels: {{ monthly_labels | tojson }},
+      datasets: [
+        {
+          label: 'Entrate',
+          data: {{ monthly_in | tojson }},
+          backgroundColor: 'rgba(52,211,153,0.6)',
+          borderRadius: 4,
+          borderSkipped: false,
+        },
+        {
+          label: 'Uscite',
+          data: {{ monthly_out | tojson }},
+          backgroundColor: 'rgba(251,113,133,0.6)',
+          borderRadius: 4,
+          borderSkipped: false,
+        },
+      ]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: {
+          labels: { color: '#6b6b88', boxWidth: 10, boxHeight: 10, borderRadius: 2, useBorderRadius: true }
+        },
+        tooltip: { callbacks: { label: ctx => '  €' + ctx.parsed.y.toLocaleString('it-IT') } }
+      },
+      scales: {
+        x: { grid: { display: false }, border: { display: false } },
+        y: { grid: { color: GRID }, border: { display: false }, ticks: { callback: v => '€' + (v/1000).toFixed(0) + 'k' } }
+      }
+    }
+  });
+
+  const catLabels  = {{ cat_labels | tojson }};
+  const catData    = {{ cat_data | tojson }};
+  const catColors  = {{ cat_colors | tojson }};
+
+  if (catData.length > 0) {
+    new Chart(document.getElementById('catChart'), {
+      type: 'doughnut',
+      data: {
+        labels: catLabels,
+        datasets: [{
+          data: catData,
+          backgroundColor: catColors.map(c => c + 'cc'),
+          borderColor: '#f0f0f6',
+          borderWidth: 2,
+          hoverOffset: 4,
+        }]
+      },
+      options: {
+        responsive: true,
+        cutout: '65%',
+        plugins: {
+          legend: {
+            position: window.innerWidth < 640 ? 'bottom' : 'right',
+            labels: { color: '#6b6b88', boxWidth: 10, boxHeight: 10, borderRadius: 2, useBorderRadius: true, font: { size: 11 } }
+          },
+          tooltip: { callbacks: { label: ctx => '  €' + ctx.parsed.toLocaleString('it-IT') } }
+        }
+      }
+    });
+  }
+})();
+</script>
+{% endblock %}

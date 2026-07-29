@@ -209,6 +209,7 @@
         <nav class="hidden md:flex items-center gap-0.5">
           <a href="/" class="nav-link {% if request.url.path == '/' %}active{% endif %}">Overview</a>
           <a href="/monthly" class="nav-link {% if request.url.path == '/monthly' %}active{% endif %}">Mensile</a>
+          <a href="/yearly" class="nav-link {% if request.url.path == '/yearly' %}active{% endif %}">Annuale</a>
           <a href="/transactions" class="nav-link {% if '/transactions' in request.url.path %}active{% endif %}">Transazioni</a>
           <a href="/investments" class="nav-link {% if '/investments' in request.url.path %}active{% endif %}">Investimenti</a>
           <a href="/budgets" class="nav-link {% if request.url.path == '/budgets' %}active{% endif %}">Budget</a>
@@ -254,6 +255,7 @@
       <nav class="flex flex-col gap-0.5">
         <a href="/" @click="mobileMenu=false" class="nav-link-mobile {% if request.url.path == '/' %}active{% endif %}">Overview</a>
         <a href="/monthly" @click="mobileMenu=false" class="nav-link-mobile {% if request.url.path == '/monthly' %}active{% endif %}">Mensile</a>
+        <a href="/yearly" @click="mobileMenu=false" class="nav-link-mobile {% if request.url.path == '/yearly' %}active{% endif %}">Annuale</a>
         <a href="/transactions" @click="mobileMenu=false" class="nav-link-mobile {% if '/transactions' in request.url.path %}active{% endif %}">Transazioni</a>
         <a href="/investments" @click="mobileMenu=false" class="nav-link-mobile {% if '/investments' in request.url.path %}active{% endif %}">Investimenti</a>
         <a href="/budgets" @click="mobileMenu=false" class="nav-link-mobile {% if request.url.path == '/budgets' %}active{% endif %}">Budget</a>
