@@ -35,6 +35,7 @@ class Transaction(SQLModel, table=True):
     description: str = ""
     merchant: Optional[str] = None
     category_id: Optional[int] = Field(default=None, foreign_key="category.id")
+    trip_id: Optional[int] = Field(default=None, foreign_key="trip.id")
     transfer_partner_id: Optional[int] = Field(default=None, foreign_key="transaction.id")
     personal_share: Optional[float] = None  # personally-owed portion (positive); None = full amount
     eur_amount: Optional[float] = None      # EUR equivalent at transaction date; None = native is EUR
@@ -131,6 +132,13 @@ class MarketQuote(SQLModel, table=True):
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
 
+class Trip(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    name: str = Field(unique=True)
+    start_date: date
+    end_date: date
+
+
 class Budget(SQLModel, table=True):
     __table_args__ = (UniqueConstraint("category_id", "period"),)
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -181,7 +189,9 @@ DEFAULT_CATEGORIES = [
     ("Carburante",    "expense",  "#8B5CF6", "⛽"),
     ("Trasporti",     "expense",  "#6366F1", "🚇"),
     ("Viaggi",        "expense",  "#818CF8", "✈️"),
+    ("Alloggio",      "expense",  "#A5B4FC", "🏨"),
     ("Shopping",      "expense",  "#EC4899", "🛍️"),
+    ("Banca/Commissioni", "expense", "#64748B", "🧾"),
     ("Abbonamenti",   "expense",  "#14B8A6", "📱"),
     ("Salute",        "expense",  "#06B6D4", "🏥"),
     ("Sport",         "expense",  "#22D3EE", "🏋️"),
@@ -210,6 +220,8 @@ NEW_CATEGORIES = [
     ("Vendite",       "income",   "#6EE7B7", "🏷️"),
     ("Regali",        "both",     "#F472B6", "🎁"),
     ("Prelievo ATM",  "transfer", "#9CA3AF", "💵"),
+    ("Banca/Commissioni", "expense", "#64748B", "🧾"),
+    ("Alloggio",      "expense",  "#A5B4FC", "🏨"),
 ]
 
 DEFAULT_RULES = [
@@ -225,7 +237,8 @@ DEFAULT_RULES = [
     (r"bar |caffè|caffe |coffee",                               "Bar/Caffè",      7),
     (r"eni |q8|totalerg|shell|ip gas|agip|tamoil",             "Carburante",     9),
     (r"atm|ataf|trenitalia|italo|flixbus|taxi|uber|bolt",      "Trasporti",      8),
-    (r"ryanair|easyjet|booking|airbnb|hotel|aereo|volo",       "Viaggi",         9),
+    (r"ryanair|easyjet|wizzair|aereo|volo",                    "Viaggi",         9),
+    (r"booking|airbnb|hotel|hostel|b&b",                       "Alloggio",       9),
     (r"amazon|zalando|shein|zara|h&m|ikea|mediaworld",         "Shopping",       8),
     (r"netflix|spotify|disney|prime video|youtube|dazn|apple", "Abbonamenti",    9),
     (r"farmacia|medico|dottore|ospedale|dentista|ottico",      "Salute",         9),
@@ -235,6 +248,7 @@ DEFAULT_RULES = [
     (r"etf|titol|azion|fondo|fineco invest|directa",           "Investimento",   9),
     (r"revolut|n26|wise|paypal|satispay|bonifico",             "Trasferimento",  5),
     (r"prelievo|bancomat|sportello atm",                       "Prelievo ATM",  12),
+    (r"canone|imposta di bollo|commission|competenze",         "Banca/Commissioni", 8),
 ]
 
 
@@ -307,6 +321,9 @@ def init_db():
             conn.commit()
         if "is_reimbursement" not in tx_cols:
             conn.execute(text("ALTER TABLE 'transaction' ADD COLUMN is_reimbursement INTEGER NOT NULL DEFAULT 0"))
+            conn.commit()
+        if "trip_id" not in tx_cols:
+            conn.execute(text("ALTER TABLE 'transaction' ADD COLUMN trip_id INTEGER REFERENCES trip(id)"))
             conn.commit()
     with engine.connect() as conn:
         acols = [r[1] for r in conn.execute(text("PRAGMA table_info('account')")).fetchall()]
@@ -381,6 +398,26 @@ def init_db():
                 existing_rule = session.exec(select(CategoryRule).where(CategoryRule.category_id == prelievo_cat.id)).first()
                 if not existing_rule:
                     session.add(CategoryRule(pattern=r"prelievo|bancomat|sportello atm", category_id=prelievo_cat.id, priority=12))
+            # Add Banca/Commissioni rule if missing
+            banca_cat = session.exec(select(Category).where(Category.name == "Banca/Commissioni")).first()
+            if banca_cat:
+                existing_rule = session.exec(select(CategoryRule).where(CategoryRule.category_id == banca_cat.id)).first()
+                if not existing_rule:
+                    session.add(CategoryRule(pattern=r"canone|imposta di bollo|commission|competenze", category_id=banca_cat.id, priority=8))
+            # Split hotels out of Viaggi rules → Alloggio (strip lodging tokens, keep the rest)
+            viaggi_cat = session.exec(select(Category).where(Category.name == "Viaggi")).first()
+            if viaggi_cat:
+                lodging_tokens = {"booking", "airbnb", "hotel", "hostel", "b&b"}
+                for rule in session.exec(select(CategoryRule).where(CategoryRule.category_id == viaggi_cat.id)).all():
+                    parts = rule.pattern.split("|")
+                    kept = [p for p in parts if p.strip().lower() not in lodging_tokens]
+                    if kept and len(kept) != len(parts):
+                        rule.pattern = "|".join(kept)
+            alloggio_cat = session.exec(select(Category).where(Category.name == "Alloggio")).first()
+            if alloggio_cat:
+                existing_rule = session.exec(select(CategoryRule).where(CategoryRule.category_id == alloggio_cat.id)).first()
+                if not existing_rule:
+                    session.add(CategoryRule(pattern=r"booking|airbnb|hotel|hostel|b&b", category_id=alloggio_cat.id, priority=9))
             session.commit()
 
 

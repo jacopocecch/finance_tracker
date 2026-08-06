@@ -18,7 +18,7 @@ import config
 import scheduler
 from database import (
     Account, Transaction, BalanceSnapshot, Category, CategoryRule, MerchantCategory, Budget,
-    Instrument, MacroCategory, engine, init_db, get_session,
+    Instrument, MacroCategory, Trip, engine, init_db, get_session,
 )
 from colors import derive_leaf_colors
 from sync import build_auth_url, handle_callback, sync_all, sync_account
@@ -84,7 +84,15 @@ def _enrich_tx(tx: Transaction, session: Session) -> SimpleNamespace:
     ns = SimpleNamespace(**{k: v for k, v in vars(tx).items() if not k.startswith('_')})
     ns.category = session.get(Category, tx.category_id)
     ns.account  = session.get(Account, tx.account_id)
+    ns.deletable = _is_deletable(tx, ns.account)
     return ns
+
+
+def _is_deletable(tx: Transaction, account: Optional[Account]) -> bool:
+    """Pending, manually-entered, and cash transactions can be deleted; synced bank ones cannot."""
+    if tx.status == "PDNG":
+        return True
+    return bool(account and (account.session_id == "manual" or account.type == "cash"))
 
 
 def _effective_amount(tx, session: Session = None) -> float:
@@ -611,6 +619,8 @@ def transactions_view(
         for mc in session.exec(select(MerchantCategory)).all()
     }
 
+    trips_list = session.exec(select(Trip).order_by(Trip.start_date.desc())).all()
+
     return templates.TemplateResponse("transactions.html", {
         "request": request,
         "transactions": txs,
@@ -629,6 +639,8 @@ def transactions_view(
         "search": search or "",
         "query_string": query_string,
         "mapped_merchants": mapped_merchants,
+        "trips": trips_list,
+        "trip_map": {t.id: t.name for t in trips_list},
         "new_since": new_since,
         "new_since_dt": new_since_dt,
         "cash_accounts": session.exec(
@@ -687,8 +699,7 @@ def delete_transaction(
     session: Session = Depends(get_session),
 ):
     tx = session.get(Transaction, tx_id)
-    # Safety: only pending (PDNG) transactions can be deleted manually
-    if tx and tx.status == "PDNG":
+    if tx and _is_deletable(tx, session.get(Account, tx.account_id)):
         # Unlink any transfer partner first to avoid dangling reference
         if tx.transfer_partner_id:
             partner = session.get(Transaction, tx.transfer_partner_id)
@@ -711,6 +722,204 @@ def update_share(
         tx.personal_share = personal_share if personal_share and personal_share > 0 else None
         session.commit()
     return RedirectResponse(redirect_to, status_code=303)
+
+
+# ── Viaggi ────────────────────────────────────────────────────────────────────
+
+def _trip_candidates(trip: Trip, session: Session) -> list[Transaction]:
+    """In-range transactions not yet assigned to any trip, excluding transfers/investments."""
+    txs = session.exec(
+        select(Transaction).where(
+            Transaction.trip_id == None,
+            Transaction.date >= trip.start_date,
+            Transaction.date <= trip.end_date,
+        )
+    ).all()
+    out = []
+    for tx in txs:
+        if tx.amount == 0:
+            continue
+        cat = session.get(Category, tx.category_id) if tx.category_id else None
+        if cat and cat.type in ("transfer", "investment"):
+            continue
+        out.append(tx)
+    return out
+
+
+def _trip_stats(trip: Trip, session: Session) -> dict:
+    txs = session.exec(select(Transaction).where(Transaction.trip_id == trip.id)).all()
+    spent = sum(abs(_effective_amount(tx, session)) for tx in txs if tx.amount < 0)
+    refunds = sum(_effective_amount(tx, session) for tx in txs if tx.amount > 0)
+    return {"count": len(txs), "spent": round(spent, 2), "refunds": round(refunds, 2),
+            "net": round(spent - refunds, 2)}
+
+
+@app.get("/trips", response_class=HTMLResponse)
+def trips_view(request: Request, session: Session = Depends(get_session)):
+    trips = session.exec(select(Trip).order_by(Trip.start_date.desc())).all()
+    return templates.TemplateResponse("trips.html", {
+        "request": request,
+        "trips": trips,
+        "stats": {t.id: _trip_stats(t, session) for t in trips},
+        "today": date.today().isoformat(),
+    })
+
+
+@app.post("/trips/add")
+def add_trip(
+    name: str = Form(...),
+    start_date: str = Form(...),
+    end_date: str = Form(...),
+    session: Session = Depends(get_session),
+):
+    trip = Trip(name=name.strip(), start_date=date.fromisoformat(start_date), end_date=date.fromisoformat(end_date))
+    session.add(trip)
+    session.commit()
+    session.refresh(trip)
+    return RedirectResponse(f"/trips/{trip.id}", status_code=303)
+
+
+@app.get("/trips/{trip_id}", response_class=HTMLResponse)
+def trip_detail(trip_id: int, request: Request, session: Session = Depends(get_session)):
+    trip = session.get(Trip, trip_id)
+    if not trip:
+        return RedirectResponse("/trips", status_code=303)
+    txs = session.exec(
+        select(Transaction).where(Transaction.trip_id == trip.id).order_by(Transaction.date.desc())
+    ).all()
+
+    cat_totals: dict[int, dict] = {}
+    for tx in txs:
+        if tx.amount >= 0:
+            continue
+        cat = session.get(Category, tx.category_id) if tx.category_id else None
+        key = cat.id if cat else 0
+        row = cat_totals.setdefault(key, {
+            "name": cat.name if cat else "Altro",
+            "icon": cat.icon if cat else "❓",
+            "color": cat.color if cat else "#6b6b88",
+            "total": 0.0, "count": 0,
+        })
+        row["total"] += abs(_effective_amount(tx, session))
+        row["count"] += 1
+    cat_rows = sorted(cat_totals.values(), key=lambda r: -r["total"])
+    max_total = max((r["total"] for r in cat_rows), default=0)
+    for r in cat_rows:
+        r["total"] = round(r["total"], 2)
+        r["pct"] = round(r["total"] / max_total * 100) if max_total else 0
+
+    return templates.TemplateResponse("trip_detail.html", {
+        "request": request,
+        "trip": trip,
+        "transactions": [_enrich_tx(tx, session) for tx in txs],
+        "stats": _trip_stats(trip, session),
+        "cat_rows": cat_rows,
+        "days": (trip.end_date - trip.start_date).days + 1,
+        "candidates_count": len(_trip_candidates(trip, session)),
+    })
+
+
+@app.post("/trips/{trip_id}/update")
+def update_trip(
+    trip_id: int,
+    name: str = Form(...),
+    start_date: str = Form(...),
+    end_date: str = Form(...),
+    session: Session = Depends(get_session),
+):
+    trip = session.get(Trip, trip_id)
+    if trip:
+        trip.name = name.strip()
+        trip.start_date = date.fromisoformat(start_date)
+        trip.end_date = date.fromisoformat(end_date)
+        session.commit()
+    return RedirectResponse(f"/trips/{trip_id}", status_code=303)
+
+
+@app.post("/trips/{trip_id}/delete")
+def delete_trip(trip_id: int, session: Session = Depends(get_session)):
+    trip = session.get(Trip, trip_id)
+    if trip:
+        for tx in session.exec(select(Transaction).where(Transaction.trip_id == trip_id)).all():
+            tx.trip_id = None
+        session.delete(trip)
+        session.commit()
+    return RedirectResponse("/trips", status_code=303)
+
+
+@app.post("/trips/{trip_id}/assign-range")
+def assign_trip_range(trip_id: int, session: Session = Depends(get_session)):
+    trip = session.get(Trip, trip_id)
+    if trip:
+        for tx in _trip_candidates(trip, session):
+            tx.trip_id = trip.id
+        session.commit()
+    return RedirectResponse(f"/trips/{trip_id}", status_code=303)
+
+
+@app.post("/trips/{trip_id}/unassign/{tx_id}")
+def unassign_trip_tx(trip_id: int, tx_id: int, session: Session = Depends(get_session)):
+    tx = session.get(Transaction, tx_id)
+    if tx and tx.trip_id == trip_id:
+        tx.trip_id = None
+        session.commit()
+    return RedirectResponse(f"/trips/{trip_id}", status_code=303)
+
+
+@app.post("/transactions/{tx_id}/trip")
+def update_transaction_trip(
+    tx_id: int,
+    request: Request,
+    trip_id: str = Form(default=""),
+    redirect_to: str = Form(default="/transactions"),
+    session: Session = Depends(get_session),
+):
+    tx = session.get(Transaction, tx_id)
+    if tx:
+        tx.trip_id = int(trip_id) if trip_id else None
+        session.commit()
+    if request.headers.get("X-Fetch"):
+        trip = session.get(Trip, tx.trip_id) if tx and tx.trip_id else None
+        return JSONResponse({"trip_id": tx.trip_id if tx else None, "trip_name": trip.name if trip else ""})
+    return RedirectResponse(redirect_to, status_code=303)
+
+
+def _parse_ids(ids: str) -> list[int]:
+    return [int(i) for i in ids.split(",") if i.strip().isdigit()]
+
+
+@app.post("/transactions/bulk-category")
+def bulk_assign_category(
+    ids: str = Form(...),
+    category_id: int = Form(...),
+    session: Session = Depends(get_session),
+):
+    count = 0
+    for tx_id in _parse_ids(ids):
+        tx = session.get(Transaction, tx_id)
+        if tx:
+            tx.category_id = category_id
+            tx.is_confirmed = True
+            count += 1
+    session.commit()
+    return JSONResponse({"updated": count})
+
+
+@app.post("/transactions/bulk-trip")
+def bulk_assign_trip(
+    ids: str = Form(...),
+    trip_id: str = Form(default=""),
+    session: Session = Depends(get_session),
+):
+    tid = int(trip_id) if trip_id else None
+    count = 0
+    for tx_id in _parse_ids(ids):
+        tx = session.get(Transaction, tx_id)
+        if tx:
+            tx.trip_id = tid
+            count += 1
+    session.commit()
+    return JSONResponse({"updated": count})
 
 
 # ── Budgets ───────────────────────────────────────────────────────────────────

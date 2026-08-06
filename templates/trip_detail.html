@@ -1,0 +1,144 @@
+{% extends "base.html" %}
+{% block title %}{{ trip.name }} — Ledger{% endblock %}
+{% block content %}
+
+<div x-data="{ editing: false }">
+
+<!-- Header -->
+<div class="flex items-center justify-between mb-6 gap-3 flex-wrap">
+  <div class="flex items-center gap-3">
+    <a href="/trips" class="btn-ghost text-sm">←</a>
+    <template x-if="!editing">
+      <div>
+        <h1 class="text-xl font-semibold" style="color:var(--text)">✈️ {{ trip.name }}</h1>
+        <p class="num text-xs mt-0.5" style="color:var(--text-muted)">
+          {{ trip.start_date.strftime('%d/%m/%Y') }} → {{ trip.end_date.strftime('%d/%m/%Y') }} · {{ days }} giorni
+        </p>
+      </div>
+    </template>
+    <template x-if="editing">
+      <form method="post" action="/trips/{{ trip.id }}/update" class="flex flex-wrap gap-2 items-end">
+        <input type="text" name="name" required value="{{ trip.name }}" class="input" style="width:180px">
+        <input type="date" name="start_date" required value="{{ trip.start_date.isoformat() }}" class="input num">
+        <input type="date" name="end_date" required value="{{ trip.end_date.isoformat() }}" class="input num">
+        <button type="submit" class="btn-primary text-xs">Salva</button>
+      </form>
+    </template>
+  </div>
+  <div class="flex items-center gap-2">
+    <button @click="editing = !editing" class="btn-ghost text-xs" x-text="editing ? 'Annulla' : 'Modifica'"></button>
+    <form method="post" action="/trips/{{ trip.id }}/delete" onsubmit="return confirm('Eliminare il viaggio? Le transazioni non vengono cancellate, solo scollegate.')">
+      <button type="submit" class="btn-ghost text-xs" style="color:var(--rose)">Elimina</button>
+    </form>
+  </div>
+</div>
+
+<!-- Stats -->
+<div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-7">
+  <div class="card">
+    <p class="text-xs mb-3" style="color:var(--text-muted)">Totale speso</p>
+    <p class="num text-2xl font-medium" style="color:var(--rose)">-€{{ "{:,.0f}".format(stats.net) }}</p>
+  </div>
+  <div class="card">
+    <p class="text-xs mb-3" style="color:var(--text-muted)">Al giorno</p>
+    <p class="num text-2xl font-medium" style="color:var(--text)">€{{ "{:,.0f}".format(stats.net / days) }}</p>
+  </div>
+  <div class="card">
+    <p class="text-xs mb-3" style="color:var(--text-muted)">Rimborsi</p>
+    <p class="num text-2xl font-medium" style="color:{% if stats.refunds %}var(--emerald){% else %}var(--text-dim){% endif %}">
+      {% if stats.refunds %}+€{{ "{:,.0f}".format(stats.refunds) }}{% else %}—{% endif %}
+    </p>
+  </div>
+  <div class="card">
+    <p class="text-xs mb-3" style="color:var(--text-muted)">Transazioni</p>
+    <p class="num text-2xl font-medium" style="color:var(--text)">{{ stats.count }}</p>
+  </div>
+</div>
+
+<!-- Assegnazione automatica -->
+{% if candidates_count %}
+<div class="card mb-7 flex items-center justify-between gap-3 flex-wrap">
+  <p class="text-sm" style="color:var(--text)">
+    <span class="num font-medium">{{ candidates_count }}</span> transazioni nel periodo non ancora assegnate a un viaggio
+    <span class="text-xs block mt-0.5" style="color:var(--text-dim)">Trasferimenti e investimenti esclusi. Voli e hotel prenotati prima delle date vanno assegnati a mano da Transazioni.</span>
+  </p>
+  <form method="post" action="/trips/{{ trip.id }}/assign-range" onsubmit="return confirm('Assegnare {{ candidates_count }} transazioni a «{{ trip.name }}»?')">
+    <button type="submit" class="btn-primary text-xs">Assegna al viaggio</button>
+  </form>
+</div>
+{% endif %}
+
+<!-- Breakdown per categoria -->
+{% if cat_rows %}
+<div class="card mb-7">
+  <p class="text-xs font-medium uppercase tracking-wider mb-4" style="color:var(--text-muted)">Spese per categoria</p>
+  <div class="flex flex-col gap-3">
+    {% for row in cat_rows %}
+    <div>
+      <div class="flex items-center justify-between mb-1">
+        <span class="text-xs font-medium" style="color:var(--text)">{{ row.icon }} {{ row.name }}
+          <span style="color:var(--text-dim)">· {{ row.count }}</span>
+        </span>
+        <span class="num text-xs" style="color:var(--text-muted)">{{ "{:,.2f}".format(row.total) }} €</span>
+      </div>
+      <div class="w-full rounded-full" style="background:var(--surface-2);height:6px">
+        <div class="rounded-full" style="width:{{ row.pct }}%;height:6px;background:{{ row.color }};transition:width 0.4s ease"></div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+<!-- Transazioni -->
+<div class="card table-wrap" style="padding:0;overflow-x:auto">
+  <table class="w-full text-sm" style="min-width:520px">
+    <thead>
+      <tr class="text-xs uppercase tracking-wide" style="color:var(--text-dim); border-bottom:1px solid var(--border)">
+        <th class="text-left px-4 sm:px-5 py-3 font-medium">Data</th>
+        <th class="text-left px-4 sm:px-5 py-3 font-medium">Descrizione</th>
+        <th class="text-left px-3 py-3 font-medium">Categoria</th>
+        <th class="text-right px-4 sm:px-5 py-3 font-medium">Importo</th>
+        <th class="px-3 py-3 w-8"></th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for tx in transactions %}
+    <tr class="tr-hover" style="border-bottom:1px solid var(--border-subtle)">
+      <td class="num px-4 sm:px-5 py-3 text-xs" style="color:var(--text-muted);white-space:nowrap">{{ tx.date.strftime('%d/%m/%Y') }}</td>
+      <td class="px-4 sm:px-5 py-3" style="max-width:280px">
+        <p class="truncate" style="color:var(--text)" title="{{ tx.merchant or tx.description or '' }}">{{ tx.merchant or tx.description or '—' }}</p>
+      </td>
+      <td class="px-3 py-3">
+        {% if tx.category %}
+        <span class="tag text-xs" style="background:{{ tx.category.color }}22;border:1px solid {{ tx.category.color }}44;color:var(--text)">
+          {{ tx.category.icon }} {{ tx.category.name }}
+        </span>
+        {% endif %}
+      </td>
+      <td class="num px-4 sm:px-5 py-3 text-right font-medium" style="white-space:nowrap;color:{% if tx.amount >= 0 %}var(--emerald){% else %}var(--rose){% endif %}">
+        {% set is_foreign = tx.currency and tx.currency != 'EUR' %}
+        {{ "{:+,.2f}".format(tx.amount) }} {{ tx.currency | currency_symbol if is_foreign else '€' }}
+        {% if is_foreign and tx.eur_amount is not none %}
+        <div class="text-xs" style="color:var(--text-muted)">≈ {{ "{:+,.2f}".format(tx.eur_amount) }} €</div>
+        {% endif %}
+      </td>
+      <td class="px-3 py-3 text-center">
+        <form method="post" action="/trips/{{ trip.id }}/unassign/{{ tx.id }}">
+          <button type="submit" title="Rimuovi dal viaggio" style="color:var(--text-dim);opacity:0.4" class="hover:opacity-100 transition-opacity">✕</button>
+        </form>
+      </td>
+    </tr>
+    {% else %}
+    <tr>
+      <td colspan="5" class="px-5 py-14 text-center text-sm" style="color:var(--text-dim)">
+        Nessuna transazione assegnata. Usa «Assegna al viaggio» qui sopra o l'icona ✈ nella pagina Transazioni.
+      </td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+</div>
+{% endblock %}

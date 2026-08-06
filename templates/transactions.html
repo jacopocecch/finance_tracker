@@ -6,18 +6,29 @@
 function txRow(el) {
   const s = JSON.parse(el.dataset.state);
   return {
-    editing: false, editShare: false, dropUp: false,
+    editing: false, editShare: false, dropUp: false, editingTrip: false, catSearch: '',
     isMapped: s.isMapped,
     catId: s.catId,
     catColor: s.catColor, catName: s.catName, catIcon: s.catIcon, catTextColor: s.catTextColor,
     txId: s.txId,
     isConfirmed: s.isConfirmed,
+    tripId: s.tripId, tripName: s.tripName,
     toggleEditing(trigger) {
       if (!this.editing) {
         const rect = trigger.closest('.relative').getBoundingClientRect();
         this.dropUp = (window.innerHeight - rect.bottom) < 280;
+        this.catSearch = '';
+        if (window.matchMedia('(hover: hover)').matches) {
+          this.$nextTick(() => this.$root.querySelector('.cat-search')?.focus());
+        }
       }
       this.editing = !this.editing;
+    },
+    _norm(s) { return s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, ''); },
+    catMatch(name) { return !this.catSearch || this._norm(name).includes(this._norm(this.catSearch)); },
+    selectFirstCat() {
+      const el = this.$root.querySelector('[data-catid]:not([style*="display: none"])');
+      if (el) this.saveCategory(el.dataset.catid);
     },
     async saveCategory(catId) {
       const fd = new FormData(); fd.append('category_id', catId);
@@ -39,9 +50,42 @@ function txRow(el) {
       const r = await fetch('/transactions/' + this.txId + '/confirm', {method:'POST'});
       const d = await r.json();
       this.isConfirmed = d.is_confirmed;
+    },
+    toggleTripEditing(trigger) {
+      if (!this.editingTrip) {
+        const rect = trigger.closest('.relative').getBoundingClientRect();
+        this.dropUp = (window.innerHeight - rect.bottom) < 280;
+      }
+      this.editingTrip = !this.editingTrip;
+    },
+    async saveTrip(tripId) {
+      const fd = new FormData(); fd.append('trip_id', tripId);
+      const r = await fetch('/transactions/' + this.txId + '/trip', {method:'POST', body:fd, headers:{'X-Fetch':'1'}});
+      const d = await r.json();
+      this.tripId = d.trip_id ? String(d.trip_id) : '';
+      this.tripName = d.trip_name || '';
+      this.editingTrip = false;
     }
   };
 }
+
+document.addEventListener('alpine:init', () => {
+  Alpine.store('sel', {
+    ids: [],
+    has(id) { return this.ids.includes(id); },
+    toggle(id) { this.has(id) ? this.ids = this.ids.filter(i => i !== id) : this.ids.push(id); },
+    toggleAll(all) { this.ids = this.ids.length === all.length ? [] : [...all]; },
+    clear() { this.ids = []; },
+    async apply(kind, value) {
+      if (!this.ids.length || value === '') return;
+      const fd = new FormData();
+      fd.append('ids', this.ids.join(','));
+      fd.append(kind === 'category' ? 'category_id' : 'trip_id', value === '__none__' ? '' : value);
+      await fetch('/transactions/bulk-' + kind, {method: 'POST', body: fd});
+      location.reload();
+    }
+  });
+});
 </script>
 
 <!-- Header -->
@@ -179,7 +223,8 @@ function txRow(el) {
 <style>@keyframes spin { to { transform: rotate(360deg); } }</style>
 
 <!-- Table -->
-<div id="tx-table" class="card table-wrap" style="padding:0;overflow-x:auto;display:none">
+<script>window.__pageTxIds = {{ transactions | map(attribute='id') | list | tojson }};</script>
+<div id="tx-table" x-data class="card table-wrap" style="padding:0;overflow-x:auto;display:none">
   <!-- Count + pagination -->
   <div class="flex items-center justify-between px-4 sm:px-5 py-3" style="border-bottom:1px solid var(--border)">
     <span class="num text-xs" style="color:var(--text-muted)">{{ total }} risultati</span>
@@ -201,17 +246,21 @@ function txRow(el) {
     {% set cat_color = tx.category.color if tx.category else '#6b6b88' %}
     {% set is_mapped = tx.merchant and tx.merchant.lower() in mapped_merchants %}
     {% set _is_new = new_since_dt and tx.created_at and tx.created_at >= new_since_dt %}
-    {% set _state = {'isMapped': true if is_mapped else false, 'catId': tx.category_id|string if tx.category_id else '', 'catColor': cat_color, 'catName': tx.category.name if tx.category else 'Altro', 'catIcon': tx.category.icon if tx.category else '❓', 'catTextColor': cat_color | tag_text_color, 'txId': tx.id, 'isConfirmed': tx.is_confirmed} %}
+    {% set _state = {'isMapped': true if is_mapped else false, 'catId': tx.category_id|string if tx.category_id else '', 'catColor': cat_color, 'catName': tx.category.name if tx.category else 'Altro', 'catIcon': tx.category.icon if tx.category else '❓', 'catTextColor': cat_color | tag_text_color, 'txId': tx.id, 'isConfirmed': tx.is_confirmed, 'tripId': tx.trip_id|string if tx.trip_id else '', 'tripName': trip_map.get(tx.trip_id, '') if tx.trip_id else ''} %}
     <div x-data="txRow($el)" data-state='{{ _state | tojson | replace("'", "&#39;") }}'
          :style="isConfirmed ? 'border-bottom:1px solid var(--border-subtle);background:rgba(16,185,129,0.04)' : 'border-bottom:1px solid var(--border-subtle)'"
          class="px-4 py-3 tr-hover">
-      <!-- Row 1: date + amount + confirm -->
+      <!-- Row 1: checkbox + date + amount + confirm -->
       <div class="flex items-center justify-between gap-2 mb-1">
-        <p class="num text-xs" style="color:var(--text-muted)">
-          {{ tx.date.strftime('%d/%m/%Y') }}
-          {% if tx.status == 'PDNG' %}<span class="inline-block ml-1 px-1.5 rounded text-[10px] font-semibold" style="background:rgba(245,158,11,0.15);color:#f59e0b">PDNG</span>
-          {% elif _is_new %}<span class="inline-block ml-1 px-1.5 rounded text-[10px] font-semibold" style="background:rgba(14,165,233,0.15);color:#0ea5e9">NUOVA</span>{% endif %}
-        </p>
+        <div class="flex items-center gap-2">
+          <input type="checkbox" style="accent-color:var(--sky);width:15px;height:15px;cursor:pointer;flex-shrink:0"
+                 :checked="$store.sel.has(txId)" @change="$store.sel.toggle(txId)">
+          <p class="num text-xs" style="color:var(--text-muted)">
+            {{ tx.date.strftime('%d/%m/%Y') }}
+            {% if tx.status == 'PDNG' %}<span class="inline-block ml-1 px-1.5 rounded text-[10px] font-semibold" style="background:rgba(245,158,11,0.15);color:#f59e0b">PDNG</span>
+            {% elif _is_new %}<span class="inline-block ml-1 px-1.5 rounded text-[10px] font-semibold" style="background:rgba(14,165,233,0.15);color:#0ea5e9">NUOVA</span>{% endif %}
+          </p>
+        </div>
         <div class="flex items-center gap-2">
           {% set is_foreign = tx.currency and tx.currency != 'EUR' %}
           {% if tx.amount < 0 %}
@@ -234,8 +283,8 @@ function txRow(el) {
               <path fill-rule="evenodd" d="M10 18a8 8 0 1 0 0-16 8 8 0 0 0 0 16Zm3.857-9.809a.75.75 0 0 0-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 1 0-1.06 1.061l2.5 2.5a.75.75 0 0 0 1.137-.089l4-5.5Z" clip-rule="evenodd"/>
             </svg>
           </button>
-          {% if tx.status == 'PDNG' %}
-          <form method="post" action="/transactions/{{ tx.id }}/delete" class="flex-shrink-0" onsubmit="return confirm('Eliminare questa transazione in sospeso?')">
+          {% if tx.deletable %}
+          <form method="post" action="/transactions/{{ tx.id }}/delete" class="flex-shrink-0" onsubmit="return confirm('Eliminare questa transazione?')">
             <input type="hidden" name="redirect_to" value="{{ request.url }}">
             <button type="submit" title="Elimina" style="color:#ef4444;opacity:0.6" class="hover:opacity-100 transition-opacity">
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" style="width:15px;height:15px">
@@ -261,9 +310,11 @@ function txRow(el) {
           </div>
           <div x-show="editing" x-transition @click.outside="editing = false" @keydown.escape.window="editing = false"
                class="absolute z-50 card" :style="dropUp ? 'bottom:calc(100% + 6px);left:0;width:200px;padding:6px;box-shadow:0 8px 24px rgba(0,0,0,0.18);max-height:260px;overflow-y:auto' : 'top:calc(100% + 6px);left:0;width:200px;padding:6px;box-shadow:0 8px 24px rgba(0,0,0,0.18);max-height:260px;overflow-y:auto'">
+            <input x-model="catSearch" @click.stop @keydown.enter.prevent="selectFirstCat()" placeholder="Cerca…"
+                   class="cat-search input w-full text-xs" style="height:28px;padding:4px 8px;position:sticky;top:-6px;z-index:1;background:var(--surface);margin-bottom:4px">
             {% set tx_type = 'income' if tx.amount > 0 else 'expense' %}
             {% for cat in categories if cat.type == tx_type or cat.type == 'transfer' or cat.type == 'both' or cat.type == 'investment' %}
-            <div @click="saveCategory('{{ cat.id }}')" class="tr-hover flex items-center gap-2 px-1.5 py-1 rounded-lg cursor-pointer" style="color:var(--text)"
+            <div @click="saveCategory('{{ cat.id }}')" data-catid="{{ cat.id }}" x-show='catMatch({{ cat.name|tojson }})' class="tr-hover flex items-center gap-2 px-1.5 py-1 rounded-lg cursor-pointer" style="color:var(--text)"
                  {% if tx.category_id == cat.id %}x-init="$el.style.background='{{ cat.color }}12'"{% endif %}>
               <span class="inline-flex items-center justify-center text-xs flex-shrink-0" style="width:20px;height:20px;border-radius:6px;background:{{ cat.color }}20">{{ cat.icon }}</span>
               <span class="text-xs font-medium" style="color:var(--text)">{{ cat.name }}</span>
@@ -281,6 +332,31 @@ function txRow(el) {
           </svg>
         </button>
         {% endif %}
+        <div class="relative inline-block">
+          <button @click="toggleTripEditing($el)" :title="tripId ? ('Viaggio: ' + tripName) : 'Assegna a viaggio'"
+            :style="tripId ? 'color:var(--sky);opacity:1' : 'color:var(--text-dim);opacity:0.4'"
+            class="hover:opacity-100 transition-opacity">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" style="width:15px;height:15px">
+              <path d="M3.105 2.289a.75.75 0 0 0-.826.95l1.414 4.925A1.5 1.5 0 0 0 5.135 9.25h6.115a.75.75 0 0 1 0 1.5H5.135a1.5 1.5 0 0 0-1.442 1.086l-1.414 4.926a.75.75 0 0 0 .826.95 28.896 28.896 0 0 0 15.293-7.154.75.75 0 0 0 0-1.115A28.897 28.897 0 0 0 3.105 2.289Z"/>
+            </svg>
+          </button>
+          <div x-show="editingTrip" x-transition @click.outside="editingTrip = false" @keydown.escape.window="editingTrip = false"
+               class="absolute z-50 card"
+               :style="dropUp ? 'bottom:calc(100% + 6px);left:0;width:190px;padding:6px;box-shadow:0 8px 24px rgba(0,0,0,0.18);box-sizing:border-box;max-height:260px;overflow-y:auto' : 'top:calc(100% + 6px);left:0;width:190px;padding:6px;box-shadow:0 8px 24px rgba(0,0,0,0.18);box-sizing:border-box;max-height:260px;overflow-y:auto'">
+            {% if trips %}
+            <div @click="saveTrip('')" class="tr-hover px-1.5 py-1 rounded-lg cursor-pointer text-left text-xs" style="color:var(--text-muted)">— Nessun viaggio —</div>
+            {% for trip in trips %}
+            <div @click="saveTrip('{{ trip.id }}')" class="tr-hover flex items-center justify-between gap-2 px-1.5 py-1 rounded-lg cursor-pointer"
+                 :style="tripId === '{{ trip.id }}' ? 'background:rgba(3,105,161,0.08)' : ''">
+              <span class="text-xs font-medium truncate" style="color:var(--text)">{{ trip.name }}</span>
+              <span class="num text-[10px] flex-shrink-0" style="color:var(--text-dim)">{{ trip.start_date.strftime('%m/%y') }}</span>
+            </div>
+            {% endfor %}
+            {% else %}
+            <a href="/trips" class="block px-1.5 py-1 text-left text-xs" style="color:var(--sky)">+ Crea viaggio</a>
+            {% endif %}
+          </div>
+        </div>
         {% if tx.account %}
         <span class="text-xs ml-auto" style="color:var(--text-dim)">{{ tx.account.display_name or tx.account.bank_name }}</span>
         {% endif %}
@@ -318,6 +394,11 @@ function txRow(el) {
   <table class="hidden sm:table w-full text-sm" style="min-width:600px">
     <thead>
       <tr class="text-xs uppercase tracking-wide" style="color:var(--text-dim); border-bottom:1px solid var(--border)">
+        <th class="px-3 py-3" style="width:32px">
+          <input type="checkbox" style="accent-color:var(--sky);width:15px;height:15px;cursor:pointer;vertical-align:middle"
+                 :checked="$store.sel.ids.length > 0 && $store.sel.ids.length === window.__pageTxIds.length"
+                 @change="$store.sel.toggleAll(window.__pageTxIds)" title="Seleziona tutte">
+        </th>
         <th class="text-left px-4 sm:px-5 py-3 font-medium">Data</th>
         <th class="text-left px-4 sm:px-5 py-3 font-medium" style="width:300px">Descrizione</th>
         <th class="text-left px-3 py-3 font-medium">Categoria</th>
@@ -332,9 +413,13 @@ function txRow(el) {
     {% set cat_color = tx.category.color if tx.category else '#6b6b88' %}
     {% set is_mapped = tx.merchant and tx.merchant.lower() in mapped_merchants %}
     {% set _is_new = new_since_dt and tx.created_at and tx.created_at >= new_since_dt %}
-    {% set _state = {'isMapped': true if is_mapped else false, 'catId': tx.category_id|string if tx.category_id else '', 'catColor': cat_color, 'catName': tx.category.name if tx.category else 'Altro', 'catIcon': tx.category.icon if tx.category else '❓', 'catTextColor': cat_color | tag_text_color, 'txId': tx.id, 'isConfirmed': tx.is_confirmed} %}
+    {% set _state = {'isMapped': true if is_mapped else false, 'catId': tx.category_id|string if tx.category_id else '', 'catColor': cat_color, 'catName': tx.category.name if tx.category else 'Altro', 'catIcon': tx.category.icon if tx.category else '❓', 'catTextColor': cat_color | tag_text_color, 'txId': tx.id, 'isConfirmed': tx.is_confirmed, 'tripId': tx.trip_id|string if tx.trip_id else '', 'tripName': trip_map.get(tx.trip_id, '') if tx.trip_id else ''} %}
     <tr class="tr-hover" x-data="txRow($el)" data-state='{{ _state | tojson | replace("'", "&#39;") }}'
         :style="isConfirmed ? 'border-bottom:1px solid var(--border-subtle);background:rgba(16,185,129,0.04)' : 'border-bottom:1px solid var(--border-subtle)'">
+      <td class="px-3 py-3.5 text-center" style="width:32px">
+        <input type="checkbox" style="accent-color:var(--sky);width:15px;height:15px;cursor:pointer;vertical-align:middle"
+               :checked="$store.sel.has(txId)" @change="$store.sel.toggle(txId)">
+      </td>
       <td class="num px-4 sm:px-5 py-3.5 text-xs" style="color:var(--text-muted); white-space:nowrap">
         {{ tx.date.strftime('%d/%m/%Y') }}
         {% if tx.status == 'PDNG' %}<span class="inline-block ml-1.5 px-1.5 py-0.5 rounded text-[10px] font-semibold" style="background:rgba(245,158,11,0.15);color:#f59e0b;line-height:1.4">PDNG</span>
@@ -359,9 +444,11 @@ function txRow(el) {
           <div x-show="editing" x-transition @click.outside="editing = false" @keydown.escape.window="editing = false"
                class="absolute z-50 card"
                :style="dropUp ? 'bottom:calc(100% + 6px);left:0;width:200px;padding:6px;box-shadow:0 8px 24px rgba(0,0,0,0.18);box-sizing:border-box;max-height:260px;overflow-y:auto' : 'top:calc(100% + 6px);left:0;width:200px;padding:6px;box-shadow:0 8px 24px rgba(0,0,0,0.18);box-sizing:border-box;max-height:260px;overflow-y:auto'">
+            <input x-model="catSearch" @click.stop @keydown.enter.prevent="selectFirstCat()" placeholder="Cerca…"
+                   class="cat-search input w-full text-xs" style="height:28px;padding:4px 8px;position:sticky;top:-6px;z-index:1;background:var(--surface);margin-bottom:4px">
             {% set tx_type = 'income' if tx.amount > 0 else 'expense' %}
             {% for cat in categories if cat.type == tx_type or cat.type == 'transfer' or cat.type == 'both' or cat.type == 'investment' %}
-            <div @click="saveCategory('{{ cat.id }}')" class="tr-hover flex items-center gap-2 px-1.5 py-1 rounded-lg cursor-pointer"
+            <div @click="saveCategory('{{ cat.id }}')" data-catid="{{ cat.id }}" x-show='catMatch({{ cat.name|tojson }})' class="tr-hover flex items-center gap-2 px-1.5 py-1 rounded-lg cursor-pointer"
                  style="color:var(--text)"
                  {% if tx.category_id == cat.id %}x-init="$el.style.background='{{ cat.color }}12'"{% endif %}>
               <span class="inline-flex items-center justify-center text-xs flex-shrink-0"
@@ -374,16 +461,43 @@ function txRow(el) {
       </td>
       <!-- Associa cell -->
       <td class="px-2 py-3.5 text-center">
-        {% if tx.merchant %}
-        <button @click="saveMerchant()" :title="isMapped ? 'Rimuovi associazione esercente' : 'Associa esercente a categoria'"
-          :style="isMapped ? 'color:var(--emerald);opacity:1' : 'color:var(--text-dim);opacity:0.4'"
-          class="hover:opacity-100 transition-opacity">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" style="width:15px;height:15px">
-            <path d="M12.232 4.232a2.5 2.5 0 0 1 3.536 3.536l-1.225 1.224a.75.75 0 0 0 1.061 1.06l1.224-1.224a4 4 0 0 0-5.656-5.656l-3 3a4 4 0 0 0 .225 5.865.75.75 0 0 0 .977-1.138 2.5 2.5 0 0 1-.142-3.667l3-3Z"/>
-            <path d="M11.603 7.963a.75.75 0 0 0-.977 1.138 2.5 2.5 0 0 1 .142 3.667l-3 3a2.5 2.5 0 0 1-3.536-3.536l1.225-1.224a.75.75 0 0 0-1.061-1.06l-1.224 1.224a4 4 0 1 0 5.656 5.656l3-3a4 4 0 0 0-.225-5.865Z"/>
-          </svg>
-        </button>
-        {% endif %}
+        <div class="flex items-center justify-center gap-1.5">
+          {% if tx.merchant %}
+          <button @click="saveMerchant()" :title="isMapped ? 'Rimuovi associazione esercente' : 'Associa esercente a categoria'"
+            :style="isMapped ? 'color:var(--emerald);opacity:1' : 'color:var(--text-dim);opacity:0.4'"
+            class="hover:opacity-100 transition-opacity">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" style="width:15px;height:15px">
+              <path d="M12.232 4.232a2.5 2.5 0 0 1 3.536 3.536l-1.225 1.224a.75.75 0 0 0 1.061 1.06l1.224-1.224a4 4 0 0 0-5.656-5.656l-3 3a4 4 0 0 0 .225 5.865.75.75 0 0 0 .977-1.138 2.5 2.5 0 0 1-.142-3.667l3-3Z"/>
+              <path d="M11.603 7.963a.75.75 0 0 0-.977 1.138 2.5 2.5 0 0 1 .142 3.667l-3 3a2.5 2.5 0 0 1-3.536-3.536l1.225-1.224a.75.75 0 0 0-1.061-1.06l-1.224 1.224a4 4 0 1 0 5.656 5.656l3-3a4 4 0 0 0-.225-5.865Z"/>
+            </svg>
+          </button>
+          {% endif %}
+          <div class="relative inline-block">
+            <button @click="toggleTripEditing($el)" :title="tripId ? ('Viaggio: ' + tripName) : 'Assegna a viaggio'"
+              :style="tripId ? 'color:var(--sky);opacity:1' : 'color:var(--text-dim);opacity:0.4'"
+              class="hover:opacity-100 transition-opacity">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" style="width:15px;height:15px">
+                <path d="M3.105 2.289a.75.75 0 0 0-.826.95l1.414 4.925A1.5 1.5 0 0 0 5.135 9.25h6.115a.75.75 0 0 1 0 1.5H5.135a1.5 1.5 0 0 0-1.442 1.086l-1.414 4.926a.75.75 0 0 0 .826.95 28.896 28.896 0 0 0 15.293-7.154.75.75 0 0 0 0-1.115A28.897 28.897 0 0 0 3.105 2.289Z"/>
+              </svg>
+            </button>
+            <div x-show="editingTrip" x-transition @click.outside="editingTrip = false" @keydown.escape.window="editingTrip = false"
+                 class="absolute z-50 card"
+                 :style="dropUp ? 'bottom:calc(100% + 6px);right:0;width:190px;padding:6px;box-shadow:0 8px 24px rgba(0,0,0,0.18);box-sizing:border-box;max-height:260px;overflow-y:auto' : 'top:calc(100% + 6px);right:0;width:190px;padding:6px;box-shadow:0 8px 24px rgba(0,0,0,0.18);box-sizing:border-box;max-height:260px;overflow-y:auto'">
+              {% if trips %}
+              <div @click="saveTrip('')" class="tr-hover px-1.5 py-1 rounded-lg cursor-pointer text-left text-xs" style="color:var(--text-muted)">— Nessun viaggio —</div>
+              {% for trip in trips %}
+              <div @click="saveTrip('{{ trip.id }}')" class="tr-hover flex items-center justify-between gap-2 px-1.5 py-1 rounded-lg cursor-pointer"
+                   :style="tripId === '{{ trip.id }}' ? 'background:rgba(3,105,161,0.08)' : ''">
+                <span class="text-xs font-medium truncate" style="color:var(--text)">{{ trip.name }}</span>
+                <span class="num text-[10px] flex-shrink-0" style="color:var(--text-dim)">{{ trip.start_date.strftime('%m/%y') }}</span>
+              </div>
+              {% endfor %}
+              {% else %}
+              <a href="/trips" class="block px-1.5 py-1 text-left text-xs" style="color:var(--sky)">+ Crea viaggio</a>
+              {% endif %}
+            </div>
+          </div>
+        </div>
       </td>
       <td class="px-3 py-3.5 text-xs" style="color:var(--text-muted)">{{ (tx.account.display_name or tx.account.bank_name) if tx.account else '—' }}</td>
       <td class="num px-4 sm:px-5 py-3.5 text-right font-medium" style="white-space:nowrap">
@@ -440,10 +554,10 @@ function txRow(el) {
               <path fill-rule="evenodd" d="M10 18a8 8 0 1 0 0-16 8 8 0 0 0 0 16Zm3.857-9.809a.75.75 0 0 0-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 1 0-1.06 1.061l2.5 2.5a.75.75 0 0 0 1.137-.089l4-5.5Z" clip-rule="evenodd" />
             </svg>
           </button>
-          {% if tx.status == 'PDNG' %}
-          <form method="post" action="/transactions/{{ tx.id }}/delete" onsubmit="return confirm('Eliminare questa transazione in sospeso?')">
+          {% if tx.deletable %}
+          <form method="post" action="/transactions/{{ tx.id }}/delete" onsubmit="return confirm('Eliminare questa transazione?')">
             <input type="hidden" name="redirect_to" value="{{ request.url }}">
-            <button type="submit" title="Elimina transazione in sospeso" style="color:var(--text-dim);opacity:0.4"
+            <button type="submit" title="Elimina transazione" style="color:var(--text-dim);opacity:0.4"
                     class="hover:opacity-100 transition-opacity" onmouseover="this.style.color='#ef4444'" onmouseout="this.style.color='var(--text-dim)'">
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" style="width:15px;height:15px">
                 <path fill-rule="evenodd" d="M8.75 1A2.75 2.75 0 0 0 6 3.75v.443c-.795.077-1.584.176-2.365.298a.75.75 0 1 0 .23 1.482l.149-.022.841 10.518A2.75 2.75 0 0 0 7.596 19h4.807a2.75 2.75 0 0 0 2.742-2.53l.841-10.52.149.023a.75.75 0 0 0 .23-1.482A41.03 41.03 0 0 0 14 4.193V3.75A2.75 2.75 0 0 0 11.25 1h-2.5ZM10 4c.84 0 1.673.025 2.5.075V3.75c0-.69-.56-1.25-1.25-1.25h-2.5c-.69 0-1.25.56-1.25 1.25v.325C8.327 4.025 9.16 4 10 4ZM8.58 7.72a.75.75 0 0 0-1.5.06l.3 7.5a.75.75 0 1 0 1.5-.06l-.3-7.5Zm4.34.06a.75.75 0 1 0-1.5-.06l-.3 7.5a.75.75 0 1 0 1.5.06l.3-7.5Z" clip-rule="evenodd" />
@@ -456,7 +570,7 @@ function txRow(el) {
     </tr>
     {% else %}
     <tr>
-      <td colspan="7" class="px-5 py-14 text-center text-sm" style="color:var(--text-dim)">
+      <td colspan="8" class="px-5 py-14 text-center text-sm" style="color:var(--text-dim)">
         Nessuna transazione trovata
       </td>
     </tr>
@@ -481,6 +595,32 @@ function txRow(el) {
     </div>
   </div>
   {% endif %}
+</div>
+
+<!-- Bulk action bar -->
+<div x-data x-show="$store.sel.ids.length > 0" x-cloak
+     class="fixed card" style="bottom:20px;left:50%;transform:translateX(-50%);z-index:70;padding:10px 14px;box-shadow:0 8px 30px rgba(0,0,0,0.25);display:flex;align-items:center;gap:10px;flex-wrap:wrap;max-width:calc(100vw - 24px)">
+  <span class="num text-xs font-medium whitespace-nowrap" style="color:var(--text)" x-text="$store.sel.ids.length + ' selezionate'"></span>
+  <div class="flex items-center gap-1.5">
+    <select x-ref="bulkcat" class="input text-xs" style="height:30px;max-width:150px">
+      <option value="">Categoria…</option>
+      {% for cat in categories %}
+      <option value="{{ cat.id }}">{{ cat.icon }} {{ cat.name }}</option>
+      {% endfor %}
+    </select>
+    <button @click="$store.sel.apply('category', $refs.bulkcat.value)" class="btn-primary text-xs" style="height:30px;padding:0 10px">✓</button>
+  </div>
+  <div class="flex items-center gap-1.5">
+    <select x-ref="bulktrip" class="input text-xs" style="height:30px;max-width:150px">
+      <option value="">Viaggio…</option>
+      <option value="__none__">— Rimuovi viaggio —</option>
+      {% for trip in trips %}
+      <option value="{{ trip.id }}">✈️ {{ trip.name }}</option>
+      {% endfor %}
+    </select>
+    <button @click="$store.sel.apply('trip', $refs.bulktrip.value)" class="btn-primary text-xs" style="height:30px;padding:0 10px">✓</button>
+  </div>
+  <button @click="$store.sel.clear()" class="btn-ghost text-xs" style="height:30px" title="Deseleziona tutto">✕</button>
 </div>
 
 <script>
