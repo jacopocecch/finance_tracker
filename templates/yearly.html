@@ -151,7 +151,7 @@
       },
       scales: {
         x: { grid: { display: false }, border: { display: false } },
-        y: { grid: { color: GRID }, border: { display: false }, ticks: { callback: v => '€' + (v/1000).toFixed(0) + 'k' } }
+        y: { grid: { color: GRID }, border: { display: false }, ticks: { callback: v => Math.abs(v) >= 1000 ? '€' + (v/1000).toLocaleString('it-IT', {maximumFractionDigits: 1}) + 'k' : '€' + v.toLocaleString('it-IT') } }
       }
     }
   });

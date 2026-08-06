@@ -437,9 +437,20 @@ def monthly(
         -r["total"],
     ))
 
-    cat_labels = [r["name"] for r in cat_rows]
-    cat_data   = [r["total"] for r in cat_rows]
-    cat_colors = [r["color"] for r in cat_rows]
+    # Chart arrays: trip slices expand into contiguous per-category sub-slices
+    tb_map = {f"✈️ {tb['name']}": tb for tb in trips_breakdown}
+    cat_labels, cat_data, cat_colors = [], [], []
+    for r in cat_rows:
+        tb = tb_map.get(r["name"])
+        if tb:
+            for sub in tb["rows"]:
+                cat_labels.append(f"✈️ {tb['name']} · {sub['name']}")
+                cat_data.append(sub["total"])
+                cat_colors.append(sub["color"])
+        else:
+            cat_labels.append(r["name"])
+            cat_data.append(r["total"])
+            cat_colors.append(r["color"])
 
     categories = session.exec(select(Category)).all()
 
@@ -462,7 +473,6 @@ def monthly(
         "cat_data": cat_data,
         "cat_colors": cat_colors,
         "cat_rows": cat_rows,
-        "trips_breakdown": trips_breakdown,
         "categories": categories,
         "selected_cat": cat or "",
         "tx_type": tx_type or "",
