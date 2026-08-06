@@ -357,17 +357,21 @@ def monthly(
         weekly_out.append(round(abs(sum(_effective_amount(t, session) for t in w_txs if t.amount < 0)), 2))
         weekly_labels.append(f"Sett {week+1}")
 
-    # Category breakdown (expenses only, with budget)
+    # Category breakdown (expenses only, with budget); trip expenses grouped per trip
     cat_totals: dict[str, float] = defaultdict(float)
     cat_id_map: dict[str, int] = {}
     cat_colors_map: dict[str, str] = {}
     cat_macro_map: dict[str, Optional[int]] = {}
+    trip_totals: dict[int, float] = defaultdict(float)
     for tx in transactions:
-        if tx.amount < 0 and tx.category and not _is_transfer(tx):
-            cat_totals[tx.category.name] += abs(_effective_amount(tx, session))
-            cat_colors_map[tx.category.name] = tx.category.color
-            cat_id_map[tx.category.name] = tx.category.id
-            cat_macro_map[tx.category.name] = tx.category.macrocategory_id
+        if tx.amount < 0 and not _is_transfer(tx):
+            if getattr(tx, "trip_id", None):
+                trip_totals[tx.trip_id] += abs(_effective_amount(tx, session))
+            elif tx.category:
+                cat_totals[tx.category.name] += abs(_effective_amount(tx, session))
+                cat_colors_map[tx.category.name] = tx.category.color
+                cat_id_map[tx.category.name] = tx.category.id
+                cat_macro_map[tx.category.name] = tx.category.macrocategory_id
 
     budgets_map = {
         b.category_id: b.amount
@@ -386,6 +390,17 @@ def monthly(
             "budget": budget_amount,
             "pct": min(round(total / budget_amount * 100), 100) if budget_amount else None,
         })
+    if trip_totals:
+        trip_names = {t.id: t.name for t in session.exec(select(Trip).where(Trip.id.in_(trip_totals))).all()}
+        for tid, total in trip_totals.items():
+            cat_rows.append({
+                "name": f"✈️ {trip_names.get(tid, 'Viaggio')}",
+                "total": round(total, 2),
+                "color": "#818CF8",
+                "macro_id": None,
+                "budget": None,
+                "pct": None,
+            })
     # Keep same-macro shades together: order groups by their combined total,
     # then rows within a group by total. Ungrouped categories sort by own total.
     macro_totals: dict[Optional[int], float] = defaultdict(float)
@@ -492,15 +507,19 @@ def yearly(
     else:
         months_elapsed = 1
 
-    # Category breakdown (expenses only)
+    # Category breakdown (expenses only); trip expenses grouped per trip
     cat_totals: dict[str, float] = defaultdict(float)
     cat_colors_map: dict[str, str] = {}
     cat_macro_map: dict[str, Optional[int]] = {}
+    trip_totals: dict[int, float] = defaultdict(float)
     for tx in transactions:
-        if tx.amount < 0 and tx.category:
-            cat_totals[tx.category.name] += abs(_effective_amount(tx, session))
-            cat_colors_map[tx.category.name] = tx.category.color
-            cat_macro_map[tx.category.name] = tx.category.macrocategory_id
+        if tx.amount < 0:
+            if getattr(tx, "trip_id", None):
+                trip_totals[tx.trip_id] += abs(_effective_amount(tx, session))
+            elif tx.category:
+                cat_totals[tx.category.name] += abs(_effective_amount(tx, session))
+                cat_colors_map[tx.category.name] = tx.category.color
+                cat_macro_map[tx.category.name] = tx.category.macrocategory_id
 
     cat_rows = []
     for name, total in cat_totals.items():
@@ -512,6 +531,17 @@ def yearly(
             "monthly_avg": round(total / months_elapsed, 2),
             "pct_of_out": round(total / total_out * 100, 1) if total_out else 0,
         })
+    if trip_totals:
+        trip_names = {t.id: t.name for t in session.exec(select(Trip).where(Trip.id.in_(trip_totals))).all()}
+        for tid, total in trip_totals.items():
+            cat_rows.append({
+                "name": f"✈️ {trip_names.get(tid, 'Viaggio')}",
+                "total": round(total, 2),
+                "color": "#818CF8",
+                "macro_id": None,
+                "monthly_avg": round(total / months_elapsed, 2),
+                "pct_of_out": round(total / total_out * 100, 1) if total_out else 0,
+            })
     cat_rows.sort(key=lambda r: -r["total"])
 
     cat_labels = [r["name"] for r in cat_rows]
@@ -772,6 +802,9 @@ def add_trip(
     end_date: str = Form(...),
     session: Session = Depends(get_session),
 ):
+    existing = session.exec(select(Trip).where(Trip.name == name.strip())).first()
+    if existing:
+        return RedirectResponse(f"/trips/{existing.id}", status_code=303)
     trip = Trip(name=name.strip(), start_date=date.fromisoformat(start_date), end_date=date.fromisoformat(end_date))
     session.add(trip)
     session.commit()
@@ -829,7 +862,9 @@ def update_trip(
 ):
     trip = session.get(Trip, trip_id)
     if trip:
-        trip.name = name.strip()
+        clash = session.exec(select(Trip).where(Trip.name == name.strip(), Trip.id != trip_id)).first()
+        if not clash:
+            trip.name = name.strip()
         trip.start_date = date.fromisoformat(start_date)
         trip.end_date = date.fromisoformat(end_date)
         session.commit()
