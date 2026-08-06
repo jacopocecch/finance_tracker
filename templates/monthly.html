@@ -115,6 +115,32 @@
 </div>
 {% endif %}
 
+<!-- Trip breakdowns -->
+{% for tb in trips_breakdown %}
+<div class="card mb-7">
+  <div class="flex items-center justify-between mb-4">
+    <p class="text-xs font-medium uppercase tracking-wider" style="color:var(--text-muted)">✈️ {{ tb.name }}</p>
+    <div class="flex items-center gap-3">
+      <span class="num text-xs font-medium" style="color:var(--rose)">-€{{ "{:,.0f}".format(tb.total) }}</span>
+      <a href="/trips/{{ tb.id }}" class="text-xs" style="color:var(--sky)">Dettagli →</a>
+    </div>
+  </div>
+  <div class="flex flex-col gap-3">
+    {% for row in tb.rows %}
+    <div>
+      <div class="flex items-center justify-between mb-1">
+        <span class="text-xs font-medium" style="color:var(--text)">{{ row.icon }} {{ row.name }}</span>
+        <span class="num text-xs" style="color:var(--text-muted)">{{ "{:,.2f}".format(row.total) }} €</span>
+      </div>
+      <div class="w-full rounded-full" style="background:var(--surface-2);height:6px">
+        <div class="rounded-full" style="width:{{ row.pct }}%;height:6px;background:{{ row.color }};transition:width 0.4s ease"></div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endfor %}
+
 <!-- Transactions -->
 {% set tx_out = transactions | selectattr('amount', 'lt', 0) | list %}
 {% set tx_in  = transactions | selectattr('amount', 'ge', 0) | list %}
