@@ -34,14 +34,14 @@
 </div>
 
 <!-- Stats -->
-<div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-7">
+<div class="grid grid-cols-2 {% if stats.refunds %}sm:grid-cols-5{% else %}sm:grid-cols-4{% endif %} gap-3 mb-7">
   <div class="card">
     <p class="text-xs mb-3" style="color:var(--text-muted)">Totale speso</p>
-    <p class="num text-2xl font-medium" style="color:var(--rose)">-€{{ "{:,.0f}".format(stats.net) }}</p>
+    <p class="num text-2xl font-medium" style="color:var(--rose)">-€{{ "{:,.0f}".format(stats.spent) }}</p>
   </div>
   <div class="card">
     <p class="text-xs mb-3" style="color:var(--text-muted)">Al giorno</p>
-    <p class="num text-2xl font-medium" style="color:var(--text)">€{{ "{:,.0f}".format(stats.net / days) }}</p>
+    <p class="num text-2xl font-medium" style="color:var(--text)">€{{ "{:,.0f}".format(stats.spent / days) }}</p>
   </div>
   <div class="card">
     <p class="text-xs mb-3" style="color:var(--text-muted)">Rimborsi</p>
@@ -49,6 +49,12 @@
       {% if stats.refunds %}+€{{ "{:,.0f}".format(stats.refunds) }}{% else %}—{% endif %}
     </p>
   </div>
+  {% if stats.refunds %}
+  <div class="card">
+    <p class="text-xs mb-3" style="color:var(--text-muted)">Netto</p>
+    <p class="num text-2xl font-medium" style="color:var(--rose)">-€{{ "{:,.0f}".format(stats.net) }}</p>
+  </div>
+  {% endif %}
   <div class="card">
     <p class="text-xs mb-3" style="color:var(--text-muted)">Transazioni</p>
     <p class="num text-2xl font-medium" style="color:var(--text)">{{ stats.count }}</p>

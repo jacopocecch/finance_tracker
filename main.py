@@ -390,7 +390,6 @@ def monthly(
             "budget": budget_amount,
             "pct": min(round(total / budget_amount * 100), 100) if budget_amount else None,
         })
-    trips_breakdown = []
     if trip_totals:
         trip_names = {t.id: t.name for t in session.exec(select(Trip).where(Trip.id.in_(trip_totals))).all()}
         for tid, total in trip_totals.items():
@@ -401,30 +400,6 @@ def monthly(
                 "macro_id": None,
                 "budget": None,
                 "pct": None,
-            })
-        # Per-trip category breakdown (month's expenses only)
-        for tid, total in sorted(trip_totals.items(), key=lambda kv: -kv[1]):
-            rows_map: dict[int, dict] = {}
-            for tx in transactions:
-                if tx.amount < 0 and getattr(tx, "trip_id", None) == tid and not _is_transfer(tx):
-                    key = tx.category.id if tx.category else 0
-                    row = rows_map.setdefault(key, {
-                        "name": tx.category.name if tx.category else "Altro",
-                        "icon": tx.category.icon if tx.category else "❓",
-                        "color": tx.category.color if tx.category else "#6b6b88",
-                        "total": 0.0,
-                    })
-                    row["total"] += abs(_effective_amount(tx, session))
-            rows = sorted(rows_map.values(), key=lambda r: -r["total"])
-            max_total = max((r["total"] for r in rows), default=0)
-            for r in rows:
-                r["total"] = round(r["total"], 2)
-                r["pct"] = round(r["total"] / max_total * 100) if max_total else 0
-            trips_breakdown.append({
-                "id": tid,
-                "name": trip_names.get(tid, "Viaggio"),
-                "total": round(total, 2),
-                "rows": rows,
             })
     # Keep same-macro shades together: order groups by their combined total,
     # then rows within a group by total. Ungrouped categories sort by own total.
@@ -437,20 +412,9 @@ def monthly(
         -r["total"],
     ))
 
-    # Chart arrays: trip slices expand into contiguous per-category sub-slices
-    tb_map = {f"✈️ {tb['name']}": tb for tb in trips_breakdown}
-    cat_labels, cat_data, cat_colors = [], [], []
-    for r in cat_rows:
-        tb = tb_map.get(r["name"])
-        if tb:
-            for sub in tb["rows"]:
-                cat_labels.append(f"✈️ {tb['name']} · {sub['name']}")
-                cat_data.append(sub["total"])
-                cat_colors.append(sub["color"])
-        else:
-            cat_labels.append(r["name"])
-            cat_data.append(r["total"])
-            cat_colors.append(r["color"])
+    cat_labels = [r["name"] for r in cat_rows]
+    cat_data = [r["total"] for r in cat_rows]
+    cat_colors = [r["color"] for r in cat_rows]
 
     categories = session.exec(select(Category)).all()
 

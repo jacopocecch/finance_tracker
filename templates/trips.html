@@ -45,7 +45,7 @@
       {{ trip.start_date.strftime('%d/%m/%Y') }} → {{ trip.end_date.strftime('%d/%m/%Y') }}
     </p>
     <p class="num text-2xl font-medium" style="color:var(--rose)">
-      {% if s.count %}-€{{ "{:,.0f}".format(s.net) }}{% else %}<span style="color:var(--text-dim)">—</span>{% endif %}
+      {% if s.count %}-€{{ "{:,.0f}".format(s.spent) }}{% else %}<span style="color:var(--text-dim)">—</span>{% endif %}
     </p>
     <p class="text-xs mt-1" style="color:var(--text-dim)">{{ s.count }} transazioni{% if s.refunds %} · rimborsi €{{ "{:,.0f}".format(s.refunds) }}{% endif %}</p>
   </a>
