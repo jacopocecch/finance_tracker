@@ -6,7 +6,7 @@
 function txRow(el) {
   const s = JSON.parse(el.dataset.state);
   return {
-    editing: false, editShare: false, dropUp: false, editingTrip: false, catSearch: '',
+    editing: false, editShare: false, dropUp: false, catSearch: '',
     isMapped: s.isMapped,
     catId: s.catId,
     catColor: s.catColor, catName: s.catName, catIcon: s.catIcon, catTextColor: s.catTextColor,
@@ -51,20 +51,35 @@ function txRow(el) {
       const d = await r.json();
       this.isConfirmed = d.is_confirmed;
     },
-    toggleTripEditing(trigger) {
-      if (!this.editingTrip) {
-        const rect = trigger.closest('.relative').getBoundingClientRect();
-        this.dropUp = (window.innerHeight - rect.bottom) < 280;
+  };
+}
+
+function catSelect(opts) {
+  return {
+    open: false, search: '',
+    value: opts.value || '', label: opts.label || opts.placeholder,
+    placeholder: opts.placeholder,
+    submitOnSelect: !!opts.submit,
+    _norm(s) { return s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, ''); },
+    match(name) { return !this.search || this._norm(name).includes(this._norm(this.search)); },
+    toggle() {
+      if (!this.open) {
+        this.search = '';
+        if (window.matchMedia('(hover: hover)').matches) {
+          this.$nextTick(() => this.$root.querySelector('.cs-search')?.focus());
+        }
       }
-      this.editingTrip = !this.editingTrip;
+      this.open = !this.open;
     },
-    async saveTrip(tripId) {
-      const fd = new FormData(); fd.append('trip_id', tripId);
-      const r = await fetch('/transactions/' + this.txId + '/trip', {method:'POST', body:fd, headers:{'X-Fetch':'1'}});
-      const d = await r.json();
-      this.tripId = d.trip_id ? String(d.trip_id) : '';
-      this.tripName = d.trip_name || '';
-      this.editingTrip = false;
+    choose(id, label) {
+      this.value = id;
+      this.label = label || this.placeholder;
+      this.open = false;
+      if (this.submitOnSelect) this.$root.closest('form').submit();
+    },
+    selectFirst() {
+      const el = this.$root.querySelector('[data-optid]:not([style*="display: none"])');
+      if (el) el.click();
     }
   };
 }
@@ -145,14 +160,25 @@ document.addEventListener('alpine:init', () => {
         <label class="text-xs mb-1.5 block font-medium" style="color:var(--text-muted)">Esercente</label>
         <input type="text" name="merchant" placeholder="es. Esselunga" class="input" style="width:140px">
       </div>
-      <div>
+      <div x-data='catSelect({"value": "", "label": "Auto", "placeholder": "Auto"})'>
         <label class="text-xs mb-1.5 block font-medium" style="color:var(--text-muted)">Categoria</label>
-        <select name="category_id" class="input">
-          <option value="">Auto</option>
-          {% for cat in categories %}
-          <option value="{{ cat.id }}">{{ cat.icon }} {{ cat.name }}</option>
-          {% endfor %}
-        </select>
+        <input type="hidden" name="category_id" :value="value">
+        <button type="button" @click="toggle()" class="input text-left truncate" style="min-width:140px" x-text="label">Auto</button>
+        <div class="relative">
+          <div x-show="open" x-transition @click.outside="open = false" @keydown.escape.window="open = false"
+               class="absolute z-50 card" style="top:4px;left:0;min-width:200px;padding:6px;box-shadow:0 8px 24px rgba(0,0,0,0.18);max-height:260px;overflow-y:auto">
+            <input x-model="search" @keydown.enter.prevent="selectFirst()" placeholder="Cerca…"
+                   class="cs-search input w-full text-xs" style="height:28px;padding:4px 8px;position:sticky;top:-6px;z-index:1;background:var(--surface);margin-bottom:4px">
+            <div @click="choose('', 'Auto')" data-optid="" x-show="match('Auto')" class="tr-hover px-1.5 py-1 rounded-lg cursor-pointer text-xs" style="color:var(--text-muted)">Auto</div>
+            {% for cat in categories %}
+            <div @click='choose("{{ cat.id }}", {{ (cat.icon ~ " " ~ cat.name) | tojson | replace("'", "&#39;") }})' data-optid="{{ cat.id }}" x-show='match({{ cat.name | tojson | replace("'", "&#39;") }})'
+                 class="tr-hover flex items-center gap-2 px-1.5 py-1 rounded-lg cursor-pointer">
+              <span class="inline-flex items-center justify-center text-xs flex-shrink-0" style="width:20px;height:20px;border-radius:6px;background:{{ cat.color }}20">{{ cat.icon }}</span>
+              <span class="text-xs font-medium" style="color:var(--text)">{{ cat.name }}</span>
+            </div>
+            {% endfor %}
+          </div>
+        </div>
       </div>
       <button type="submit" class="btn-primary">Aggiungi</button>
     </form>
@@ -167,16 +193,27 @@ document.addEventListener('alpine:init', () => {
       <label class="text-xs mb-1.5 block font-medium" style="color:var(--text-muted)">Cerca</label>
       <input type="text" name="search" value="{{ search }}" placeholder="Descrizione o esercente…" class="input w-full">
     </div>
-    <div class="flex-1 min-w-36">
+    {% set ns = namespace(cat_label='Tutte') %}
+    {% for cat in categories %}{% if selected_cat == cat.id|string %}{% set ns.cat_label = cat.icon ~ ' ' ~ cat.name %}{% endif %}{% endfor %}
+    <div class="flex-1 min-w-36" x-data='catSelect({{ {"value": selected_cat, "label": ns.cat_label, "placeholder": "Tutte", "submit": true} | tojson | replace("'", "&#39;") }})'>
       <label class="text-xs mb-1.5 block font-medium" style="color:var(--text-muted)">Categoria</label>
-      <select name="cat" class="input w-full" onchange="this.form.submit()">
-        <option value="">Tutte</option>
-        {% for cat in categories %}
-        <option value="{{ cat.id }}" {% if selected_cat == cat.id|string %}selected{% endif %}>
-          {{ cat.icon }} {{ cat.name }}
-        </option>
-        {% endfor %}
-      </select>
+      <input type="hidden" name="cat" :value="value">
+      <button type="button" @click="toggle()" class="input w-full text-left truncate" x-text="label">{{ ns.cat_label }}</button>
+      <div class="relative">
+        <div x-show="open" x-transition @click.outside="open = false" @keydown.escape.window="open = false"
+             class="absolute z-50 card" style="top:4px;left:0;min-width:100%;padding:6px;box-shadow:0 8px 24px rgba(0,0,0,0.18);max-height:260px;overflow-y:auto">
+          <input x-model="search" @keydown.enter.prevent="selectFirst()" placeholder="Cerca…"
+                 class="cs-search input w-full text-xs" style="height:28px;padding:4px 8px;position:sticky;top:-6px;z-index:1;background:var(--surface);margin-bottom:4px">
+          <div @click="choose('', 'Tutte')" data-optid="" x-show="match('Tutte')" class="tr-hover px-1.5 py-1 rounded-lg cursor-pointer text-xs" style="color:var(--text-muted)">Tutte</div>
+          {% for cat in categories %}
+          <div @click='choose("{{ cat.id }}", {{ (cat.icon ~ " " ~ cat.name) | tojson | replace("'", "&#39;") }})' data-optid="{{ cat.id }}" x-show='match({{ cat.name | tojson | replace("'", "&#39;") }})'
+               class="tr-hover flex items-center gap-2 px-1.5 py-1 rounded-lg cursor-pointer">
+            <span class="inline-flex items-center justify-center text-xs flex-shrink-0" style="width:20px;height:20px;border-radius:6px;background:{{ cat.color }}20">{{ cat.icon }}</span>
+            <span class="text-xs font-medium" style="color:var(--text)">{{ cat.name }}</span>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
     </div>
     <div class="flex-1 min-w-36">
       <label class="text-xs mb-1.5 block font-medium" style="color:var(--text-muted)">Conto</label>
@@ -184,7 +221,7 @@ document.addEventListener('alpine:init', () => {
         <option value="">Tutti</option>
         {% for acc in accounts %}
         <option value="{{ acc.id }}" {% if selected_account == acc.id|string %}selected{% endif %}>
-          {{ acc.display_name or (acc.bank_name ~ ' / ' ~ acc.name) }}
+          {{ acc.display_name or (acc.bank_name ~ ' / ' ~ acc.name) }}{% if acc.deleted %} (archiviato){% endif %}
         </option>
         {% endfor %}
       </select>
@@ -332,31 +369,11 @@ document.addEventListener('alpine:init', () => {
           </svg>
         </button>
         {% endif %}
-        <div class="relative inline-block">
-          <button @click="toggleTripEditing($el)" :title="tripId ? ('Viaggio: ' + tripName) : 'Assegna a viaggio'"
-            :style="tripId ? 'color:var(--sky);opacity:1' : 'color:var(--text-dim);opacity:0.4'"
-            class="hover:opacity-100 transition-opacity">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" style="width:15px;height:15px">
-              <path d="M3.105 2.289a.75.75 0 0 0-.826.95l1.414 4.925A1.5 1.5 0 0 0 5.135 9.25h6.115a.75.75 0 0 1 0 1.5H5.135a1.5 1.5 0 0 0-1.442 1.086l-1.414 4.926a.75.75 0 0 0 .826.95 28.896 28.896 0 0 0 15.293-7.154.75.75 0 0 0 0-1.115A28.897 28.897 0 0 0 3.105 2.289Z"/>
-            </svg>
-          </button>
-          <div x-show="editingTrip" x-transition @click.outside="editingTrip = false" @keydown.escape.window="editingTrip = false"
-               class="absolute z-50 card"
-               :style="dropUp ? 'bottom:calc(100% + 6px);left:0;width:190px;padding:6px;box-shadow:0 8px 24px rgba(0,0,0,0.18);box-sizing:border-box;max-height:260px;overflow-y:auto' : 'top:calc(100% + 6px);left:0;width:190px;padding:6px;box-shadow:0 8px 24px rgba(0,0,0,0.18);box-sizing:border-box;max-height:260px;overflow-y:auto'">
-            {% if trips %}
-            <div @click="saveTrip('')" class="tr-hover px-1.5 py-1 rounded-lg cursor-pointer text-left text-xs" style="color:var(--text-muted)">— Nessun viaggio —</div>
-            {% for trip in trips %}
-            <div @click="saveTrip('{{ trip.id }}')" class="tr-hover flex items-center justify-between gap-2 px-1.5 py-1 rounded-lg cursor-pointer"
-                 :style="tripId === '{{ trip.id }}' ? 'background:rgba(3,105,161,0.08)' : ''">
-              <span class="text-xs font-medium truncate" style="color:var(--text)">{{ trip.name }}</span>
-              <span class="num text-[10px] flex-shrink-0" style="color:var(--text-dim)">{{ trip.start_date.strftime('%m/%y') }}</span>
-            </div>
-            {% endfor %}
-            {% else %}
-            <a href="/trips" class="block px-1.5 py-1 text-left text-xs" style="color:var(--sky)">+ Crea viaggio</a>
-            {% endif %}
-          </div>
-        </div>
+        <span x-show="tripId" x-cloak :title="'Viaggio: ' + tripName" style="color:var(--sky)">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" style="width:13px;height:13px">
+            <path d="M3.105 2.289a.75.75 0 0 0-.826.95l1.414 4.925A1.5 1.5 0 0 0 5.135 9.25h6.115a.75.75 0 0 1 0 1.5H5.135a1.5 1.5 0 0 0-1.442 1.086l-1.414 4.926a.75.75 0 0 0 .826.95 28.896 28.896 0 0 0 15.293-7.154.75.75 0 0 0 0-1.115A28.897 28.897 0 0 0 3.105 2.289Z"/>
+          </svg>
+        </span>
         {% if tx.account %}
         <span class="text-xs ml-auto" style="color:var(--text-dim)">{{ tx.account.display_name or tx.account.bank_name }}</span>
         {% endif %}
@@ -472,31 +489,11 @@ document.addEventListener('alpine:init', () => {
             </svg>
           </button>
           {% endif %}
-          <div class="relative inline-block">
-            <button @click="toggleTripEditing($el)" :title="tripId ? ('Viaggio: ' + tripName) : 'Assegna a viaggio'"
-              :style="tripId ? 'color:var(--sky);opacity:1' : 'color:var(--text-dim);opacity:0.4'"
-              class="hover:opacity-100 transition-opacity">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" style="width:15px;height:15px">
-                <path d="M3.105 2.289a.75.75 0 0 0-.826.95l1.414 4.925A1.5 1.5 0 0 0 5.135 9.25h6.115a.75.75 0 0 1 0 1.5H5.135a1.5 1.5 0 0 0-1.442 1.086l-1.414 4.926a.75.75 0 0 0 .826.95 28.896 28.896 0 0 0 15.293-7.154.75.75 0 0 0 0-1.115A28.897 28.897 0 0 0 3.105 2.289Z"/>
-              </svg>
-            </button>
-            <div x-show="editingTrip" x-transition @click.outside="editingTrip = false" @keydown.escape.window="editingTrip = false"
-                 class="absolute z-50 card"
-                 :style="dropUp ? 'bottom:calc(100% + 6px);right:0;width:190px;padding:6px;box-shadow:0 8px 24px rgba(0,0,0,0.18);box-sizing:border-box;max-height:260px;overflow-y:auto' : 'top:calc(100% + 6px);right:0;width:190px;padding:6px;box-shadow:0 8px 24px rgba(0,0,0,0.18);box-sizing:border-box;max-height:260px;overflow-y:auto'">
-              {% if trips %}
-              <div @click="saveTrip('')" class="tr-hover px-1.5 py-1 rounded-lg cursor-pointer text-left text-xs" style="color:var(--text-muted)">— Nessun viaggio —</div>
-              {% for trip in trips %}
-              <div @click="saveTrip('{{ trip.id }}')" class="tr-hover flex items-center justify-between gap-2 px-1.5 py-1 rounded-lg cursor-pointer"
-                   :style="tripId === '{{ trip.id }}' ? 'background:rgba(3,105,161,0.08)' : ''">
-                <span class="text-xs font-medium truncate" style="color:var(--text)">{{ trip.name }}</span>
-                <span class="num text-[10px] flex-shrink-0" style="color:var(--text-dim)">{{ trip.start_date.strftime('%m/%y') }}</span>
-              </div>
-              {% endfor %}
-              {% else %}
-              <a href="/trips" class="block px-1.5 py-1 text-left text-xs" style="color:var(--sky)">+ Crea viaggio</a>
-              {% endif %}
-            </div>
-          </div>
+          <span x-show="tripId" x-cloak :title="'Viaggio: ' + tripName" style="color:var(--sky)">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" style="width:13px;height:13px">
+              <path d="M3.105 2.289a.75.75 0 0 0-.826.95l1.414 4.925A1.5 1.5 0 0 0 5.135 9.25h6.115a.75.75 0 0 1 0 1.5H5.135a1.5 1.5 0 0 0-1.442 1.086l-1.414 4.926a.75.75 0 0 0 .826.95 28.896 28.896 0 0 0 15.293-7.154.75.75 0 0 0 0-1.115A28.897 28.897 0 0 0 3.105 2.289Z"/>
+            </svg>
+          </span>
         </div>
       </td>
       <td class="px-3 py-3.5 text-xs" style="color:var(--text-muted)">{{ (tx.account.display_name or tx.account.bank_name) if tx.account else '—' }}</td>

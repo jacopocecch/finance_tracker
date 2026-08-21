@@ -78,7 +78,8 @@
 <div>
   <p class="text-xs font-medium uppercase tracking-wider mb-3" style="color:var(--text-muted)">Conti</p>
   {% if accounts %}
-  {% set pie_colors = ['#059669','#0369a1','#7c3aed','#ea580c','#db2777','#0d9488','#d97706'] %}
+  {# Fixed-order categorical palette in the app's dusty register, CVD-validated for adjacent slices #}
+  {% set pie_colors = ['#0369a1','#c2703d','#059669','#8e4a9e','#b08b26','#5b4fb5','#be5b7b','#4a90c2','#b45309','#0d9488','#8e6bc9'] %}
   <div class="grid grid-cols-1 sm:grid-cols-2 gap-5 items-start">
     <!-- Pie chart -->
     <div class="card">
@@ -177,16 +178,57 @@
 
 // Pie chart distribuzione conti
 (function() {
-  const accs = {{ accounts | map(attribute='display_name') | list | tojson }};
+  const accs = [{% for a in accounts %}{{ (a.display_name or a.name) | tojson }}{% if not loop.last %},{% endif %}{% endfor %}];
   const bals = {{ accounts | map(attribute='balance') | list | tojson }};
-  const COLORS = ['#059669','#0369a1','#7c3aed','#ea580c','#db2777','#0d9488','#d97706'];
+  const COLORS = {{ pie_colors | tojson }};
   const ctx = document.getElementById('accountsPieChart');
   if (!ctx || bals.every(b => b === 0)) return;
+  // Direct labels on slices >= 8% of the total: Figtree, word-wrapped to fit
+  // the ring, skipped when they can't fit, clamped inside the canvas.
+  const sliceLabels = {
+    id: 'sliceLabels',
+    afterDatasetsDraw(chart) {
+      const c = chart.ctx;
+      const ds = chart.data.datasets[0];
+      const total = ds.data.reduce((a, b) => a + b, 0);
+      const area = chart.chartArea;
+      c.save();
+      c.font = "600 11px Figtree, sans-serif";
+      c.textAlign = 'center';
+      c.textBaseline = 'middle';
+      chart.getDatasetMeta(0).data.forEach((arc, i) => {
+        if (!total || ds.data[i] / total < 0.08) return;
+        const pos = arc.tooltipPosition();
+        const maxW = (arc.outerRadius - arc.innerRadius) * 1.15;
+        const words = String(chart.data.labels[i]).split(' ');
+        const lines = [];
+        let cur = '';
+        for (const w of words) {
+          const t = cur ? cur + ' ' + w : w;
+          if (!cur || c.measureText(t).width <= maxW) cur = t;
+          else { lines.push(cur); cur = w; }
+        }
+        lines.push(cur);
+        const widest = Math.max(...lines.map(l => c.measureText(l).width));
+        if (widest > maxW * 1.25) return;   // doesn't fit — tooltip + list cover it
+        const lineH = 13;
+        let x = Math.min(Math.max(pos.x, area.left + widest / 2 + 2), area.right - widest / 2 - 2);
+        let y = pos.y - ((lines.length - 1) * lineH) / 2;
+        y = Math.min(Math.max(y, area.top + lineH / 2), area.bottom - (lines.length - 0.5) * lineH);
+        const hex = ds.backgroundColor[i % ds.backgroundColor.length].substring(1);
+        const lum = 0.299 * parseInt(hex.substr(0, 2), 16) + 0.587 * parseInt(hex.substr(2, 2), 16) + 0.114 * parseInt(hex.substr(4, 2), 16);
+        c.fillStyle = lum > 150 ? '#16162a' : '#ffffff';
+        lines.forEach((l, j) => c.fillText(l, x, y + j * lineH));
+      });
+      c.restore();
+    }
+  };
   new Chart(ctx, {
     type: 'doughnut',
+    plugins: [sliceLabels],
     data: {
       labels: accs,
-      datasets: [{ data: bals.map(Math.abs), backgroundColor: COLORS.slice(0, accs.length), borderColor: '#f0f0f6', borderWidth: 2, hoverOffset: 4 }]
+      datasets: [{ data: bals.map(Math.abs), backgroundColor: accs.map((_, i) => COLORS[i % COLORS.length]), borderColor: '#ffffff', borderWidth: 2, hoverOffset: 4 }]
     },
     options: {
       responsive: true,
