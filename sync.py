@@ -82,14 +82,39 @@ def handle_callback(code: str, state: str) -> list[int]:
         saved = []
         for acc in session_data.get("accounts", []):
             uid = acc["uid"]
+            ident_hash = acc.get("identification_hash")
+            account_id_obj = acc.get("account_id") or {}
+            iban = account_id_obj.get("iban") if isinstance(account_id_obj, dict) else None
+            currency = acc.get("currency") or "EUR"
+
+            # Enable Banking issues a new uid per session, so match on stable
+            # keys too: identification_hash first, then bank+IBAN+currency
+            # (currency disambiguates Revolut multi-currency pockets that
+            # share one IBAN).
             existing = db.exec(
                 select(Account).where(Account.external_id == uid)
             ).first()
+            if not existing and ident_hash:
+                existing = db.exec(
+                    select(Account).where(
+                        Account.identification_hash == ident_hash,
+                        Account.deleted == False,
+                    )
+                ).first()
+            if not existing and iban:
+                existing = db.exec(
+                    select(Account).where(
+                        Account.bank_name == state,
+                        Account.iban == iban,
+                        Account.currency == currency,
+                        Account.deleted == False,
+                    )
+                ).first()
+
             if existing:
                 db_acc = existing
+                db_acc.external_id = uid
             else:
-                account_id_obj = acc.get("account_id") or {}
-                currency = acc.get("currency") or "EUR"
                 auto_display = f"{state} {currency}" if currency != "EUR" else None
                 db_acc = Account(
                     bank_name=state,
@@ -101,8 +126,10 @@ def handle_callback(code: str, state: str) -> list[int]:
                     currency=currency,
                 )
                 db.add(db_acc)
+            db_acc.identification_hash = ident_hash or db_acc.identification_hash
             db_acc.session_id = session_id
             db_acc.connected = True
+            db_acc.sync_error = None
             db.flush()
             saved.append(db_acc.id)
         db.commit()

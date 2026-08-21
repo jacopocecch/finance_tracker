@@ -14,6 +14,7 @@ class Account(SQLModel, table=True):
     name: str
     display_name: Optional[str] = None
     iban: Optional[str] = None
+    identification_hash: Optional[str] = None  # Enable Banking hash, stable across sessions
     type: str = "checking"  # checking | savings | investment
     currency: str = "EUR"
     session_id: str = ""         # Enable Banking session ID (from /sessions)
@@ -358,6 +359,9 @@ def init_db():
             conn.commit()
         if "balance_threshold" not in acccols:
             conn.execute(text("ALTER TABLE 'account' ADD COLUMN balance_threshold REAL"))
+            conn.commit()
+        if "identification_hash" not in acccols:
+            conn.execute(text("ALTER TABLE 'account' ADD COLUMN identification_hash TEXT"))
             conn.commit()
     with Session(engine) as session:
         existing_cats = {c.name for c in session.exec(select(Category)).all()}
