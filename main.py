@@ -167,9 +167,11 @@ CHART_START_DATE = date(2026, 5, 24)
 def _networth_series(session: Session) -> tuple[list[str], list[float]]:
     start = CHART_START_DATE
     today = date.today()
+    # Include archived accounts too: their snapshots must keep contributing to
+    # past days, otherwise archiving rewrites history.
     liquidity_accounts = {
         a.id: a for a in session.exec(
-            select(Account).where(Account.connected == True, Account.type.in_(("checking", "savings", "cash")))
+            select(Account).where(Account.type.in_(("checking", "savings", "cash")))
         ).all()
     }
     if not liquidity_accounts:
@@ -194,8 +196,13 @@ def _networth_series(session: Session) -> tuple[list[str], list[float]]:
         total = 0.0
         has_any = False
         for acc_id, acc in liquidity_accounts.items():
+            snaps = by_account.get(acc_id, [])
+            # Archived accounts stop counting after their last snapshot instead
+            # of forward-filling a stale balance to today.
+            if acc.deleted and (not snaps or d > snaps[-1].date):
+                continue
             last_snap = None
-            for s in by_account.get(acc_id, []):
+            for s in snaps:
                 if s.date <= d:
                     last_snap = s
                 else:
@@ -658,7 +665,7 @@ def transactions_view(
         "page": page,
         "page_size": page_size,
         "categories": _categories_by_frequency(session),
-        "accounts": session.exec(select(Account).where(Account.connected == True)).all(),
+        "accounts": session.exec(select(Account).order_by(Account.deleted)).all(),
         "manual_accounts": session.exec(select(Account).where(Account.session_id == "manual", Account.deleted == False)).all(),
         "today": date.today().isoformat(),
         "selected_cat": cat or "",
@@ -1251,9 +1258,11 @@ def reparse_transactions(session: Session = Depends(get_session)):
 @app.get("/setup", response_class=HTMLResponse)
 def setup(request: Request, session: Session = Depends(get_session), msg: str = "", msg_type: str = "info"):
     accounts = session.exec(select(Account).where(Account.deleted == False)).all()
+    archived_accounts = session.exec(select(Account).where(Account.deleted == True)).all()
     return templates.TemplateResponse("setup.html", {
         "request": request,
         "accounts": accounts,
+        "archived_accounts": archived_accounts,
         "supported_banks": SUPPORTED_BANKS,
         "flash": {"message": msg, "type": msg_type} if msg else None,
     })
@@ -1320,7 +1329,20 @@ def delete_account(account_id: int, session: Session = Depends(get_session)):
         acc.connected = False
         session.add(acc)
         session.commit()
-    return RedirectResponse("/setup?msg=Conto+rimosso", status_code=303)
+    return RedirectResponse("/setup?msg=Conto+archiviato", status_code=303)
+
+
+@app.post("/setup/account/{account_id}/restore")
+def restore_account(account_id: int, session: Session = Depends(get_session)):
+    acc = session.get(Account, account_id)
+    if acc:
+        acc.deleted = False
+        # Manual accounts have no bank session — fully active again on restore.
+        # Bank accounts stay unsynced until reconnected via PSD2.
+        acc.connected = acc.session_id == "manual"
+        session.add(acc)
+        session.commit()
+    return RedirectResponse("/setup?msg=Conto+ripristinato", status_code=303)
 
 
 # ── Manual accounts & transactions ───────────────────────────────────────────

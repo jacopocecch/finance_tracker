@@ -47,6 +47,14 @@
 
       <!-- Actions -->
       <div class="flex flex-wrap items-center gap-2 flex-shrink-0">
+        {% if acc.session_id != 'manual' and (acc.sync_error or not acc.connected) %}
+        <form method="post" action="/setup/connect">
+          <input type="hidden" name="bank" value="{{ acc.bank_name }}">
+          <button type="submit" class="btn-ghost" style="color:var(--amber, #d97706); border-color:rgba(217,119,6,0.25)">
+            Riconnetti
+          </button>
+        </form>
+        {% endif %}
         {% if acc.session_id != 'manual' %}
         <form method="post" action="/setup/account/{{ acc.id }}/sync">
           <button type="submit" class="btn-ghost" style="color:var(--sky); border-color:rgba(125,211,252,0.25)">
@@ -64,9 +72,9 @@
           Gestisci
         </button>
         <form method="post" action="/setup/account/{{ acc.id }}/delete"
-              onsubmit="return confirm('Rimuovere {{ acc.bank_name }} — {{ acc.name }}? Verranno cancellate tutte le transazioni associate.')">
+              onsubmit="return confirm('Archiviare {{ acc.bank_name }} — {{ acc.name }}? Il conto verrà nascosto e non più sincronizzato. Le transazioni restano nello storico.')">
           <button type="submit" class="btn-ghost" style="color:var(--rose); border-color:rgba(225,29,72,0.25)">
-            Rimuovi
+            Archivia
           </button>
         </form>
       </div>
@@ -162,6 +170,33 @@
     </form>
   </div>
 </div>
+
+<!-- Archived accounts -->
+{% if archived_accounts %}
+<div class="card mb-7" x-data="{ open: false }">
+  <button @click="open = !open" class="flex items-center gap-2 text-sm font-medium w-full" style="color:var(--text-muted)">
+    <span x-text="open ? '−' : '+'"></span>
+    Conti archiviati ({{ archived_accounts|length }})
+  </button>
+  <div x-show="open" x-transition class="mt-4">
+    {% for acc in archived_accounts %}
+    <div class="flex items-center gap-3 py-2.5 {% if not loop.last %}border-b{% endif %}" style="{% if not loop.last %}border-color:var(--border-subtle){% endif %}">
+      <div class="w-2 h-2 rounded-full flex-shrink-0" style="background:var(--text-dim)"></div>
+      <div class="flex-1 min-w-0">
+        <p class="text-sm truncate" style="color:var(--text-muted)">{{ acc.display_name or (acc.bank_name ~ ' — ' ~ acc.name) }}</p>
+        <p class="text-xs" style="color:var(--text-dim)">{{ acc.bank_name }}{% if acc.iban %} · {{ acc.iban[-8:] }}{% endif %}</p>
+      </div>
+      <form method="post" action="/setup/account/{{ acc.id }}/restore">
+        <button type="submit" class="btn-ghost flex-shrink-0">Ripristina</button>
+      </form>
+    </div>
+    {% endfor %}
+    <p class="text-xs mt-3" style="color:var(--text-dim)">
+      Le transazioni dei conti archiviati restano visibili nello storico e nelle statistiche.
+    </p>
+  </div>
+</div>
+{% endif %}
 
 <!-- Utility actions -->
 <div class="flex justify-end gap-2">
