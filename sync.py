@@ -80,6 +80,7 @@ def handle_callback(code: str, state: str) -> list[int]:
 
     with Session(engine) as db:
         saved = []
+        claimed_ids: set[int] = set()
         for acc in session_data.get("accounts", []):
             uid = acc["uid"]
             ident_hash = acc.get("identification_hash")
@@ -110,6 +111,23 @@ def handle_callback(code: str, state: str) -> list[int]:
                         Account.deleted == False,
                     )
                 ).first()
+            if not existing and not iban:
+                # Banks without IBAN (e.g. PayPal): match by bank name alone,
+                # but only when unambiguous — exactly one active IBAN-less
+                # account for this bank not already claimed in this session.
+                candidates = [
+                    a
+                    for a in db.exec(
+                        select(Account).where(
+                            Account.bank_name == state,
+                            Account.iban == None,
+                            Account.deleted == False,
+                        )
+                    ).all()
+                    if a.id not in claimed_ids
+                ]
+                if len(candidates) == 1:
+                    existing = candidates[0]
 
             if existing:
                 db_acc = existing
@@ -131,6 +149,7 @@ def handle_callback(code: str, state: str) -> list[int]:
             db_acc.connected = True
             db_acc.sync_error = None
             db.flush()
+            claimed_ids.add(db_acc.id)
             saved.append(db_acc.id)
         db.commit()
         return saved
