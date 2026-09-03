@@ -89,6 +89,10 @@
       background: rgba(0,0,0,0.08);
       color: var(--text);
     }
+    .btn-ghost.active {
+      background: rgba(0,0,0,0.08);
+      color: var(--text);
+    }
     .btn-primary {
       @apply inline-flex items-center px-4 rounded-lg text-sm font-medium transition-all duration-100;
       height: 36px;
@@ -146,6 +150,52 @@
       font-size: 0.7rem;
       color: var(--text-muted);
       flex-shrink: 0;
+    }
+    /* Nav dropdowns */
+    .nav-group { position: relative; }
+    .nav-group-btn {
+      @apply inline-flex items-center gap-1 px-3 py-1.5 rounded-md text-sm transition-all duration-100;
+      color: var(--text-muted);
+      background: none;
+      border: none;
+      cursor: pointer;
+    }
+    .nav-group-btn:hover, .nav-group-btn.open {
+      color: var(--text);
+      background: rgba(0,0,0,0.05);
+    }
+    .nav-group-btn.active {
+      color: var(--text);
+      background: rgba(0,0,0,0.07);
+    }
+    .nav-group-btn svg { transition: transform 0.15s; }
+    .nav-group-btn.open svg { transform: rotate(180deg); }
+    .nav-menu {
+      position: absolute;
+      top: calc(100% + 6px);
+      left: 0;
+      min-width: 160px;
+      padding: 4px;
+      background: var(--surface);
+      border: 1px solid var(--border-subtle);
+      border-radius: 10px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+      z-index: 100;
+    }
+    .nav-menu.right { left: auto; right: 0; }
+    .nav-menu-item {
+      display: block;
+      padding: 7px 10px;
+      border-radius: 6px;
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      transition: background 0.1s, color 0.1s;
+    }
+    .nav-menu-item:hover { background: rgba(0,0,0,0.05); color: var(--text); }
+    .nav-menu-item.active { background: rgba(0,0,0,0.07); color: var(--text); font-weight: 500; }
+    .nav-mobile-label {
+      @apply px-3 pt-3 pb-1 text-[0.65rem] font-semibold uppercase tracking-wider;
+      color: var(--text-dim);
     }
     .tag {
       @apply inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full;
@@ -206,16 +256,37 @@
           <span class="text-sm font-semibold tracking-tight" style="color:var(--text)">Ledger</span>
         </a>
         <!-- Desktop nav -->
+        {% set p = request.url.path %}
+        {% set in_analisi = p in ['/monthly', '/yearly'] %}
+        {% set in_altro = p == '/budgets' or '/trips' in p %}
+        {% set in_settings = p in ['/categories', '/setup'] %}
         <nav class="hidden md:flex items-center gap-0.5">
-          <a href="/" class="nav-link {% if request.url.path == '/' %}active{% endif %}">Overview</a>
-          <a href="/monthly" class="nav-link {% if request.url.path == '/monthly' %}active{% endif %}">Mensile</a>
-          <a href="/yearly" class="nav-link {% if request.url.path == '/yearly' %}active{% endif %}">Annuale</a>
-          <a href="/transactions" class="nav-link {% if '/transactions' in request.url.path %}active{% endif %}">Transazioni</a>
-          <a href="/trips" class="nav-link {% if '/trips' in request.url.path %}active{% endif %}">Viaggi</a>
-          <a href="/investments" class="nav-link {% if '/investments' in request.url.path %}active{% endif %}">Investimenti</a>
-          <a href="/budgets" class="nav-link {% if request.url.path == '/budgets' %}active{% endif %}">Budget</a>
-          <a href="/categories" class="nav-link {% if request.url.path == '/categories' %}active{% endif %}">Categorie</a>
-          <a href="/setup" class="nav-link {% if request.url.path == '/setup' %}active{% endif %}">Setup</a>
+          <a href="/" class="nav-link {% if p == '/' %}active{% endif %}">Overview</a>
+
+          <div class="nav-group" x-data="{ open: false }" @click.outside="open = false" @keydown.escape="open = false">
+            <button @click="open = !open" class="nav-group-btn {% if in_analisi %}active{% endif %}" :class="{ open }" aria-haspopup="true" :aria-expanded="open">
+              Analisi
+              <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+            </button>
+            <div x-show="open" x-cloak x-transition:enter="transition ease-out duration-100" x-transition:enter-start="opacity-0 scale-95" x-transition:enter-end="opacity-100 scale-100" class="nav-menu">
+              <a href="/monthly" class="nav-menu-item {% if p == '/monthly' %}active{% endif %}">Mensile</a>
+              <a href="/yearly" class="nav-menu-item {% if p == '/yearly' %}active{% endif %}">Annuale</a>
+            </div>
+          </div>
+
+          <a href="/transactions" class="nav-link {% if '/transactions' in p %}active{% endif %}">Transazioni</a>
+          <a href="/investments" class="nav-link {% if '/investments' in p %}active{% endif %}">Investimenti</a>
+
+          <div class="nav-group" x-data="{ open: false }" @click.outside="open = false" @keydown.escape="open = false">
+            <button @click="open = !open" class="nav-group-btn {% if in_altro %}active{% endif %}" :class="{ open }" aria-haspopup="true" :aria-expanded="open">
+              Altro
+              <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+            </button>
+            <div x-show="open" x-cloak x-transition:enter="transition ease-out duration-100" x-transition:enter-start="opacity-0 scale-95" x-transition:enter-end="opacity-100 scale-100" class="nav-menu">
+              <a href="/budgets" class="nav-menu-item {% if p == '/budgets' %}active{% endif %}">Budget</a>
+              <a href="/trips" class="nav-menu-item {% if '/trips' in p %}active{% endif %}">Viaggi</a>
+            </div>
+          </div>
         </nav>
       </div>
 
@@ -240,6 +311,19 @@
             <div hx-get="/sync/accounts" hx-trigger="load" hx-swap="innerHTML" style="min-height:36px"></div>
           </div>
         </div>
+        <!-- Settings (desktop only) -->
+        <div class="relative hidden md:block" x-data="{ open: false }" @click.outside="open = false" @keydown.escape="open = false">
+          <button @click="open = !open" class="btn-ghost px-2 {% if in_settings %}active{% endif %}" aria-label="Impostazioni" aria-haspopup="true" :aria-expanded="open">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+            </svg>
+          </button>
+          <div x-show="open" x-cloak x-transition:enter="transition ease-out duration-100" x-transition:enter-start="opacity-0 scale-95" x-transition:enter-end="opacity-100 scale-100" class="nav-menu right">
+            <a href="/categories" class="nav-menu-item {% if p == '/categories' %}active{% endif %}">Categorie</a>
+            <a href="/setup" class="nav-menu-item {% if p == '/setup' %}active{% endif %}">Setup</a>
+          </div>
+        </div>
         <!-- Hamburger (mobile only) -->
         <button @click="mobileMenu = !mobileMenu" class="md:hidden btn-ghost px-2" aria-label="Menu">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -254,15 +338,19 @@
     <div x-show="mobileMenu" x-transition:enter="transition ease-out duration-150" x-transition:enter-start="opacity-0 -translate-y-2" x-transition:enter-end="opacity-100 translate-y-0"
          class="md:hidden px-4 pb-3 pt-1" style="border-top:1px solid var(--border-subtle)">
       <nav class="flex flex-col gap-0.5">
-        <a href="/" @click="mobileMenu=false" class="nav-link-mobile {% if request.url.path == '/' %}active{% endif %}">Overview</a>
-        <a href="/monthly" @click="mobileMenu=false" class="nav-link-mobile {% if request.url.path == '/monthly' %}active{% endif %}">Mensile</a>
-        <a href="/yearly" @click="mobileMenu=false" class="nav-link-mobile {% if request.url.path == '/yearly' %}active{% endif %}">Annuale</a>
-        <a href="/transactions" @click="mobileMenu=false" class="nav-link-mobile {% if '/transactions' in request.url.path %}active{% endif %}">Transazioni</a>
-        <a href="/trips" @click="mobileMenu=false" class="nav-link-mobile {% if '/trips' in request.url.path %}active{% endif %}">Viaggi</a>
-        <a href="/investments" @click="mobileMenu=false" class="nav-link-mobile {% if '/investments' in request.url.path %}active{% endif %}">Investimenti</a>
-        <a href="/budgets" @click="mobileMenu=false" class="nav-link-mobile {% if request.url.path == '/budgets' %}active{% endif %}">Budget</a>
-        <a href="/categories" @click="mobileMenu=false" class="nav-link-mobile {% if request.url.path == '/categories' %}active{% endif %}">Categorie</a>
-        <a href="/setup" @click="mobileMenu=false" class="nav-link-mobile {% if request.url.path == '/setup' %}active{% endif %}">Setup</a>
+        <a href="/" @click="mobileMenu=false" class="nav-link-mobile {% if p == '/' %}active{% endif %}">Overview</a>
+        <div class="nav-mobile-label">Analisi</div>
+        <a href="/monthly" @click="mobileMenu=false" class="nav-link-mobile {% if p == '/monthly' %}active{% endif %}">Mensile</a>
+        <a href="/yearly" @click="mobileMenu=false" class="nav-link-mobile {% if p == '/yearly' %}active{% endif %}">Annuale</a>
+        <div class="nav-mobile-label">Movimenti</div>
+        <a href="/transactions" @click="mobileMenu=false" class="nav-link-mobile {% if '/transactions' in p %}active{% endif %}">Transazioni</a>
+        <a href="/investments" @click="mobileMenu=false" class="nav-link-mobile {% if '/investments' in p %}active{% endif %}">Investimenti</a>
+        <div class="nav-mobile-label">Altro</div>
+        <a href="/budgets" @click="mobileMenu=false" class="nav-link-mobile {% if p == '/budgets' %}active{% endif %}">Budget</a>
+        <a href="/trips" @click="mobileMenu=false" class="nav-link-mobile {% if '/trips' in p %}active{% endif %}">Viaggi</a>
+        <div class="nav-mobile-label">Impostazioni</div>
+        <a href="/categories" @click="mobileMenu=false" class="nav-link-mobile {% if p == '/categories' %}active{% endif %}">Categorie</a>
+        <a href="/setup" @click="mobileMenu=false" class="nav-link-mobile {% if p == '/setup' %}active{% endif %}">Setup</a>
       </nav>
     </div>
   </header>
