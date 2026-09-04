@@ -17,10 +17,10 @@
       </div>
     </template>
     <template x-if="editing">
-      <form method="post" action="/trips/{{ trip.id }}/update" class="flex flex-wrap gap-2 items-end">
+      <form method="post" action="/trips/{{ trip.id }}/update" class="flex flex-wrap gap-2 items-end" x-data="{ start: '{{ trip.start_date.isoformat() }}' }">
         <input type="text" name="name" required value="{{ trip.name }}" class="input" style="width:180px">
-        <input type="date" name="start_date" required value="{{ trip.start_date.isoformat() }}" class="input num">
-        <input type="date" name="end_date" required value="{{ trip.end_date.isoformat() }}" class="input num">
+        <input type="date" name="start_date" required x-model="start" class="input num">
+        <input type="date" name="end_date" required value="{{ trip.end_date.isoformat() }}" :min="start" class="input num">
         <button type="submit" class="btn-primary text-xs">Salva</button>
       </form>
     </template>
@@ -68,7 +68,7 @@
     <span class="num font-medium">{{ candidates_count }}</span> transazioni nel periodo non ancora assegnate a un viaggio
     <span class="text-xs block mt-0.5" style="color:var(--text-dim)">Trasferimenti e investimenti esclusi. Voli e hotel prenotati prima delle date vanno assegnati a mano da Transazioni.</span>
   </p>
-  <form method="post" action="/trips/{{ trip.id }}/assign-range" onsubmit="return confirm('Assegnare {{ candidates_count }} transazioni a «{{ trip.name }}»?')">
+  <form method="post" action="/trips/{{ trip.id }}/assign-range" onsubmit='return confirm({{ ("Assegnare " ~ candidates_count ~ " transazioni a «" ~ trip.name ~ "»?") | tojson }})'>
     <button type="submit" class="btn-primary text-xs">Assegna al viaggio</button>
   </form>
 </div>

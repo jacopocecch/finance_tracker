@@ -11,12 +11,6 @@
   </div>
 </div>
 
-{% if request.query_params.get('msg') %}
-<div class="mb-4 text-xs px-3 py-2 rounded-lg" style="background:rgba(5,150,105,0.08);color:var(--emerald);border:1px solid rgba(5,150,105,0.2)">
-  {{ request.query_params.get('msg') | replace('+', ' ') }}
-</div>
-{% endif %}
-
 <!-- Add category -->
 <div class="card mb-6" x-data="{ open: false }">
   <button @click="open = !open" class="flex items-center gap-2 text-sm font-medium w-full" style="color:var(--text)">
@@ -89,7 +83,7 @@
         <button type="submit" class="cat-btn">Applica sfumature</button>
       </form>
       {% if not m_cats %}
-      <form method="post" action="/macros/{{ m.id }}/delete" onsubmit="return confirm('Eliminare la macrocategoria {{ m.name }}?')">
+      <form method="post" action="/macros/{{ m.id }}/delete" onsubmit='return confirm({{ ("Eliminare la macrocategoria " ~ m.name ~ "?") | tojson }})'>
         <button type="submit" class="cat-btn cat-btn-danger">✕</button>
       </form>
       {% endif %}
@@ -310,7 +304,7 @@
         <span x-text="rulesOpen ? 'Chiudi' : 'Regole'"></span>
       </button>
       <form method="post" action="/categories/{{ cat.id }}/delete"
-            onsubmit="return confirm('Eliminare {{ cat.name }}? Possibile solo se non ha transazioni.')">
+            onsubmit='return confirm({{ ("Eliminare " ~ cat.name ~ "? Possibile solo se non ha transazioni.") | tojson }})'>
         <button type="submit" class="cat-btn cat-btn-danger">✕</button>
       </form>
     </div>
@@ -391,22 +385,27 @@
 <!-- Merchant associations — collapsible panel at the bottom -->
 {% if all_merchants %}
 <div x-data="{ open: false }" class="rounded-xl" style="border:1px dashed var(--border)">
-  <button @click="open = !open"
-          class="flex items-center gap-3 w-full text-left px-5 py-4"
-          style="color:var(--text-muted)">
-    <svg class="w-4 h-4 shrink-0 transition-transform duration-200" :style="open ? 'transform:rotate(90deg)' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-    </svg>
-    <span class="text-sm font-medium" style="color:var(--text)">Esercenti associati</span>
-    <span class="text-xs px-2 py-0.5 rounded-full" style="background:var(--surface-2);color:var(--text-dim)">{{ all_merchants | length }}</span>
-    <span class="text-xs ml-auto" style="color:var(--text-dim)" x-text="open ? 'Chiudi' : 'Espandi'"></span>
-    <form method="post" action="/merchant-categories/sync" @click.stop>
+  <!-- The sync form sits beside the toggle button, not inside it: a <form>
+       nested in a <button> gets hoisted out by the HTML parser and its submit
+       button stops working. -->
+  <div class="flex items-center gap-3 px-5 py-4">
+    <button @click="open = !open"
+            class="flex items-center gap-3 flex-1 min-w-0 text-left"
+            style="color:var(--text-muted)">
+      <svg class="w-4 h-4 shrink-0 transition-transform duration-200" :style="open ? 'transform:rotate(90deg)' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+      </svg>
+      <span class="text-sm font-medium" style="color:var(--text)">Esercenti associati</span>
+      <span class="text-xs px-2 py-0.5 rounded-full" style="background:var(--surface-2);color:var(--text-dim)">{{ all_merchants | length }}</span>
+      <span class="text-xs ml-auto" style="color:var(--text-dim)" x-text="open ? 'Chiudi' : 'Espandi'"></span>
+    </button>
+    <form method="post" action="/merchant-categories/sync" class="shrink-0">
       <button type="submit" class="text-xs font-medium px-3 py-1 rounded-lg transition-colors"
               style="background:rgba(3,105,161,0.08);border:1px solid rgba(3,105,161,0.2);color:var(--sky)">
         ↺ Sincronizza
       </button>
     </form>
-  </button>
+  </div>
   <div x-show="open" x-transition style="border-top:1px solid var(--border)">
     {% for mc in all_merchants %}
     {% set cat = cat_map.get(mc.category_id) %}

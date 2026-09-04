@@ -72,7 +72,7 @@
           Gestisci
         </button>
         <form method="post" action="/setup/account/{{ acc.id }}/delete"
-              onsubmit="return confirm('Archiviare {{ acc.bank_name }} — {{ acc.name }}? Il conto verrà nascosto e non più sincronizzato. Le transazioni restano nello storico.')">
+              onsubmit='return confirm({{ ("Archiviare " ~ acc.bank_name ~ " — " ~ acc.name ~ "? Il conto verrà nascosto e non più sincronizzato. Le transazioni restano nello storico.") | tojson }})'>
           <button type="submit" class="btn-ghost" style="color:var(--rose); border-color:rgba(225,29,72,0.25)">
             Archivia
           </button>

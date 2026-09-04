@@ -13,18 +13,18 @@
     Nuovo viaggio
   </button>
   <div x-show="open" x-transition class="mt-4">
-    <form method="post" action="/trips/add" class="flex flex-wrap gap-3 items-end">
+    <form method="post" action="/trips/add" class="flex flex-wrap gap-3 items-end" x-data="{ start: '{{ today }}' }">
       <div>
         <label class="text-xs mb-1.5 block font-medium" style="color:var(--text-muted)">Nome *</label>
         <input type="text" name="name" required placeholder="es. Lisbona 2026" class="input" style="width:200px">
       </div>
       <div>
         <label class="text-xs mb-1.5 block font-medium" style="color:var(--text-muted)">Dal *</label>
-        <input type="date" name="start_date" required value="{{ today }}" class="input num">
+        <input type="date" name="start_date" required x-model="start" class="input num">
       </div>
       <div>
         <label class="text-xs mb-1.5 block font-medium" style="color:var(--text-muted)">Al *</label>
-        <input type="date" name="end_date" required value="{{ today }}" class="input num">
+        <input type="date" name="end_date" required value="{{ today }}" :min="start" class="input num">
       </div>
       <button type="submit" class="btn-primary">Crea</button>
     </form>

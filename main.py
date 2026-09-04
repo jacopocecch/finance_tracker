@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 import urllib.parse
 from collections import defaultdict
@@ -23,7 +24,11 @@ from database import (
 from colors import derive_leaf_colors
 from sync import build_auth_url, handle_callback, sync_all, sync_account
 from investments import router as investments_router, _build_portfolio_data
+from portfolio import compute_portfolio
 import fx as _fx
+from fx import FxUnavailable
+
+log = logging.getLogger(__name__)
 
 app = FastAPI()
 templates = Jinja2Templates(directory="templates")
@@ -78,7 +83,63 @@ def flash(message: str, type_: str = "info"):
     return {"message": message, "type": type_}
 
 
+def _flash_from_query(msg: str = "", msg_type: str = "info") -> Optional[dict]:
+    return {"message": msg, "type": msg_type} if msg else None
+
+
+def _redirect_flash(path: str, message: str, type_: str = "info") -> RedirectResponse:
+    """303 redirect to `path` carrying a flash message in the query string."""
+    sep = "&" if "?" in path else "?"
+    qs = urllib.parse.urlencode({"msg": message, "msg_type": type_})
+    return RedirectResponse(f"{path}{sep}{qs}", status_code=303)
+
+
 # ── Helpers ──────────────────────────────────────────────────────────────────
+
+def _opt_int(v: Optional[str]) -> Optional[int]:
+    """Coerce an optional form field to int; empty/blank/invalid → None."""
+    if v is None:
+        return None
+    v = v.strip()
+    if not v:
+        return None
+    try:
+        return int(v)
+    except ValueError:
+        try:
+            return int(float(v))
+        except ValueError:
+            return None
+
+
+def _opt_float(v: Optional[str]) -> Optional[float]:
+    """Coerce an optional form field to float; empty/blank/invalid → None."""
+    if v is None:
+        return None
+    v = v.strip().replace(",", ".")
+    if not v:
+        return None
+    try:
+        return float(v)
+    except ValueError:
+        return None
+
+
+_fx_warned: set[str] = set()
+
+
+def _fx_convert_safe(amount: float, currency: str, session: Session, on_date: Optional[date] = None) -> float:
+    """Convert to EUR; when no rate is obtainable, warn once per currency and
+    return the unconverted amount."""
+    try:
+        if on_date:
+            return _fx.convert_on(amount, currency, on_date, session=session)
+        return _fx.convert(amount, currency, session=session)
+    except FxUnavailable:
+        if currency not in _fx_warned:
+            _fx_warned.add(currency)
+            log.warning("FX rate unavailable for %s: using unconverted amounts", currency)
+        return amount
 
 def _enrich_tx(tx: Transaction, session: Session) -> SimpleNamespace:
     ns = SimpleNamespace(**{k: v for k, v in vars(tx).items() if not k.startswith('_')})
@@ -104,14 +165,11 @@ def _effective_amount(tx, session: Session = None) -> float:
         if eur_amount is not None:
             ps = getattr(tx, 'personal_share', None)
             if amount < 0 and ps is not None and amount != 0:
-                return -(eur_amount * abs(ps / amount))
+                # Scale the EUR amount by the personal fraction; sign preserved.
+                return eur_amount * abs(ps / amount)
             return eur_amount
         if session:
-            tx_date = getattr(tx, 'date', None)
-            if tx_date:
-                amount = _fx.convert_on(amount, cur, tx_date, session=session)
-            else:
-                amount = _fx.convert(amount, cur, session=session)
+            amount = _fx_convert_safe(amount, cur, session, on_date=getattr(tx, 'date', None))
     if amount < 0 and getattr(tx, 'personal_share', None) is not None:
         return -tx.personal_share
     return amount
@@ -153,7 +211,7 @@ def _balances_by_account(session: Session) -> dict[int, dict]:
             native = snap.balance
             currency = acc.currency or "EUR"
             if currency != "EUR":
-                eur = _fx.convert(native, currency, session=session)
+                eur = _fx_convert_safe(native, currency, session)
             else:
                 eur = native
             result[acc.id] = {"eur": eur, "native": native, "currency": currency}
@@ -197,9 +255,10 @@ def _networth_series(session: Session) -> tuple[list[str], list[float]]:
         has_any = False
         for acc_id, acc in liquidity_accounts.items():
             snaps = by_account.get(acc_id, [])
-            # Archived accounts stop counting after their last snapshot instead
-            # of forward-filling a stale balance to today.
-            if acc.deleted and (not snaps or d > snaps[-1].date):
+            # Archived/disconnected accounts stop counting after their last
+            # snapshot instead of forward-filling a stale balance to today
+            # (consistent with _balances_by_account, which excludes them).
+            if (acc.deleted or not acc.connected) and (not snaps or d > snaps[-1].date):
                 continue
             last_snap = None
             for s in snaps:
@@ -211,7 +270,7 @@ def _networth_series(session: Session) -> tuple[list[str], list[float]]:
                 has_any = True
                 balance = last_snap.balance
                 if acc.currency and acc.currency != "EUR":
-                    balance = _fx.convert(balance, acc.currency, session=session)
+                    balance = _fx_convert_safe(balance, acc.currency, session)
                 total += balance
         if has_any:
             result[d] = total
@@ -245,14 +304,23 @@ def dashboard(request: Request, session: Session = Depends(get_session)):
                 select(Instrument).where(Instrument.is_liquidity == True, Instrument.active == True)
             ).all()
         }
-        liquidity_etf = sum(
-            (p.market_value or p.total_invested)
-            for p in portfolio.positions if p.instrument_id in liquidity_ids
+        # Split the basket exactly like investments.overview(): liquidity ETFs
+        # count as liquidity, everything else is the investment portfolio, and
+        # P&L is computed on that same filtered basket (summary totals are EUR).
+        inv_positions = [p for p in portfolio.positions if p.instrument_id not in liquidity_ids]
+        liq_positions = [p for p in portfolio.positions if p.instrument_id in liquidity_ids]
+        inv_summary = compute_portfolio(inv_positions, portfolio.pac_positions)
+        liq_summary = compute_portfolio(liq_positions, [])
+        liquidity_etf = (
+            liq_summary.total_market_value if liq_summary.total_market_value is not None
+            else liq_summary.total_invested
         )
-        full_value = portfolio.total_market_value if portfolio.total_market_value is not None else portfolio.total_invested
-        portfolio_value = full_value - liquidity_etf
-        portfolio_pl = portfolio.total_unrealized_pl
-        portfolio_pl_pct = portfolio.total_unrealized_pl_pct
+        portfolio_value = (
+            inv_summary.total_market_value if inv_summary.total_market_value is not None
+            else inv_summary.total_invested
+        )
+        portfolio_pl = inv_summary.total_unrealized_pl
+        portfolio_pl_pct = inv_summary.total_unrealized_pl_pct
     except Exception:
         liquidity_etf = 0.0
         portfolio_value = 0.0
@@ -354,15 +422,19 @@ def monthly(
     total_out = abs(sum(_effective_amount(tx, session) for tx in transactions if tx.amount < 0 and not _is_transfer(tx)))
     balance   = total_in - total_out - total_invested
 
-    # Weekly aggregation (4 weeks)
+    # Weekly aggregation: 7-day buckets from the 1st, covering the whole month
+    # (5 buckets when needed so days 29–31 are not dropped)
     weekly_in, weekly_out, weekly_labels = [], [], []
-    for week in range(4):
-        w_start = first_day + timedelta(weeks=week)
+    w_start = first_day
+    week = 0
+    while w_start <= last_day:
         w_end   = min(w_start + timedelta(days=6), last_day)
         w_txs   = [tx for tx in transactions if w_start <= tx.date <= w_end and not _is_transfer(tx)]
         weekly_in.append(round(sum(_effective_amount(t, session) for t in w_txs if t.amount > 0 and not t.is_reimbursement), 2))
         weekly_out.append(round(abs(sum(_effective_amount(t, session) for t in w_txs if t.amount < 0)), 2))
-        weekly_labels.append(f"Sett {week+1}")
+        week += 1
+        weekly_labels.append(f"Sett {week}")
+        w_start = w_end + timedelta(days=1)
 
     # Category breakdown (expenses only, with budget); trip expenses grouped per trip
     cat_totals: dict[str, float] = defaultdict(float)
@@ -598,12 +670,14 @@ def transactions_view(
     request: Request,
     cat: Optional[str] = None,
     account: Optional[str] = None,
-    from_: Optional[str] = None,
-    to_: Optional[str] = None,
+    from_: Optional[str] = Query(default=None, alias="from"),
+    to_: Optional[str] = Query(default=None, alias="to"),
     tx_type: Optional[str] = Query(default=None, alias="type"),
     search: Optional[str] = None,
     new_since: Optional[str] = None,
     page: int = 1,
+    msg: str = "",
+    msg_type: str = "info",
     session: Session = Depends(get_session),
 ):
     page_size = 50
@@ -683,6 +757,7 @@ def transactions_view(
         "cash_accounts": session.exec(
             select(Account).where(Account.type == "cash", Account.deleted == False)
         ).all(),
+        "flash": _flash_from_query(msg, msg_type),
     })
 
 
@@ -750,13 +825,14 @@ def delete_transaction(
 @app.post("/transactions/{tx_id}/share")
 def update_share(
     tx_id: int,
-    personal_share: Optional[float] = Form(default=None),
+    personal_share: Optional[str] = Form(default=None),
     redirect_to: str = Form(default="/transactions"),
     session: Session = Depends(get_session),
 ):
+    share = _opt_float(personal_share)
     tx = session.get(Transaction, tx_id)
     if tx:
-        tx.personal_share = personal_share if personal_share and personal_share > 0 else None
+        tx.personal_share = share if share and share > 0 else None
         session.commit()
     return RedirectResponse(redirect_to, status_code=303)
 
@@ -792,14 +868,27 @@ def _trip_stats(trip: Trip, session: Session) -> dict:
 
 
 @app.get("/trips", response_class=HTMLResponse)
-def trips_view(request: Request, session: Session = Depends(get_session)):
+def trips_view(request: Request, session: Session = Depends(get_session), msg: str = "", msg_type: str = "info"):
     trips = session.exec(select(Trip).order_by(Trip.start_date.desc())).all()
     return templates.TemplateResponse("trips.html", {
         "request": request,
         "trips": trips,
         "stats": {t.id: _trip_stats(t, session) for t in trips},
         "today": date.today().isoformat(),
+        "flash": _flash_from_query(msg, msg_type),
     })
+
+
+def _parse_trip_dates(start_date: str, end_date: str) -> tuple[Optional[date], Optional[date], Optional[str]]:
+    """Returns (start, end, error). Rejects unparsable dates and end < start."""
+    try:
+        start = date.fromisoformat(start_date)
+        end = date.fromisoformat(end_date)
+    except ValueError:
+        return None, None, "Date non valide"
+    if end < start:
+        return None, None, "La data di fine non può precedere quella di inizio"
+    return start, end, None
 
 
 @app.post("/trips/add")
@@ -812,7 +901,10 @@ def add_trip(
     existing = session.exec(select(Trip).where(Trip.name == name.strip())).first()
     if existing:
         return RedirectResponse(f"/trips/{existing.id}", status_code=303)
-    trip = Trip(name=name.strip(), start_date=date.fromisoformat(start_date), end_date=date.fromisoformat(end_date))
+    start, end, err = _parse_trip_dates(start_date, end_date)
+    if err:
+        return _redirect_flash("/trips", err, "error")
+    trip = Trip(name=name.strip(), start_date=start, end_date=end)
     session.add(trip)
     session.commit()
     session.refresh(trip)
@@ -820,7 +912,7 @@ def add_trip(
 
 
 @app.get("/trips/{trip_id}", response_class=HTMLResponse)
-def trip_detail(trip_id: int, request: Request, session: Session = Depends(get_session)):
+def trip_detail(trip_id: int, request: Request, session: Session = Depends(get_session), msg: str = "", msg_type: str = "info"):
     trip = session.get(Trip, trip_id)
     if not trip:
         return RedirectResponse("/trips", status_code=303)
@@ -854,8 +946,9 @@ def trip_detail(trip_id: int, request: Request, session: Session = Depends(get_s
         "transactions": [_enrich_tx(tx, session) for tx in txs],
         "stats": _trip_stats(trip, session),
         "cat_rows": cat_rows,
-        "days": (trip.end_date - trip.start_date).days + 1,
+        "days": max(1, (trip.end_date - trip.start_date).days + 1),
         "candidates_count": len(_trip_candidates(trip, session)),
+        "flash": _flash_from_query(msg, msg_type),
     })
 
 
@@ -869,11 +962,14 @@ def update_trip(
 ):
     trip = session.get(Trip, trip_id)
     if trip:
+        start, end, err = _parse_trip_dates(start_date, end_date)
+        if err:
+            return _redirect_flash(f"/trips/{trip_id}", err, "error")
         clash = session.exec(select(Trip).where(Trip.name == name.strip(), Trip.id != trip_id)).first()
         if not clash:
             trip.name = name.strip()
-        trip.start_date = date.fromisoformat(start_date)
-        trip.end_date = date.fromisoformat(end_date)
+        trip.start_date = start
+        trip.end_date = end
         session.commit()
     return RedirectResponse(f"/trips/{trip_id}", status_code=303)
 
@@ -967,22 +1063,26 @@ def bulk_assign_trip(
 # ── Budgets ───────────────────────────────────────────────────────────────────
 
 @app.get("/budgets", response_class=HTMLResponse)
-def budgets_view(request: Request, session: Session = Depends(get_session)):
+def budgets_view(request: Request, session: Session = Depends(get_session), msg: str = "", msg_type: str = "info"):
     categories = session.exec(select(Category).where(Category.type.in_(["expense", "both"]))).all()
     budgets = {b.category_id: b for b in session.exec(select(Budget)).all()}
     return templates.TemplateResponse("budgets.html", {
         "request": request,
         "categories": categories,
         "budgets": budgets,
+        "flash": _flash_from_query(msg, msg_type),
     })
 
 
 @app.post("/budgets/save")
 def save_budget(
     category_id: int = Form(...),
-    amount: float = Form(...),
+    amount: Optional[str] = Form(None),
     session: Session = Depends(get_session),
 ):
+    amount = _opt_float(amount)
+    if amount is None or amount < 0:
+        return _redirect_flash("/budgets", "Importo budget non valido", "error")
     existing = session.exec(
         select(Budget).where(Budget.category_id == category_id, Budget.period == "monthly")
     ).first()
@@ -1007,7 +1107,7 @@ def delete_budget(budget_id: int, session: Session = Depends(get_session)):
 # ── Categories ────────────────────────────────────────────────────────────────
 
 @app.get("/categories", response_class=HTMLResponse)
-def categories_view(request: Request, session: Session = Depends(get_session)):
+def categories_view(request: Request, session: Session = Depends(get_session), msg: str = "", msg_type: str = "info"):
     categories = session.exec(select(Category)).all()
     rules = session.exec(select(CategoryRule).order_by(CategoryRule.priority.desc())).all()
     rules_by_cat: dict[int, list] = defaultdict(list)
@@ -1031,6 +1131,7 @@ def categories_view(request: Request, session: Session = Depends(get_session)):
         "cat_map": cat_map,
         "macros": macros,
         "cats_by_macro": dict(cats_by_macro),
+        "flash": _flash_from_query(msg, msg_type),
     })
 
 
@@ -1054,11 +1155,16 @@ def add_category(
     cat_type: str = Form(default="expense"),
     color: str = Form(default="#6B7280"),
     icon: str = Form(default="💳"),
-    macrocategory_id: Optional[int] = Form(default=None),
+    macrocategory_id: Optional[str] = Form(default=None),
     session: Session = Depends(get_session),
 ):
-    macro_id = macrocategory_id or None
-    cat = Category(name=name.strip(), type=cat_type, color=color, icon=icon, macrocategory_id=macro_id)
+    macro_id = _opt_int(macrocategory_id) or None
+    name = name.strip()
+    if not name:
+        return _redirect_flash("/categories", "Nome categoria obbligatorio", "error")
+    if session.exec(select(Category).where(Category.name == name)).first():
+        return _redirect_flash("/categories", f"La categoria «{name}» esiste già", "error")
+    cat = Category(name=name, type=cat_type, color=color, icon=icon, macrocategory_id=macro_id)
     session.add(cat)
     session.commit()
     if macro_id:
@@ -1070,13 +1176,13 @@ def add_category(
 @app.post("/categories/{cat_id}/assign")
 def assign_category_macro(
     cat_id: int,
-    macrocategory_id: Optional[int] = Form(default=None),
+    macrocategory_id: Optional[str] = Form(default=None),
     session: Session = Depends(get_session),
 ):
     cat = session.get(Category, cat_id)
     if cat:
         old_macro = cat.macrocategory_id
-        new_macro = macrocategory_id or None
+        new_macro = _opt_int(macrocategory_id) or None
         cat.macrocategory_id = new_macro
         session.add(cat)
         session.commit()
@@ -1093,7 +1199,12 @@ def add_macro(
     color: str = Form(default="#6B7280"),
     session: Session = Depends(get_session),
 ):
-    session.add(MacroCategory(name=name.strip(), color=color))
+    name = name.strip()
+    if not name:
+        return _redirect_flash("/categories", "Nome macrocategoria obbligatorio", "error")
+    if session.exec(select(MacroCategory).where(MacroCategory.name == name)).first():
+        return _redirect_flash("/categories", f"La macrocategoria «{name}» esiste già", "error")
+    session.add(MacroCategory(name=name, color=color))
     session.commit()
     return RedirectResponse("/categories", status_code=303)
 
@@ -1125,8 +1236,13 @@ def delete_macro(macro_id: int, session: Session = Depends(get_session)):
 def delete_category(cat_id: int, session: Session = Depends(get_session)):
     has_txs = session.exec(select(Transaction).where(Transaction.category_id == cat_id)).first()
     if not has_txs:
+        # Remove every row pointing at this category so no dangling ids remain.
         for rule in session.exec(select(CategoryRule).where(CategoryRule.category_id == cat_id)).all():
             session.delete(rule)
+        for mc in session.exec(select(MerchantCategory).where(MerchantCategory.category_id == cat_id)).all():
+            session.delete(mc)
+        for b in session.exec(select(Budget).where(Budget.category_id == cat_id)).all():
+            session.delete(b)
         cat = session.get(Category, cat_id)
         if cat:
             session.delete(cat)
@@ -1155,34 +1271,60 @@ def delete_rule(rule_id: int, session: Session = Depends(get_session)):
     return RedirectResponse("/categories", status_code=303)
 
 
+def _txs_with_merchant(session: Session, key: str) -> list[Transaction]:
+    """Transactions whose merchant equals `key` (already lowercased).
+    Compared in Python: SQLite's lower() is ASCII-only, so accented merchants
+    ("È", "É"…) would never match a Python-lowercased key."""
+    rows = session.exec(select(Transaction).where(Transaction.merchant != None)).all()
+    return [t for t in rows if (t.merchant or "").lower() == key]
+
+
 @app.post("/transactions/{tx_id}/merchant-category")
 def assign_merchant_category(
     tx_id: int,
     request: Request,
-    category_id: int = Form(...),
+    category_id: Optional[str] = Form(default=None),
+    remove: str = Form(default=""),
     redirect_to: str = Form(default="/transactions"),
     session: Session = Depends(get_session),
 ):
+    is_fetch = bool(request.headers.get("X-Fetch"))
+    cat_id = _opt_int(category_id)
     tx = session.get(Transaction, tx_id)
-    if tx and tx.merchant:
-        key = tx.merchant.lower()
-        existing = session.exec(
-            select(MerchantCategory).where(MerchantCategory.merchant == key)
-        ).first()
+    if not tx or not tx.merchant:
+        if is_fetch:
+            return JSONResponse({"error": "Transazione senza esercente"}, status_code=400)
+        return RedirectResponse(redirect_to, status_code=303)
+
+    key = tx.merchant.lower()
+    existing = session.exec(
+        select(MerchantCategory).where(MerchantCategory.merchant == key)
+    ).first()
+
+    if remove:
         if existing:
-            existing.category_id = category_id
-        else:
-            session.add(MerchantCategory(merchant=key, category_id=category_id))
-        all_txs = session.exec(
-            select(Transaction).where(func.lower(Transaction.merchant) == key)
-        ).all()
-        for t in all_txs:
-            t.category_id = category_id
-        session.commit()
-    if request.headers.get("X-Fetch"):
-        cat = session.get(Category, category_id)
+            session.delete(existing)
+            session.commit()
+        if is_fetch:
+            return JSONResponse({"mapped": False})
+        return RedirectResponse(redirect_to, status_code=303)
+
+    if cat_id is None:
+        if is_fetch:
+            return JSONResponse({"error": "Categoria mancante"}, status_code=400)
+        return RedirectResponse(redirect_to, status_code=303)
+
+    if existing:
+        existing.category_id = cat_id
+    else:
+        session.add(MerchantCategory(merchant=key, category_id=cat_id))
+    for t in _txs_with_merchant(session, key):
+        t.category_id = cat_id
+    session.commit()
+    if is_fetch:
+        cat = session.get(Category, cat_id)
         color = cat.color if cat else "#6b6b88"
-        return JSONResponse({"color": color, "name": cat.name if cat else "Altro", "icon": cat.icon if cat else "❓", "text_color": _tag_text_color(color)})
+        return JSONResponse({"mapped": True, "color": color, "name": cat.name if cat else "Altro", "icon": cat.icon if cat else "❓", "text_color": _tag_text_color(color)})
     return RedirectResponse(redirect_to, status_code=303)
 
 
@@ -1202,12 +1344,13 @@ def update_merchant_category(
 @app.post("/merchant-categories/sync")
 def sync_merchant_categories(session: Session = Depends(get_session)):
     mappings = session.exec(select(MerchantCategory)).all()
+    # Group once in Python (Unicode-aware lower, see _txs_with_merchant).
+    by_merchant: dict[str, list[Transaction]] = defaultdict(list)
+    for tx in session.exec(select(Transaction).where(Transaction.merchant != None)).all():
+        by_merchant[(tx.merchant or "").lower()].append(tx)
     updated = 0
     for mc in mappings:
-        txs = session.exec(
-            select(Transaction).where(func.lower(Transaction.merchant) == mc.merchant)
-        ).all()
-        for tx in txs:
+        for tx in by_merchant.get(mc.merchant, []):
             if tx.category_id != mc.category_id:
                 tx.category_id = mc.category_id
                 updated += 1
@@ -1353,10 +1496,11 @@ def create_manual_account(
     bank_name: str = Form(...),
     acc_type: str = Form("checking"),
     currency: str = Form("EUR"),
-    initial_balance: float = Form(0.0),
+    initial_balance: Optional[str] = Form(None),
     session: Session = Depends(get_session),
 ):
     import uuid as _uuid
+    initial_balance = _opt_float(initial_balance) or 0.0
     acc = Account(
         bank_name=bank_name.strip() or name.strip(),
         external_id=f"manual_{_uuid.uuid4().hex}",
@@ -1377,9 +1521,10 @@ def create_manual_account(
 @app.post("/setup/account/{account_id}/threshold")
 def update_account_threshold(
     account_id: int,
-    threshold: Optional[float] = Form(None),
+    threshold: Optional[str] = Form(None),
     session: Session = Depends(get_session),
 ):
+    threshold = _opt_float(threshold)
     acc = session.get(Account, account_id)
     if acc:
         acc.balance_threshold = threshold if threshold is not None and threshold >= 0 else None
@@ -1390,9 +1535,12 @@ def update_account_threshold(
 @app.post("/setup/account/{account_id}/balance")
 def update_manual_balance(
     account_id: int,
-    balance: float = Form(...),
+    balance: Optional[str] = Form(None),
     session: Session = Depends(get_session),
 ):
+    balance = _opt_float(balance)
+    if balance is None:
+        return _redirect_flash("/setup", "Inserisci un saldo valido", "error")
     acc = session.get(Account, account_id)
     if acc and acc.session_id == "manual":
         snap = session.exec(
@@ -1415,24 +1563,37 @@ def add_manual_transaction(
     amount: float = Form(...),
     description: str = Form(""),
     merchant: str = Form(""),
-    category_id: Optional[int] = Form(None),
+    category_id: Optional[str] = Form(None),
     session: Session = Depends(get_session),
 ):
     import uuid as _uuid
     from categorizer import categorize as _cat
+    account = session.get(Account, account_id)
+    if not account:
+        return _redirect_flash("/transactions", "Conto non trovato", "error")
     merchant = merchant.strip() or None
     description = description.strip()
-    if not category_id:
-        category_id = _cat(description, merchant, session)
+    cat_id = _opt_int(category_id)
+    if not cat_id:
+        cat_id = _cat(description, merchant, session)
+    tx_day = date.fromisoformat(tx_date)
+    currency = (account.currency or "EUR").upper()
+    eur_amount = None
+    if currency != "EUR":
+        try:
+            eur_amount = _fx.convert_on(amount, currency, tx_day, session=session)
+        except FxUnavailable:
+            eur_amount = None
     tx = Transaction(
         account_id=account_id,
         external_id=f"manual_{_uuid.uuid4().hex}",
-        date=date.fromisoformat(tx_date),
+        date=tx_day,
         amount=amount,
-        currency="EUR",
+        currency=currency,
+        eur_amount=eur_amount,
         description=description,
         merchant=merchant,
-        category_id=category_id,
+        category_id=cat_id,
         raw_data="",
         created_at=datetime.now(timezone.utc).replace(tzinfo=None),
     )
@@ -1462,18 +1623,22 @@ def detect_transfers(session: Session = Depends(get_session)):
         return RedirectResponse("/transactions?msg=Categoria+Trasferimento+non+trovata", status_code=303)
 
     # Candidate transactions: not already linked, not already transfer category
+    # (uncategorized rows included: `NULL != x` alone would drop them)
+    from sqlalchemy import or_
     candidates = session.exec(
         select(Transaction).where(
             Transaction.transfer_partner_id == None,
-            Transaction.category_id != transfer_cat.id,
+            or_(Transaction.category_id == None, Transaction.category_id != transfer_cat.id),
         )
     ).all()
 
-    # Group by (date, abs_amount)
-    from collections import defaultdict
+    # Group by (date, currency, abs_amount); pending entries are skipped since
+    # their amount/date may still change.
     by_key: dict = defaultdict(list)
     for tx in candidates:
-        key = (tx.date, round(abs(tx.amount), 2))
+        if tx.status == "PDNG":
+            continue
+        key = (tx.date, (tx.currency or "EUR").upper(), round(abs(tx.amount), 2))
         by_key[key].append(tx)
 
     matched = 0
@@ -1525,8 +1690,20 @@ def detect_prelievi(
         )
     ).all()
 
+    # Only withdrawals dated on/after the cash account's first snapshot adjust
+    # today's balance: older ones predate the tracked balance (which already
+    # reflects them) and are only categorized/linked. With no snapshot at all
+    # the balance starts today, so nothing historical is added.
+    first_snap = session.exec(
+        select(BalanceSnapshot)
+        .where(BalanceSnapshot.account_id == cash_acc.id)
+        .order_by(BalanceSnapshot.date)
+    ).first()
+    cutoff = first_snap.date if first_snap else date.today()
+
     import uuid as _uuid
     created = 0
+    balance_delta = 0.0
     for tx in prelievi:
         cash_tx = Transaction(
             account_id=cash_acc.id,
@@ -1546,26 +1723,44 @@ def detect_prelievi(
         tx.category_id = transfer_cat.id
         cash_tx.transfer_partner_id = tx.id
 
+        if tx.date >= cutoff:
+            balance_delta += abs(tx.amount)
+        created += 1
+
+    if balance_delta:
         snap = session.exec(
             select(BalanceSnapshot)
             .where(BalanceSnapshot.account_id == cash_acc.id)
             .order_by(BalanceSnapshot.date.desc())
         ).first()
         current = snap.balance if snap else 0.0
-        new_bal = current + abs(tx.amount)
+        new_bal = current + balance_delta
         if snap and snap.date == date.today():
             snap.balance = new_bal
         else:
             session.add(BalanceSnapshot(account_id=cash_acc.id, date=date.today(), balance=new_bal))
-
-        created += 1
 
     session.commit()
     return RedirectResponse(f"/transactions?msg={created}+prelievi+collegati", status_code=303)
 
 
 @app.post("/sync")
-def trigger_sync():
+def trigger_sync(request: Request):
+    # HTMX callers get a text fragment (+ HX-Redirect when there is something
+    # to show); plain form posts (setup "Forza sync completo") get a real
+    # redirect so the browser does not land on a bare text page.
+    is_htmx = bool(request.headers.get("HX-Request"))
+
+    def _plain(text: str, type_: str = "info", link: Optional[str] = None):
+        if is_htmx:
+            resp = HTMLResponse(text)
+            if link:
+                resp.headers["HX-Redirect"] = link
+            return resp
+        if link:
+            return RedirectResponse(link, status_code=303)
+        return _redirect_flash("/setup", text, type_)
+
     try:
         sync_start = datetime.now(timezone.utc).replace(tzinfo=None)
         sync_all()
@@ -1577,16 +1772,14 @@ def trigger_sync():
         if failed:
             names = ", ".join(a.display_name or a.bank_name for a in failed)
             suffix = f" ({new_count} nuove)" if new_count > 0 else ""
-            return HTMLResponse(f'✗ Errore: {names}{suffix}')
+            return _plain(f'✗ Errore: {names}{suffix}', "error")
         if new_count > 0:
             word = "nuova" if new_count == 1 else "nuove"
             link = f"/transactions?new_since={sync_start.isoformat()}"
-            resp = HTMLResponse(f'✓ {new_count} {word}')
-            resp.headers["HX-Redirect"] = link
-            return resp
-        return HTMLResponse('✓ Sync completato')
+            return _plain(f'✓ {new_count} {word}', link=link)
+        return _plain('✓ Sync completato')
     except Exception as e:
-        return HTMLResponse(f'✗ {e}')
+        return _plain(f'✗ {e}', "error")
 
 
 @app.post("/sync/{account_id}")
@@ -1724,7 +1917,7 @@ def backfill_eur_amounts(session: Session = Depends(get_session)):
         try:
             tx.eur_amount = _fx.convert_on(tx.amount, tx.currency, tx.date, session=session)
             updated += 1
-        except Exception:
+        except Exception:  # FxUnavailable or anything else: leave eur_amount None
             failed += 1
     session.commit()
     return {"updated": updated, "failed": failed, "total": len(txs)}

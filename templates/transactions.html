@@ -41,10 +41,25 @@ function txRow(el) {
       this.editing = false;
     },
     async saveMerchant() {
+      // Toggle: when the merchant is already mapped, ask the server to remove
+      // the mapping; otherwise map it to the current category.
       const fd = new FormData(); fd.append('category_id', this.catId);
-      const r = await fetch('/transactions/' + this.txId + '/merchant-category', {method:'POST', body:fd, headers:{'X-Fetch':'1'}});
+      if (this.isMapped) fd.append('remove', '1');
+      let r;
+      try {
+        r = await fetch('/transactions/' + this.txId + '/merchant-category', {method:'POST', body:fd, headers:{'X-Fetch':'1'}});
+      } catch (e) {
+        (window.showToast || alert)('Errore di rete: ' + e, 'error');
+        return;
+      }
+      if (!r.ok) {
+        let msg = 'Errore associazione esercente (' + r.status + ')';
+        try { const err = await r.json(); if (err && err.error) msg = err.error; } catch (e) {}
+        (window.showToast || alert)(msg, 'error');
+        return;
+      }
       const d = await r.json();
-      this.isMapped = true;
+      this.isMapped = !!d.mapped;
     },
     async toggleConfirm() {
       const r = await fetch('/transactions/' + this.txId + '/confirm', {method:'POST'});
@@ -75,7 +90,9 @@ function catSelect(opts) {
       this.value = id;
       this.label = label || this.placeholder;
       this.open = false;
-      if (this.submitOnSelect) this.$root.closest('form').submit();
+      // Alpine flushes :value bindings in a microtask; submit after it runs
+      // or the hidden input still carries the old value.
+      if (this.submitOnSelect) this.$nextTick(() => this.$root.closest('form').submit());
     },
     selectFirst() {
       const el = this.$root.querySelector('[data-optid]:not([style*="display: none"])');
