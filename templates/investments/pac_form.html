@@ -23,7 +23,7 @@
       <label class="text-xs font-medium mb-3 block" style="color:var(--text-muted)">Strumenti inclusi</label>
       <template x-for="(comp, idx) in components" :key="idx">
         <div class="flex gap-2 mb-2 items-center">
-          <select name="instrument_ids" class="input flex-1" x-model="comp.id">
+          <select name="instrument_ids" class="input flex-1" x-model="comp.id" required>
             <option value="">— Strumento —</option>
             {% for inst in instruments %}
             <option value="{{ inst.id }}">{{ inst.ticker }} — {{ inst.name }}</option>

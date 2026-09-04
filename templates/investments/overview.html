@@ -62,6 +62,9 @@
     {% else %}
     <p class="num text-xl font-medium" style="color:var(--text-dim)">—</p>
     {% endif %}
+    {% if summary.total_realized_pl %}
+    <p class="num text-xs mt-1" style="color:var(--text-muted)">realizzato {{ "€{:+,.2f}".format(summary.total_realized_pl) }}</p>
+    {% endif %}
   </div>
   <div class="card">
     <p class="text-xs mb-2" style="color:var(--text-muted)">P/L %</p>
@@ -84,7 +87,7 @@
     </div>
     <!-- Mobile cards -->
     <div class="sm:hidden">
-      {% for pos in summary.positions %}
+      {% for pos in open_positions %}
       {% set pos_color = alloc_colors[loop.index0 % alloc_colors|length] %}
       <a href="/investments/instruments/{{ pos.instrument_id }}" class="block px-4 py-3 tr-hover" style="border-bottom:1px solid var(--border-subtle);color:inherit;text-decoration:none">
         <div class="flex items-start justify-between gap-2 mb-1">
@@ -93,7 +96,7 @@
             <p class="font-medium text-sm truncate" style="color:var(--text)">{{ pos.name }}</p>
           </div>
           <p class="num text-sm font-medium flex-shrink-0" style="color:var(--text)">
-            {% if pos.market_value is not none %}€{{ "{:,.0f}".format(pos.market_value) }}{% else %}—{% endif %}
+            {% if pos.market_value is not none %}{{ pos.currency | currency_symbol }}{{ "{:,.0f}".format(pos.market_value) }}{% else %}—{% endif %}
           </p>
         </div>
         <div class="flex items-center justify-between gap-2 pl-4">
@@ -119,7 +122,7 @@
         </tr>
       </thead>
       <tbody>
-      {% for pos in summary.positions %}
+      {% for pos in open_positions %}
       {% set pos_color = alloc_colors[loop.index0 % alloc_colors|length] %}
       <tr class="tr-hover" style="border-bottom:1px solid var(--border-subtle)">
         <td class="px-5 py-3.5">
@@ -132,15 +135,15 @@
           </a>
         </td>
         <td class="num px-4 py-3.5 text-right text-sm" style="color:var(--text-muted)">{{ pos.total_quantity }}</td>
-        <td class="num px-4 py-3.5 text-right text-sm" style="color:var(--text-muted)">€{{ "{:,.2f}".format(pos.average_cost_basis) }}</td>
+        <td class="num px-4 py-3.5 text-right text-sm" style="color:var(--text-muted)">{{ pos.currency | currency_symbol }}{{ "{:,.2f}".format(pos.average_cost_basis) }}</td>
         <td class="num px-4 py-3.5 text-right text-sm" style="color:var(--text)">
-          {% if pos.last_price is not none %}{{ "€{:,.2f}".format(pos.last_price) }}{% if pos.is_stale %}<span style="color:var(--text-dim)">*</span>{% endif %}{% else %}—{% endif %}
+          {% if pos.last_price is not none %}{{ pos.currency | currency_symbol }}{{ "{:,.2f}".format(pos.last_price) }}{% if pos.is_stale %}<span style="color:var(--text-dim)">*</span>{% endif %}{% else %}—{% endif %}
         </td>
         <td class="num px-4 py-3.5 text-right text-sm font-medium" style="color:var(--text)">
-          {% if pos.market_value is not none %}€{{ "{:,.2f}".format(pos.market_value) }}{% else %}—{% endif %}
+          {% if pos.market_value is not none %}{{ pos.currency | currency_symbol }}{{ "{:,.2f}".format(pos.market_value) }}{% else %}—{% endif %}
         </td>
         <td class="num px-5 py-3.5 text-right text-sm font-medium" style="color:{% if pos.unrealized_pl is not none and pos.unrealized_pl >= 0 %}var(--emerald){% elif pos.unrealized_pl is not none %}var(--rose){% else %}var(--text-dim){% endif %}">
-          {% if pos.unrealized_pl is not none %}{{ "€{:+,.2f}".format(pos.unrealized_pl) }}<br><span class="text-xs">{{ "{:+.2f}%".format(pos.unrealized_pl_pct) }}</span>{% else %}—{% endif %}
+          {% if pos.unrealized_pl is not none %}{{ pos.currency | currency_symbol }}{{ "{:+,.2f}".format(pos.unrealized_pl) }}<br><span class="text-xs">{{ "{:+.2f}%".format(pos.unrealized_pl_pct) }}</span>{% else %}—{% endif %}
         </td>
       </tr>
       {% endfor %}
@@ -156,6 +159,40 @@
   </div>
 </div>
 
+<!-- Posizioni chiuse -->
+{% if closed_positions %}
+<div class="card mb-5" style="padding:0">
+  <div class="px-5 py-4" style="border-bottom:1px solid var(--border)">
+    <p class="text-xs font-medium uppercase tracking-wider" style="color:var(--text-muted)">Posizioni chiuse</p>
+  </div>
+  <div class="overflow-x-auto">
+  <table class="w-full text-sm">
+    <thead>
+      <tr class="text-xs uppercase tracking-wide" style="color:var(--text-dim); border-bottom:1px solid var(--border-subtle)">
+        <th class="text-left px-5 py-3 font-medium">Strumento</th>
+        <th class="text-right px-5 py-3 font-medium">P/L realizzato</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for pos in closed_positions %}
+    <tr class="tr-hover" style="border-bottom:1px solid var(--border-subtle)">
+      <td class="px-5 py-3.5">
+        <a href="/investments/instruments/{{ pos.instrument_id }}" style="color:var(--text)">
+          <p class="font-medium text-sm">{{ pos.name }}</p>
+          <p class="text-xs mt-0.5" style="color:var(--text-dim)">{{ pos.ticker }} · {{ pos.isin }}</p>
+        </a>
+      </td>
+      <td class="num px-5 py-3.5 text-right text-sm font-medium" style="color:{% if pos.realized_pl >= 0 %}var(--emerald){% else %}var(--rose){% endif %}">
+        {{ pos.currency | currency_symbol }}{{ "{:+,.2f}".format(pos.realized_pl) }}
+      </td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</div>
+{% endif %}
+
 <!-- Liquidità section -->
 {% if liq_positions %}
 <div class="card mb-5" style="padding:0">
@@ -169,7 +206,7 @@
       <div class="flex items-start justify-between gap-2 mb-1">
         <p class="font-medium text-sm truncate" style="color:var(--text)">{{ pos.name }}</p>
         <p class="num text-sm font-medium flex-shrink-0" style="color:var(--text)">
-          {% if pos.market_value is not none %}€{{ "{:,.2f}".format(pos.market_value) }}{% else %}—{% endif %}
+          {% if pos.market_value is not none %}{{ pos.currency | currency_symbol }}{{ "{:,.2f}".format(pos.market_value) }}{% else %}—{% endif %}
         </p>
       </div>
       <p class="text-xs" style="color:var(--text-dim)">{{ pos.ticker }} · Qtà {{ pos.total_quantity }}</p>
@@ -198,12 +235,12 @@
         </a>
       </td>
       <td class="num px-4 py-3.5 text-right text-sm" style="color:var(--text-muted)">{{ pos.total_quantity }}</td>
-      <td class="num px-4 py-3.5 text-right text-sm" style="color:var(--text-muted)">€{{ "{:,.2f}".format(pos.average_cost_basis) }}</td>
+      <td class="num px-4 py-3.5 text-right text-sm" style="color:var(--text-muted)">{{ pos.currency | currency_symbol }}{{ "{:,.2f}".format(pos.average_cost_basis) }}</td>
       <td class="num px-4 py-3.5 text-right text-sm" style="color:var(--text)">
-        {% if pos.last_price is not none %}{{ "€{:,.2f}".format(pos.last_price) }}{% if pos.is_stale %}<span style="color:var(--text-dim)">*</span>{% endif %}{% else %}—{% endif %}
+        {% if pos.last_price is not none %}{{ pos.currency | currency_symbol }}{{ "{:,.2f}".format(pos.last_price) }}{% if pos.is_stale %}<span style="color:var(--text-dim)">*</span>{% endif %}{% else %}—{% endif %}
       </td>
       <td class="num px-5 py-3.5 text-right text-sm font-medium" style="color:var(--text)">
-        {% if pos.market_value is not none %}€{{ "{:,.2f}".format(pos.market_value) }}{% else %}—{% endif %}
+        {% if pos.market_value is not none %}{{ pos.currency | currency_symbol }}{{ "{:,.2f}".format(pos.market_value) }}{% else %}—{% endif %}
       </td>
     </tr>
     {% endfor %}

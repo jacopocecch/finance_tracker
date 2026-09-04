@@ -9,6 +9,7 @@ To swap provider: implement MarketDataProvider and call set_provider().
 """
 
 import logging
+import math
 from abc import ABC, abstractmethod
 from datetime import datetime, timezone
 from typing import Optional
@@ -24,6 +25,38 @@ class MarketDataProvider(ABC):
         """Returns {'price': float, 'currency': str, 'timestamp': datetime} or None."""
 
 
+# Currencies quoted in minor units by Yahoo: code → (major currency, divisor).
+# Case matters: "GBp" (pence) is not "GBP".
+_MINOR_UNIT_CURRENCIES = {
+    "GBp": ("GBP", 100.0),
+    "GBX": ("GBP", 100.0),
+    "ZAc": ("ZAR", 100.0),
+    "ILA": ("ILS", 100.0),
+}
+
+
+def _valid_price(value) -> Optional[float]:
+    """Return value as float if it is a usable price, else None (None/NaN/inf/<=0)."""
+    if value is None:
+        return None
+    try:
+        f = float(value)
+    except (TypeError, ValueError):
+        return None
+    if math.isnan(f) or math.isinf(f) or f <= 0:
+        return None
+    return f
+
+
+def normalize_quote(price: float, currency: Optional[str]) -> tuple[float, str]:
+    """Convert minor-unit quotes (pence, cents) to the major currency."""
+    cur = currency or "EUR"
+    if cur in _MINOR_UNIT_CURRENCIES:
+        major, divisor = _MINOR_UNIT_CURRENCIES[cur]
+        return price / divisor, major
+    return price, cur
+
+
 class YFinanceProvider(MarketDataProvider):
     def fetch_price(self, ticker: str) -> Optional[dict]:
         try:
@@ -34,7 +67,7 @@ class YFinanceProvider(MarketDataProvider):
 
             try:
                 fi = t.fast_info
-                price = fi.last_price
+                price = _valid_price(fi.last_price)
                 currency = fi.currency
             except Exception:
                 pass
@@ -42,17 +75,22 @@ class YFinanceProvider(MarketDataProvider):
             if price is None:
                 hist = t.history(period="5d")
                 if not hist.empty:
-                    price = float(hist["Close"].iloc[-1])
-                info = t.info
-                currency = info.get("currency", "EUR")
+                    price = _valid_price(hist["Close"].dropna().iloc[-1]) if not hist["Close"].dropna().empty else None
+                if price is not None and not currency:
+                    try:
+                        currency = t.info.get("currency")
+                    except Exception:
+                        currency = None
 
             if price is None:
                 log.warning(f"No price found for {ticker}")
                 return None
 
+            price, currency = normalize_quote(price, str(currency) if currency else None)
+
             return {
                 "price": round(float(price), 4),
-                "currency": str(currency or "EUR"),
+                "currency": currency,
                 "timestamp": datetime.now(timezone.utc),
             }
         except Exception as e:
@@ -112,6 +150,8 @@ def refresh_all_quotes(session) -> dict:
     instruments = session.exec(
         select(Instrument).where(Instrument.active == True)
     ).all()
+    if not instruments:
+        return {"success": 0, "failed": 0}
 
     # Fetch all prices in parallel (network-bound, yfinance is stateless per Ticker)
     def _fetch(inst):

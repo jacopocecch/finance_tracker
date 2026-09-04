@@ -28,7 +28,7 @@
     {% if not transaction %}
     <div class="mb-5">
       <label class="text-xs font-medium mb-1.5 block" style="color:var(--text-muted)">Strumento *</label>
-      <select name="instrument_id" class="input w-full" @change="newInstrument = ($event.target.value === 'new')">
+      <select name="instrument_id" class="input w-full" required @change="newInstrument = ($event.target.value === 'new')">
         <option value="">— Seleziona —</option>
         {% for inst in instruments %}
         <option value="{{ inst.id }}">{{ inst.name }} ({{ inst.ticker }}) — {{ inst.isin }}</option>

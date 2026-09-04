@@ -49,6 +49,7 @@
   <div class="card">
     <p class="text-xs mb-2" style="color:var(--text-muted)">Quantità</p>
     <p class="num text-xl font-medium" style="color:var(--text)">{{ pos.total_quantity }}</p>
+    {% if not pos.is_open %}<p class="text-xs mt-1" style="color:var(--text-dim)">Posizione chiusa</p>{% endif %}
   </div>
   <div class="card">
     <p class="text-xs mb-2" style="color:var(--text-muted)">PMC</p>
@@ -69,6 +70,11 @@
     </p>
     {% else %}
     <p class="num text-xl" style="color:var(--text-dim)">—</p>
+    {% endif %}
+    {% if pos.realized_pl %}
+    <p class="num text-xs mt-1" style="color:{% if pos.realized_pl >= 0 %}var(--emerald){% else %}var(--rose){% endif %}">
+      realizzato {{ "{:+,.2f}".format(pos.realized_pl) }} {{ inst.currency }}
+    </p>
     {% endif %}
   </div>
   {% endif %}
