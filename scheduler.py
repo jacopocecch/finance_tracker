@@ -1,5 +1,5 @@
-import shutil
 import logging
+import sqlite3
 from datetime import datetime
 
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -13,6 +13,9 @@ _scheduler = BackgroundScheduler()
 
 BACKUP_DIR = config.BACKUP_DIR
 MAX_BACKUPS = 30
+# Jobs missed while the machine was asleep are run once on wake-up instead of
+# being skipped (APScheduler default grace is 1 second).
+JOB_DEFAULTS = {"misfire_grace_time": 3600, "coalesce": True}
 
 
 def _backup_db():
@@ -20,7 +23,17 @@ def _backup_db():
         BACKUP_DIR.mkdir(parents=True, exist_ok=True)
         ts = datetime.now().strftime("%Y%m%d_%H%M%S")
         dest = BACKUP_DIR / f"finance_{ts}.db"
-        shutil.copy2(config.DB_PATH, dest)
+        # SQLite online backup API: consistent snapshot even while the app is
+        # writing (a plain file copy can miss the journal / WAL).
+        src = sqlite3.connect(str(config.DB_PATH))
+        try:
+            dst = sqlite3.connect(str(dest))
+            try:
+                src.backup(dst)
+            finally:
+                dst.close()
+        finally:
+            src.close()
         # Keep only the most recent MAX_BACKUPS files
         backups = sorted(BACKUP_DIR.glob("finance_*.db"))
         for old in backups[:-MAX_BACKUPS]:
@@ -44,6 +57,7 @@ def start():
         minute=config.SYNC_MINUTE,
         id="daily_sync",
         replace_existing=True,
+        **JOB_DEFAULTS,
     )
     _scheduler.add_job(
         _refresh_quotes,
@@ -52,6 +66,7 @@ def start():
         minute=45,
         id="daily_quotes",
         replace_existing=True,
+        **JOB_DEFAULTS,
     )
     _scheduler.add_job(
         _backup_db,
@@ -60,6 +75,7 @@ def start():
         minute=0,
         id="daily_backup",
         replace_existing=True,
+        **JOB_DEFAULTS,
     )
     _scheduler.start()
 

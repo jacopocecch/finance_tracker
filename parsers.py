@@ -41,13 +41,42 @@ def _creditor_debtor_name(raw: dict) -> str | None:
     return (raw.get("creditor") or {}).get("name") or (raw.get("debtor") or {}).get("name")
 
 
+# Trailing "<city> <CC>" of a Fineco card payment, e.g. "STARBUCKS PARIS FR",
+# "NETFLIX.COM Milan IT", "Netflix.com Los Gatos IT", "MOLESKINE 440948 75PARIS 1 FR".
+#   - merchant: at least one non-blank token (lazy, so the city grabs as much as
+#     the rules below allow);
+#   - city: one token of letters/digits (any case, at least one letter; no "*",
+#     "." or "/" so "www.amazon.it LU" / "AMZN.COM/BILL LU" are left alone),
+#     optionally preceded by a known Title-case city prefix ("Los Gatos",
+#     "San Miniato" — a generic Title-case token would eat merchants such as
+#     "Ur 802210 Starbucks Gosselies BE") and/or followed by a 1-2 digit
+#     district number ("75PARIS 03");
+#   - country: exactly two uppercase letters.
+_CITY_PREFIXES = (
+    "Los", "Las", "San", "Sant", "Santa", "St", "Saint", "Sankt",
+    "La", "Le", "New", "Den", "Bad", "Port", "Fort", "Ciudad", "Villa", "Monte",
+)
+_FINECO_CITY_RE = re.compile(
+    r'^(?P<merchant>.*?\S)'
+    r'\s+(?:(?:' + "|".join(_CITY_PREFIXES) + r')\s+)?'
+    r'(?=[A-Za-z0-9]*[A-Za-z])[A-Za-z0-9]+'
+    r'(?:\s+\d{1,2})?'
+    r'\s+[A-Z]{2}\s*$'
+)
+
+
+def _strip_fineco_city(before: str) -> str:
+    m = _FINECO_CITY_RE.match(before)
+    return m.group("merchant").strip() if m else before.strip()
+
+
 def _parse_fineco(raw: dict) -> dict:
     rem = _remittance(raw)
 
     # Card payment: "MERCHANT CITY CC Carta N. ***** XXX Data operazione DD/MM/YY"
     if "Carta N." in rem:
         before = rem.split(" Carta N.")[0]
-        merchant = re.sub(r'\s+[A-Z][A-Z0-9]*\s+[A-Z]{2}\s*$', '', before).strip()
+        merchant = _strip_fineco_city(before)
         tx_date = _parse_date_dmy(rem.split("Data operazione")[-1]) if "Data operazione" in rem else None
         return {"merchant": merchant or before.strip(), "description": rem, "date": tx_date}
 
