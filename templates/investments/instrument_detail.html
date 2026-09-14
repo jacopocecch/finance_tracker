@@ -36,7 +36,7 @@
     <p class="text-xs mb-2" style="color:var(--text-muted)">Ultimo prezzo</p>
     {% if quote %}
       <p class="num text-xl font-medium" style="color:var(--text)">{{ "{:,.2f}".format(quote.price) }} {{ quote.currency }}</p>
-      <p class="text-xs mt-1" style="color:{% if quote.is_stale %}#d97706{% else %}var(--emerald){% endif %}">
+      <p class="text-xs mt-1" style="color:{% if quote.is_stale %}#d98546{% else %}var(--emerald){% endif %}">
         {% if quote.is_stale %}● stale{% else %}● aggiornato{% endif %}
         · {{ quote.quote_timestamp.strftime('%d/%m %H:%M') }} UTC
       </p>
@@ -83,7 +83,7 @@
 <!-- Transactions -->
 <div class="card" style="padding:0">
   <div class="px-5 py-4 flex items-center justify-between" style="border-bottom:1px solid var(--border)">
-    <p class="text-xs font-medium uppercase tracking-wider" style="color:var(--text-muted)">Acquisti</p>
+    <p class="text-sm" style="color:var(--text-muted)">Acquisti</p>
     <a href="/investments/transactions/add" class="btn-ghost text-xs">+ Aggiungi</a>
   </div>
 
@@ -93,7 +93,7 @@
     <div class="px-4 py-3 tr-hover" style="border-bottom:1px solid var(--border-subtle)">
       <div class="flex items-start justify-between gap-2 mb-1">
         <div class="flex items-center gap-2">
-          <span class="tag text-xs" style="background:{% if tx.transaction_type=='BUY' %}rgba(5,150,105,0.1){% else %}rgba(225,29,72,0.1){% endif %};color:{% if tx.transaction_type=='BUY' %}var(--emerald){% else %}var(--rose){% endif %}">{{ tx.transaction_type }}</span>
+          <span class="tag text-xs" style="background:{% if tx.transaction_type=='BUY' %}rgba(21,128,61,0.1){% else %}rgba(217,59,79,0.1){% endif %};color:{% if tx.transaction_type=='BUY' %}var(--emerald){% else %}var(--rose){% endif %}">{{ tx.transaction_type }}</span>
           <span class="num text-xs" style="color:var(--text-muted)">{{ tx.trade_date.strftime('%d/%m/%Y') }}</span>
         </div>
         <p class="num text-sm font-medium flex-shrink-0" style="color:var(--text)">{{ "{:,.2f}".format(tx.quantity * tx.unit_price + tx.fees) }} {{ tx.currency }}</p>
@@ -117,7 +117,7 @@
   <div class="hidden sm:block overflow-x-auto">
   <table class="w-full text-sm">
     <thead>
-      <tr class="text-xs uppercase tracking-wide" style="color:var(--text-dim); border-bottom:1px solid var(--border-subtle)">
+      <tr class="text-xs" style="color:var(--text-dim); border-bottom:1px solid var(--border-subtle)">
         <th class="text-left px-5 py-3 font-medium">Data</th>
         <th class="text-left px-4 py-3 font-medium">Tipo</th>
         <th class="text-right px-4 py-3 font-medium">Qtà</th>
@@ -133,7 +133,7 @@
     <tr style="border-bottom:1px solid var(--border-subtle)">
       <td class="num px-5 py-3 text-xs" style="color:var(--text-muted)">{{ tx.trade_date.strftime('%d/%m/%Y') }}</td>
       <td class="px-4 py-3">
-        <span class="tag text-xs" style="background:{% if tx.transaction_type=='BUY' %}rgba(5,150,105,0.1){% else %}rgba(225,29,72,0.1){% endif %};color:{% if tx.transaction_type=='BUY' %}var(--emerald){% else %}var(--rose){% endif %}">{{ tx.transaction_type }}</span>
+        <span class="tag text-xs" style="background:{% if tx.transaction_type=='BUY' %}rgba(21,128,61,0.1){% else %}rgba(217,59,79,0.1){% endif %};color:{% if tx.transaction_type=='BUY' %}var(--emerald){% else %}var(--rose){% endif %}">{{ tx.transaction_type }}</span>
       </td>
       <td class="num px-4 py-3 text-right text-sm" style="color:var(--text)">{{ tx.quantity }}</td>
       <td class="num px-4 py-3 text-right text-sm" style="color:var(--text)">{{ "{:,.4f}".format(tx.unit_price) }}</td>

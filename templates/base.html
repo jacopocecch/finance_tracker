@@ -7,7 +7,7 @@
   <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Figtree:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/htmx.org@2.0.3"></script>
   <script src="https://unpkg.com/alpinejs@3.14.1/dist/cdn.min.js" defer></script>
@@ -17,8 +17,8 @@
       theme: {
         extend: {
           fontFamily: {
-            sans: ['Figtree', 'ui-sans-serif', 'system-ui', 'sans-serif'],
-            mono: ['"DM Mono"', 'ui-monospace', 'monospace'],
+            sans: ['Geist', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+            mono: ['"Geist Mono"', 'ui-monospace', 'monospace'],
           },
         }
       }
@@ -26,28 +26,31 @@
   </script>
   <style type="text/tailwindcss">
     :root {
-      --bg:            #f4f4f9;
+      --bg:            #f5f6f8;
       --surface:       #ffffff;
-      --surface-2:     #f0f0f6;
-      --border:        #e2e2ee;
-      --border-subtle: #eaeaf4;
-      --text:          #16162a;
-      --text-muted:    #6b6b88;
-      --text-dim:      #a8a8c0;
-      --emerald:       #059669;
-      --rose:          #e11d48;
-      --sky:           #0369a1;
-      --amber:         #d97706;
-      --chart-grid:    #ebebf5;
+      --surface-2:     #f3f4f7;
+      --border:        #e3e5eb;
+      --border-subtle: #edeff3;
+      --text:          #111827;
+      --text-muted:    #6b7280;
+      --text-dim:      #9ca3af;
+      --accent:        #2f5bea;
+      --accent-soft:   #e9edfb;
+      --emerald:       #15803d;
+      --rose:          #d93b4f;
+      --sky:           #2f5bea;
+      --amber:         #d98546;
+      --chart-grid:    #eef0f4;
+      --rail-w:        224px;
     }
     body {
       background-color: var(--bg);
       color: var(--text);
-      font-family: 'Figtree', sans-serif;
+      font-family: 'Geist', sans-serif;
       -webkit-font-smoothing: antialiased;
     }
     .num {
-      font-family: 'DM Mono', monospace;
+      font-family: 'Geist Mono', monospace;
       font-variant-numeric: tabular-nums;
       letter-spacing: -0.02em;
     }
@@ -56,19 +59,17 @@
       border: 1px solid var(--border);
       border-radius: 12px;
       padding: 1.25rem;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.04);
     }
-    .nav-link {
-      @apply px-3 py-1.5 rounded-md text-sm transition-all duration-100;
+    /* Left rail */
+    .rail-link {
+      @apply flex items-center h-[34px] px-3 rounded-lg text-sm transition-colors duration-100;
       color: var(--text-muted);
     }
-    .nav-link:hover {
-      color: var(--text);
-      background: rgba(0,0,0,0.05);
-    }
-    .nav-link.active {
-      color: var(--text);
-      background: rgba(0,0,0,0.07);
+    .rail-link:hover { color: var(--text); background: var(--surface-2); }
+    .rail-link.active { color: var(--text); background: var(--accent-soft); font-weight: 500; }
+    .rail-label {
+      @apply px-3 pt-4 pb-1 text-[11px];
+      color: var(--text-dim);
     }
     .nav-link-mobile {
       @apply block px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-100;
@@ -76,57 +77,56 @@
     }
     .nav-link-mobile:hover, .nav-link-mobile.active {
       color: var(--text);
-      background: rgba(0,0,0,0.05);
+      background: var(--accent-soft);
     }
     .btn-ghost {
-      @apply inline-flex items-center gap-1.5 text-sm px-3 rounded-lg font-medium transition-all duration-100;
-      height: 36px;
+      @apply inline-flex items-center gap-1.5 text-sm px-3 rounded-lg font-medium transition-colors duration-100;
+      height: 34px;
       box-sizing: border-box;
-      background: rgba(0,0,0,0.04);
-      border: 1px solid rgba(0,0,0,0.08);
-      color: var(--text-muted);
-    }
-    .btn-ghost:hover, .btn-ghost.active {
-      background: rgba(0,0,0,0.08);
+      background: var(--surface);
+      border: 1px solid var(--border);
       color: var(--text);
     }
+    .btn-ghost:hover, .btn-ghost.active {
+      background: var(--surface-2);
+      border-color: #d3d6de;
+    }
     .btn-primary {
-      @apply inline-flex items-center px-4 rounded-lg text-sm font-medium transition-all duration-100;
-      height: 36px;
+      @apply inline-flex items-center px-4 rounded-lg text-sm font-medium transition-colors duration-100;
+      height: 34px;
       box-sizing: border-box;
-      background: rgba(5,150,105,0.12);
-      border: 1px solid rgba(5,150,105,0.25);
-      color: var(--emerald);
+      background: var(--accent);
+      border: 1px solid var(--accent);
+      color: #ffffff;
     }
-    .btn-primary:hover {
-      background: rgba(5,150,105,0.2);
-    }
+    .btn-primary:hover { background: #274dcb; border-color: #274dcb; }
     .sync-split-chevron {
       @apply inline-flex items-center justify-center;
-      height: 36px;
-      width: 28px;
+      height: 34px;
+      width: 26px;
       box-sizing: border-box;
-      background: rgba(0,0,0,0.04);
-      border: 1px solid rgba(0,0,0,0.08);
+      background: var(--surface);
+      border: 1px solid var(--border);
       border-left: none;
       border-radius: 0 8px 8px 0;
       color: var(--text-muted);
       cursor: pointer;
       transition: background 0.1s;
     }
-    .sync-split-chevron:hover { background: rgba(0,0,0,0.08); color: var(--text); }
+    .sync-split-chevron:hover { background: var(--surface-2); color: var(--text); }
     .sync-dropdown {
       position: absolute;
-      top: calc(100% + 4px);
+      top: calc(100% + 6px);
       right: 0;
-      min-width: 200px;
+      min-width: 220px;
       background: var(--surface);
-      border: 1px solid var(--border-subtle);
+      border: 1px solid var(--border);
       border-radius: 10px;
-      box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+      box-shadow: 0 8px 24px rgba(17,24,39,0.10);
       z-index: 100;
       overflow: hidden;
     }
+    .sync-dropdown.up { top: auto; bottom: calc(100% + 6px); right: auto; left: 0; }
     .sync-dropdown-item {
       display: flex;
       align-items: center;
@@ -142,86 +142,41 @@
       text-align: left;
       transition: background 0.1s;
     }
-    .sync-dropdown-item:hover { background: rgba(0,0,0,0.05); }
+    .sync-dropdown-item:hover { background: var(--surface-2); }
     .sync-dropdown-bank {
       font-size: 0.7rem;
       color: var(--text-muted);
       flex-shrink: 0;
-    }
-    /* Nav dropdowns */
-    .nav-group { position: relative; }
-    /* used together with .nav-link, which supplies padding/colors/hover/active */
-    .nav-group-btn {
-      @apply inline-flex items-center gap-1;
-      background: none;
-      border: none;
-      cursor: pointer;
-    }
-    .nav-group-btn.open {
-      color: var(--text);
-      background: rgba(0,0,0,0.05);
-    }
-    .nav-group-btn svg { transition: transform 0.15s; }
-    .nav-group-btn.open svg { transform: rotate(180deg); }
-    .nav-menu {
-      position: absolute;
-      top: calc(100% + 6px);
-      left: 0;
-      min-width: 160px;
-      padding: 4px;
-      background: var(--surface);
-      border: 1px solid var(--border-subtle);
-      border-radius: 10px;
-      box-shadow: 0 8px 24px rgba(0,0,0,0.12);
-      z-index: 100;
-    }
-    .nav-menu.right { left: auto; right: 0; }
-    .nav-menu-item {
-      display: block;
-      padding: 7px 10px;
-      border-radius: 6px;
-      font-size: 0.85rem;
-      color: var(--text-muted);
-      transition: background 0.1s, color 0.1s;
-    }
-    .nav-menu-item:hover { background: rgba(0,0,0,0.05); color: var(--text); }
-    .nav-menu-item.active { background: rgba(0,0,0,0.07); color: var(--text); font-weight: 500; }
-    .nav-mobile-label {
-      @apply px-3 pt-3 pb-1 text-[0.65rem] font-semibold uppercase tracking-wider;
-      color: var(--text-dim);
     }
     .tag {
       @apply inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full;
     }
     .input {
       @apply text-sm rounded-lg px-3 outline-none transition-colors;
-      height: 36px;
+      height: 34px;
       box-sizing: border-box;
-      background: var(--surface-2);
+      background: var(--surface);
       border: 1px solid var(--border);
       color: var(--text);
     }
     .input:focus {
-      border-color: rgba(5,150,105,0.5);
-      box-shadow: 0 0 0 3px rgba(5,150,105,0.08);
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(47,91,234,0.12);
     }
     select.input option { background: var(--surface); }
-    /* Table row hover via CSS instead of inline JS */
     .tr-hover:hover { background: rgba(0,0,0,0.02); }
-    /* Responsive table scroll wrapper */
     .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-    /* Section header divider */
     .section-divider {
       @apply flex items-center gap-3 mb-3;
     }
     .section-divider-label {
-      @apply text-xs font-semibold uppercase tracking-widest;
+      @apply text-sm;
+      color: var(--text-muted);
     }
     .section-divider-line {
       @apply flex-1 h-px;
-      background: var(--border-subtle);
+      background: var(--border);
     }
-    /* Standardized card accent bar */
     .card-accent-bar {
       height: 3px;
       width: 100%;
@@ -254,124 +209,104 @@
 {%- for href, label, exact in items if active(href, exact) %}{% if loop.first %}active{% endif %}{% endfor -%}
 {%- endmacro %}
 
-{% macro nav_menu(items, align='') -%}
-<div x-show="open" x-cloak x-transition:enter="transition ease-out duration-100" x-transition:enter-start="opacity-0 scale-95" x-transition:enter-end="opacity-100 scale-100" class="nav-menu {{ align }}">
-  {%- for href, label, exact in items %}
-  <a href="{{ href }}" class="nav-menu-item {{ active(href, exact) }}">{{ label }}</a>
-  {%- endfor %}
+
+
+{% macro sync_control(dropdown_class='') -%}
+<div class="relative" x-data="{ open: false }" @click.outside="open = false" @sync-run.window="open = false">
+  <div class="inline-flex">
+    <button @click="$dispatch('sync-run', { accountId: null })"
+            class="btn-ghost" style="border-radius:8px 0 0 8px; border-right:none; padding-right:8px">
+      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+        <path d="M21 12a9 9 0 1 1-2.6-6.4"/><path d="M21 3v6h-6"/>
+      </svg>
+      <span>Sincronizza</span>
+    </button>
+    <button class="sync-split-chevron" @click="open = !open" aria-label="Sincronizza un solo conto">
+      <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+      </svg>
+    </button>
+  </div>
+  <div x-show="open" x-cloak x-transition:enter="transition ease-out duration-100" x-transition:enter-start="opacity-0 scale-95" x-transition:enter-end="opacity-100 scale-100" class="sync-dropdown {{ dropdown_class }}">
+    <div hx-get="/sync/accounts" hx-trigger="load" hx-swap="innerHTML" style="min-height:36px"></div>
+  </div>
 </div>
 {%- endmacro %}
 
-{% macro nav_group(label, items) -%}
-<div class="nav-group" x-data="{ open: false }" @click.outside="open = false" @keydown.escape.window="open = false">
-  <button @click="open = !open" class="nav-link nav-group-btn {{ group_active(items) }}" :class="{ open }" aria-haspopup="true" :aria-expanded="open">
-    {{ label }}
-    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
-  </button>
-  {{ nav_menu(items) }}
-</div>
-{%- endmacro %}
+<div class="min-h-screen flex" x-data="{ mobileMenu: false }">
 
-<div class="min-h-screen flex flex-col" x-data="{ mobileMenu: false }">
+  <!-- Left rail (desktop) -->
+  <aside class="hidden md:flex flex-col justify-between flex-shrink-0 sticky top-0 h-screen px-3 py-5"
+         style="width:var(--rail-w); background:var(--surface); border-right:1px solid var(--border)">
+    <div class="flex flex-col gap-0.5">
+      <a href="/" class="flex items-center gap-2.5 px-3 pb-6">
+        <span class="w-[22px] h-[22px] rounded-md flex-shrink-0" style="background:var(--accent)"></span>
+        <span class="text-[15px] font-semibold tracking-tight" style="color:var(--text)">Ledger</span>
+      </a>
+      {%- for g in nav %}
+      {%- if g.label %}
+      <div class="rail-label">{{ g.label }}</div>
+      {%- endif %}
+      {%- for href, label, exact in g.links %}
+      <a href="{{ href }}" class="rail-link {{ active(href, exact) }}">{{ label }}</a>
+      {%- endfor %}
+      {%- endfor %}
+    </div>
+    <div class="flex flex-col gap-0.5">
+      <div class="px-0 pb-3">{{ sync_control('up') }}</div>
+      {%- for href, label, exact in settings_items %}
+      <a href="{{ href }}" class="rail-link {{ active(href, exact) }}">{{ label }}</a>
+      {%- endfor %}
+    </div>
+  </aside>
 
-  <!-- Top nav -->
-  <header style="background:rgba(244,244,249,0.9); border-bottom:1px solid var(--border); backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px);" class="sticky top-0 z-20">
-    <div class="max-w-6xl mx-auto px-4 sm:px-5 flex items-center justify-between h-14">
+  <div class="flex-1 flex flex-col min-w-0">
 
-      <div class="flex items-center gap-5 sm:gap-7">
-        <a href="/" class="flex items-center gap-2.5 flex-shrink-0">
-          <div class="w-6 h-6 rounded-lg flex items-center justify-center" style="background:linear-gradient(135deg,#059669,#0d9488)">
-            <svg class="w-3.5 h-3.5 text-white" fill="currentColor" viewBox="0 0 20 20">
-              <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-13a1 1 0 10-2 0v.092a4.535 4.535 0 00-1.676.662C6.602 6.234 6 7.009 6 8c0 .99.602 1.765 1.324 2.246.48.32 1.054.545 1.676.662v1.941c-.391-.127-.68-.317-.843-.504a1 1 0 10-1.51 1.31c.562.649 1.413 1.076 2.353 1.253V15a1 1 0 102 0v-.092a4.535 4.535 0 001.676-.662C13.398 13.766 14 12.991 14 12c0-.99-.602-1.765-1.324-2.246A4.535 4.535 0 0011 9.092V7.151c.391.127.68.317.843.504a1 1 0 101.511-1.31c-.563-.649-1.413-1.076-2.354-1.253V5z" clip-rule="evenodd"/>
-            </svg>
-          </div>
-          <span class="text-sm font-semibold tracking-tight" style="color:var(--text)">Ledger</span>
+    <!-- Top bar (mobile) -->
+    <header class="md:hidden sticky top-0 z-20" style="background:rgba(255,255,255,0.92); border-bottom:1px solid var(--border); backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px);">
+      <div class="px-4 flex items-center justify-between h-14">
+        <a href="/" class="flex items-center gap-2.5">
+          <span class="w-[22px] h-[22px] rounded-md" style="background:var(--accent)"></span>
+          <span class="text-[15px] font-semibold tracking-tight" style="color:var(--text)">Ledger</span>
         </a>
-        <!-- Desktop nav -->
-        <nav class="hidden md:flex items-center gap-0.5">
-          {%- for g in nav %}
-          {%- if g.menu %}
-          {{ nav_group(g.label, g.links) }}
-          {%- else %}
-          {%- for href, label, exact in g.links %}
-          <a href="{{ href }}" class="nav-link {{ active(href, exact) }}">{{ label }}</a>
-          {%- endfor %}
+        <div class="flex items-center gap-2">
+          {{ sync_control() }}
+          <button @click="mobileMenu = !mobileMenu" class="btn-ghost px-2" aria-label="Menu">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path x-show="!mobileMenu" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+              <path x-show="mobileMenu" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+      <div x-show="mobileMenu" x-cloak x-transition:enter="transition ease-out duration-150" x-transition:enter-start="opacity-0 -translate-y-2" x-transition:enter-end="opacity-100 translate-y-0"
+           class="px-4 pb-3 pt-1" style="border-top:1px solid var(--border-subtle)">
+        <nav class="flex flex-col gap-0.5">
+          {%- for g in nav + [{'label': 'Impostazioni', 'links': settings_items}] %}
+          {%- if g.label %}
+          <div class="rail-label">{{ g.label }}</div>
           {%- endif %}
+          {%- for href, label, exact in g.links %}
+          <a href="{{ href }}" @click="mobileMenu=false" class="nav-link-mobile {{ active(href, exact) }}">{{ label }}</a>
+          {%- endfor %}
           {%- endfor %}
         </nav>
       </div>
+    </header>
 
-      <div class="flex items-center gap-2 sm:gap-3">
-        <div class="relative" x-data="{ open: false }" @click.outside="open = false" @sync-run.window="open = false">
-          <div class="inline-flex">
-            <button id="sync-btn"
-                    @click="$dispatch('sync-run', { accountId: null })"
-                    class="btn-ghost" style="border-radius:8px 0 0 8px; border-right:none; padding-right:8px">
-              <svg id="sync-spinner" class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
-              </svg>
-              <span class="hidden sm:inline">Sync</span>
-            </button>
-            <button class="sync-split-chevron" @click="open = !open" aria-label="Sync singolo conto">
-              <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
-              </svg>
-            </button>
-          </div>
-          <div x-show="open" x-cloak x-transition:enter="transition ease-out duration-100" x-transition:enter-start="opacity-0 scale-95" x-transition:enter-end="opacity-100 scale-100" class="sync-dropdown">
-            <div hx-get="/sync/accounts" hx-trigger="load" hx-swap="innerHTML" style="min-height:36px"></div>
-          </div>
-        </div>
-        <!-- Settings (desktop only) -->
-        <div class="relative hidden md:block" x-data="{ open: false }" @click.outside="open = false" @keydown.escape.window="open = false">
-          <button @click="open = !open" class="btn-ghost px-2 {{ group_active(settings_items) }}" aria-label="Impostazioni" aria-haspopup="true" :aria-expanded="open">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
-            </svg>
-          </button>
-          {{ nav_menu(settings_items, 'right') }}
-        </div>
-        <!-- Hamburger (mobile only) -->
-        <button @click="mobileMenu = !mobileMenu" class="md:hidden btn-ghost px-2" aria-label="Menu">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path x-show="!mobileMenu" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
-            <path x-show="mobileMenu" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-          </svg>
-        </button>
-      </div>
-    </div>
-
-    <!-- Mobile nav drawer -->
-    <div x-show="mobileMenu" x-cloak x-transition:enter="transition ease-out duration-150" x-transition:enter-start="opacity-0 -translate-y-2" x-transition:enter-end="opacity-100 translate-y-0"
-         class="md:hidden px-4 pb-3 pt-1" style="border-top:1px solid var(--border-subtle)">
-      <nav class="flex flex-col gap-0.5">
-        {%- for g in nav + [{'label': 'Impostazioni', 'links': settings_items}] %}
-        {%- if g.label %}
-        <div class="nav-mobile-label">{{ g.label }}</div>
-        {%- endif %}
-        {%- for href, label, exact in g.links %}
-        <a href="{{ href }}" @click="mobileMenu=false" class="nav-link-mobile {{ active(href, exact) }}">{{ label }}</a>
-        {%- endfor %}
-        {%- endfor %}
-      </nav>
-    </div>
-  </header>
-
-  {% if flash %}
-  <div style="border-bottom:1px solid var(--border)">
-    <div class="max-w-6xl mx-auto px-4 sm:px-5 py-2">
+    {% if flash %}
+    <div class="max-w-5xl w-full mx-auto px-4 sm:px-8 pt-5">
       <div class="text-xs px-3 py-2 rounded-lg"
-        style="{% if flash.type == 'error' %}background:rgba(225,29,72,0.08);color:#e11d48;border:1px solid rgba(225,29,72,0.2){% else %}background:rgba(5,150,105,0.08);color:#059669;border:1px solid rgba(5,150,105,0.2){% endif %}">
+        style="{% if flash.type == 'error' %}background:rgba(217,59,79,0.08);color:var(--rose);border:1px solid rgba(217,59,79,0.2){% else %}background:rgba(21,128,61,0.08);color:var(--emerald);border:1px solid rgba(21,128,61,0.2){% endif %}">
         {{ flash.message }}
       </div>
     </div>
-  </div>
-  {% endif %}
+    {% endif %}
 
-  <main class="flex-1 max-w-6xl mx-auto w-full px-4 sm:px-5 py-6 sm:py-8">
-    {% block content %}{% endblock %}
-  </main>
+    <main class="flex-1 max-w-5xl mx-auto w-full px-4 sm:px-8 py-6 sm:py-10">
+      {% block content %}{% endblock %}
+    </main>
+  </div>
 
 </div>
 
@@ -381,14 +316,14 @@
        style="position:fixed;inset:0;z-index:10000;background:rgba(10,10,20,0.55);backdrop-filter:blur(2px);display:flex;align-items:center;justify-content:center;padding:16px"
        @keydown.escape.window="if(done) close()">
     <div @click.stop x-transition
-         style="background:var(--bg,#fff);border:1px solid var(--border,#e2e2ee);border-radius:14px;box-shadow:0 12px 48px rgba(0,0,0,0.3);width:100%;max-width:420px;overflow:hidden">
+         style="background:var(--surface,#fff);border:1px solid var(--border,#e3e5eb);border-radius:14px;box-shadow:0 12px 48px rgba(0,0,0,0.25);width:100%;max-width:420px;overflow:hidden">
       <div style="padding:16px 18px;border-bottom:1px solid var(--border-subtle,#eee)">
         <div style="display:flex;align-items:center;gap:10px">
           <svg x-show="running" class="w-4 h-4" style="animation:spin 1s linear infinite;flex-shrink:0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
           <span style="font-size:0.9rem;font-weight:600" x-text="running ? 'Sincronizzazione in corso…' : (errors > 0 ? 'Sincronizzazione completata con errori' : 'Sincronizzazione completata')"></span>
         </div>
         <div style="height:4px;background:var(--border-subtle,#eee);border-radius:2px;margin-top:12px;overflow:hidden">
-          <div :style="'height:100%;border-radius:2px;background:'+(errors>0?'#e11d48':'#059669')+';width:'+pct()+'%;transition:width 0.3s ease'"></div>
+          <div :style="'height:100%;border-radius:2px;background:'+(errors>0?'#d93b4f':'#15803d')+';width:'+pct()+'%;transition:width 0.3s ease'"></div>
         </div>
       </div>
       <div style="max-height:50vh;overflow-y:auto;padding:8px 0">
@@ -397,18 +332,18 @@
             <span style="flex-shrink:0;width:16px;text-align:center">
               <span x-show="it.status==='pending'" style="color:var(--text-muted,#999)">·</span>
               <svg x-show="it.status==='syncing'" class="w-3 h-3" style="animation:spin 1s linear infinite" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
-              <span x-show="it.status==='done'" style="color:#059669">✓</span>
-              <span x-show="it.status==='error'" style="color:#e11d48">✗</span>
+              <span x-show="it.status==='done'" style="color:#15803d">✓</span>
+              <span x-show="it.status==='error'" style="color:#d93b4f">✗</span>
             </span>
             <span style="flex:1;font-weight:500" x-text="it.label"></span>
-            <span style="flex-shrink:0;color:var(--text-muted,#999)" :style="it.status==='error' ? 'color:#e11d48' : ''" x-text="it.msg"></span>
+            <span style="flex-shrink:0;color:var(--text-muted,#999)" :style="it.status==='error' ? 'color:#d93b4f' : ''" x-text="it.msg"></span>
           </div>
         </template>
         <div x-show="done && items.length===0" style="padding:16px 18px;font-size:0.8rem;color:var(--text-muted,#999)">Nessun conto connesso da sincronizzare.</div>
       </div>
       <div x-show="done" style="padding:12px 18px;border-top:1px solid var(--border-subtle,#eee);display:flex;justify-content:flex-end;gap:8px">
         <button @click="close()" class="btn-ghost" x-text="newTotal>0 ? ('Vedi '+newTotal+(newTotal===1?' nuova':' nuove')) : 'Chiudi'"
-                :style="newTotal>0 ? 'background:#059669;color:#fff;border-color:#059669' : ''"></button>
+                :style="newTotal>0 ? 'background:#2f5bea;color:#fff;border-color:#2f5bea' : ''"></button>
       </div>
     </div>
   </div>
@@ -485,8 +420,8 @@
       'line-height:1.4',
       'box-shadow:0 4px 20px rgba(0,0,0,0.15)',
       isError
-        ? 'background:#1a0a0e;color:#fca5a5;border:1px solid rgba(225,29,72,0.35)'
-        : 'background:#0a1a12;color:#6ee7b7;border:1px solid rgba(5,150,105,0.35)',
+        ? 'background:#111827;color:#fca5a5;border:1px solid rgba(217,59,79,0.4)'
+        : 'background:#111827;color:#86efac;border:1px solid rgba(21,128,61,0.4)',
       'opacity:0',
       'transform:translateX(12px)',
       'transition:opacity 0.2s ease,transform 0.2s ease',
@@ -515,14 +450,14 @@
   });
   {% endif %}
 
-  Chart.defaults.font.family = "'DM Mono', monospace";
+  Chart.defaults.font.family = "'Geist', sans-serif";
   Chart.defaults.font.size = 11;
-  Chart.defaults.color = '#a8a8c0';
+  Chart.defaults.color = '#9ca3af';
   Chart.defaults.plugins.tooltip.backgroundColor = '#ffffff';
-  Chart.defaults.plugins.tooltip.borderColor = '#e2e2ee';
+  Chart.defaults.plugins.tooltip.borderColor = '#e3e5eb';
   Chart.defaults.plugins.tooltip.borderWidth = 1;
-  Chart.defaults.plugins.tooltip.titleColor = '#a8a8c0';
-  Chart.defaults.plugins.tooltip.bodyColor = '#16162a';
+  Chart.defaults.plugins.tooltip.titleColor = '#9ca3af';
+  Chart.defaults.plugins.tooltip.bodyColor = '#111827';
   Chart.defaults.plugins.tooltip.padding = 10;
   Chart.defaults.plugins.tooltip.cornerRadius = 8;
   Chart.defaults.plugins.tooltip.boxShadow = '0 4px 12px rgba(0,0,0,0.08)';

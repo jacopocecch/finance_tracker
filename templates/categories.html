@@ -134,7 +134,7 @@
     font-size: 10px;
     font-weight: 500;
     letter-spacing: 0.04em;
-    text-transform: uppercase;
+    text-transform:;
     padding: 2px 7px;
     border-radius: 99px;
   }
@@ -172,7 +172,7 @@
   }
   .cat-btn:hover { background: var(--border); color: var(--text); }
   .cat-btn-danger { color: var(--rose); }
-  .cat-btn-danger:hover { background: rgba(225,29,72,0.08); border-color: rgba(225,29,72,0.2); color: var(--rose); }
+  .cat-btn-danger:hover { background: rgba(217,59,79,0.08); border-color: rgba(217,59,79,0.2); color: var(--rose); }
   .cat-expand-panel {
     border-top: 1px solid var(--border-subtle);
     padding: 1rem 1.1rem;
@@ -182,7 +182,7 @@
     font-size: 10px;
     font-weight: 600;
     letter-spacing: 0.07em;
-    text-transform: uppercase;
+    text-transform:;
     color: var(--text-dim);
     margin-bottom: 8px;
   }
@@ -233,10 +233,10 @@
 </style>
 
 {% set sections = [
-  ('expense',  'Uscite',           'var(--rose)',    'rgba(225,29,72,0.12)'),
-  ('income',   'Entrate',          'var(--emerald)', 'rgba(5,150,105,0.12)'),
+  ('expense',  'Uscite',           'var(--rose)',    'rgba(217,59,79,0.12)'),
+  ('income',   'Entrate',          'var(--emerald)', 'rgba(21,128,61,0.12)'),
   ('both',     'Entrate & Uscite', 'var(--text-muted)', 'rgba(107,107,136,0.12)'),
-  ('transfer', 'Trasferimenti',    'var(--sky)',     'rgba(3,105,161,0.12)'),
+  ('transfer', 'Trasferimenti',    'var(--sky)',     'rgba(47,91,234,0.12)'),
 ] %}
 
 {% for sec_type, sec_label, sec_color, sec_bg in sections %}
@@ -244,7 +244,7 @@
 {% if sec_cats %}
 
 <div class="flex items-center gap-3 mb-3 {% if not loop.first %}mt-6{% endif %}">
-  <span class="text-xs font-semibold uppercase tracking-widest" style="color:{{ sec_color }}">{{ sec_label }}</span>
+  <span class="text-sm" style="color:{{ sec_color }}">{{ sec_label }}</span>
   <span class="text-xs num px-1.5 py-0.5 rounded" style="background:{{ sec_bg }};color:{{ sec_color }}">{{ sec_cats | length }}</span>
   <div class="flex-1 h-px" style="background:var(--border-subtle)"></div>
 </div>
@@ -254,10 +254,10 @@
 {% set cat_rules = rules_by_cat.get(cat.id, []) %}
 {% set cat_merchants = merchants_by_cat.get(cat.id, []) %}
 {% set type_styles = {
-  'expense':  'background:rgba(225,29,72,0.07);color:var(--rose);border:1px solid rgba(225,29,72,0.15)',
-  'income':   'background:rgba(5,150,105,0.07);color:var(--emerald);border:1px solid rgba(5,150,105,0.15)',
+  'expense':  'background:rgba(217,59,79,0.07);color:var(--rose);border:1px solid rgba(217,59,79,0.15)',
+  'income':   'background:rgba(21,128,61,0.07);color:var(--emerald);border:1px solid rgba(21,128,61,0.15)',
   'both':     'background:rgba(107,107,136,0.07);color:var(--text-muted);border:1px solid rgba(107,107,136,0.25)',
-  'transfer': 'background:rgba(3,105,161,0.07);color:var(--sky);border:1px solid rgba(3,105,161,0.15)'
+  'transfer': 'background:rgba(47,91,234,0.07);color:var(--sky);border:1px solid rgba(47,91,234,0.15)'
 } %}
 {% set type_labels = {'expense': 'Spesa', 'income': 'Entrata', 'both': 'Entrate & Uscite', 'transfer': 'Trasferimento'} %}
 
@@ -401,7 +401,7 @@
     </button>
     <form method="post" action="/merchant-categories/sync" class="shrink-0">
       <button type="submit" class="text-xs font-medium px-3 py-1 rounded-lg transition-colors"
-              style="background:rgba(3,105,161,0.08);border:1px solid rgba(3,105,161,0.2);color:var(--sky)">
+              style="background:rgba(47,91,234,0.08);border:1px solid rgba(47,91,234,0.2);color:var(--sky)">
         ↺ Sincronizza
       </button>
     </form>

@@ -17,7 +17,7 @@
         <div class="min-w-0">
           <p class="text-sm font-medium truncate" style="color:var(--text)">{{ inst.name if inst else tx.instrument_id }}</p>
           <div class="flex items-center gap-2 mt-0.5">
-            <span class="tag text-xs" style="background:{% if tx.transaction_type=='BUY' %}rgba(5,150,105,0.1){% else %}rgba(225,29,72,0.1){% endif %};color:{% if tx.transaction_type=='BUY' %}var(--emerald){% else %}var(--rose){% endif %}">{{ tx.transaction_type }}</span>
+            <span class="tag text-xs" style="background:{% if tx.transaction_type=='BUY' %}rgba(21,128,61,0.1){% else %}rgba(217,59,79,0.1){% endif %};color:{% if tx.transaction_type=='BUY' %}var(--emerald){% else %}var(--rose){% endif %}">{{ tx.transaction_type }}</span>
             <span class="num text-xs" style="color:var(--text-muted)">{{ tx.trade_date.strftime('%d/%m/%Y') }}</span>
           </div>
         </div>
@@ -44,7 +44,7 @@
   <div class="hidden sm:block overflow-x-auto">
   <table class="w-full text-sm">
     <thead>
-      <tr class="text-xs uppercase tracking-wide" style="color:var(--text-dim); border-bottom:1px solid var(--border)">
+      <tr class="text-xs" style="color:var(--text-dim); border-bottom:1px solid var(--border)">
         <th class="text-left px-5 py-3 font-medium">Data</th>
         <th class="text-left px-5 py-3 font-medium">Strumento</th>
         <th class="text-left px-3 py-3 font-medium">Tipo</th>
@@ -66,7 +66,7 @@
         <p class="text-xs" style="color:var(--text-dim)">{{ inst.ticker if inst else '' }}</p>
       </td>
       <td class="px-3 py-3.5">
-        <span class="tag text-xs" style="background:{% if tx.transaction_type == 'BUY' %}rgba(5,150,105,0.1){% else %}rgba(225,29,72,0.1){% endif %};color:{% if tx.transaction_type == 'BUY' %}var(--emerald){% else %}var(--rose){% endif %};border:1px solid {% if tx.transaction_type == 'BUY' %}rgba(5,150,105,0.2){% else %}rgba(225,29,72,0.2){% endif %}">
+        <span class="tag text-xs" style="background:{% if tx.transaction_type == 'BUY' %}rgba(21,128,61,0.1){% else %}rgba(217,59,79,0.1){% endif %};color:{% if tx.transaction_type == 'BUY' %}var(--emerald){% else %}var(--rose){% endif %};border:1px solid {% if tx.transaction_type == 'BUY' %}rgba(21,128,61,0.2){% else %}rgba(217,59,79,0.2){% endif %}">
           {{ tx.transaction_type }}
         </span>
       </td>

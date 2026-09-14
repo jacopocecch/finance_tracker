@@ -311,7 +311,7 @@ document.addEventListener('alpine:init', () => {
                  :checked="$store.sel.has(txId)" @change="$store.sel.toggle(txId)">
           <p class="num text-xs" style="color:var(--text-muted)">
             {{ tx.date.strftime('%d/%m/%Y') }}
-            {% if tx.status == 'PDNG' %}<span class="inline-block ml-1 px-1.5 rounded text-[10px] font-semibold" style="background:rgba(245,158,11,0.15);color:#f59e0b">PDNG</span>
+            {% if tx.status == 'PDNG' %}<span class="inline-block ml-1 px-1.5 rounded text-[10px] font-semibold" style="background:rgba(217,133,70,0.15);color:#f59e0b">PDNG</span>
             {% elif _is_new %}<span class="inline-block ml-1 px-1.5 rounded text-[10px] font-semibold" style="background:rgba(14,165,233,0.15);color:#0ea5e9">NUOVA</span>{% endif %}
           </p>
         </div>
@@ -407,7 +407,7 @@ document.addEventListener('alpine:init', () => {
       {% endif %}
       {% if tx.amount > 0 %}
       {% if tx.is_reimbursement %}
-      <span class="tag mt-1 inline-block" style="background:rgba(245,158,11,0.1);color:var(--amber);border:1px solid rgba(245,158,11,0.2);font-size:10px">rimborso</span>
+      <span class="tag mt-1 inline-block" style="background:rgba(217,133,70,0.1);color:var(--amber);border:1px solid rgba(217,133,70,0.2);font-size:10px">rimborso</span>
       {% endif %}
       <template x-if="editShare">
         <form method="post" action="/transactions/{{ tx.id }}/reimbursement" class="mt-2 flex gap-1">
@@ -427,7 +427,7 @@ document.addEventListener('alpine:init', () => {
   <!-- ── Desktop table (hidden on mobile) ───────────────────────────────────── -->
   <table class="hidden sm:table w-full text-sm" style="min-width:600px">
     <thead>
-      <tr class="text-xs uppercase tracking-wide" style="color:var(--text-dim); border-bottom:1px solid var(--border)">
+      <tr class="text-xs" style="color:var(--text-dim); border-bottom:1px solid var(--border)">
         <th class="px-3 py-3" style="width:32px">
           <input type="checkbox" style="accent-color:var(--sky);width:15px;height:15px;cursor:pointer;vertical-align:middle"
                  :checked="$store.sel.ids.length > 0 && $store.sel.ids.length === window.__pageTxIds.length"
@@ -456,7 +456,7 @@ document.addEventListener('alpine:init', () => {
       </td>
       <td class="num px-4 sm:px-5 py-3.5 text-xs" style="color:var(--text-muted); white-space:nowrap">
         {{ tx.date.strftime('%d/%m/%Y') }}
-        {% if tx.status == 'PDNG' %}<span class="inline-block ml-1.5 px-1.5 py-0.5 rounded text-[10px] font-semibold" style="background:rgba(245,158,11,0.15);color:#f59e0b;line-height:1.4">PDNG</span>
+        {% if tx.status == 'PDNG' %}<span class="inline-block ml-1.5 px-1.5 py-0.5 rounded text-[10px] font-semibold" style="background:rgba(217,133,70,0.15);color:#f59e0b;line-height:1.4">PDNG</span>
         {% elif _is_new %}<span class="inline-block ml-1.5 px-1.5 py-0.5 rounded text-[10px] font-semibold" style="background:rgba(14,165,233,0.15);color:#0ea5e9;line-height:1.4">NUOVA</span>{% endif %}
       </td>
       <td class="px-4 sm:px-5 py-3.5" style="width:300px;max-width:300px">
@@ -527,7 +527,7 @@ document.addEventListener('alpine:init', () => {
           <span @click="editShare = !editShare" style="color:var(--rose);cursor:pointer" title="Clicca per modificare quota personale">{{ "{:+,.2f}".format(tx.amount) }} €</span>
           {% endif %}
           {% if tx.personal_share is not none %}
-          <span class="tag ml-1" style="background:rgba(3,105,161,0.1);color:var(--sky);border:1px solid rgba(3,105,161,0.2);font-size:10px" title="Quota personale">{{ "{:.2f}".format(tx.personal_share) }} €</span>
+          <span class="tag ml-1" style="background:rgba(47,91,234,0.1);color:var(--sky);border:1px solid rgba(47,91,234,0.2);font-size:10px" title="Quota personale">{{ "{:.2f}".format(tx.personal_share) }} €</span>
           {% endif %}
         </div>
         <template x-if="editShare">
@@ -547,7 +547,7 @@ document.addEventListener('alpine:init', () => {
         <span @click="editShare = !editShare" style="color:var(--emerald);cursor:pointer" title="Clicca per segnare come rimborso">{{ "{:+,.2f}".format(tx.amount) }} €</span>
         {% endif %}
         {% if tx.is_reimbursement %}
-        <span class="tag ml-1" style="background:rgba(245,158,11,0.1);color:var(--amber);border:1px solid rgba(245,158,11,0.2);font-size:10px" title="Rimborso — non conta come entrata">rimborso</span>
+        <span class="tag ml-1" style="background:rgba(217,133,70,0.1);color:var(--amber);border:1px solid rgba(217,133,70,0.2);font-size:10px" title="Rimborso — non conta come entrata">rimborso</span>
         {% endif %}
         <template x-if="editShare">
           <form method="post" action="/transactions/{{ tx.id }}/reimbursement" class="mt-1 flex gap-1 justify-end">

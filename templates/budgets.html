@@ -16,7 +16,7 @@
   }
   .cat-btn:hover { background: var(--border); color: var(--text); }
   .cat-btn-danger { color: var(--rose); }
-  .cat-btn-danger:hover { background: rgba(225,29,72,0.08); border-color: rgba(225,29,72,0.2); color: var(--rose); }
+  .cat-btn-danger:hover { background: rgba(217,59,79,0.08); border-color: rgba(217,59,79,0.2); color: var(--rose); }
   .budget-card {
     background: var(--surface);
     border: 1px solid var(--border);
@@ -52,9 +52,9 @@
 </style>
 
 {% set sections = [
-  ('expense',  'Uscite',        'var(--rose)',    'rgba(225,29,72,0.12)'),
-  ('income',   'Entrate',       'var(--emerald)', 'rgba(5,150,105,0.12)'),
-  ('transfer', 'Trasferimenti', 'var(--sky)',     'rgba(3,105,161,0.12)'),
+  ('expense',  'Uscite',        'var(--rose)',    'rgba(217,59,79,0.12)'),
+  ('income',   'Entrate',       'var(--emerald)', 'rgba(21,128,61,0.12)'),
+  ('transfer', 'Trasferimenti', 'var(--sky)',     'rgba(47,91,234,0.12)'),
 ] %}
 
 {% for sec_type, sec_label, sec_color, sec_bg in sections %}
@@ -62,7 +62,7 @@
 {% if sec_cats %}
 
 <div class="flex items-center gap-3 mb-3 {% if not loop.first %}mt-6{% endif %}">
-  <span class="text-xs font-semibold uppercase tracking-widest" style="color:{{ sec_color }}">{{ sec_label }}</span>
+  <span class="text-sm" style="color:{{ sec_color }}">{{ sec_label }}</span>
   <div class="flex-1 h-px" style="background:var(--border-subtle)"></div>
 </div>
 

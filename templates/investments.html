@@ -5,7 +5,7 @@
 <!-- Header -->
 <div class="flex items-end justify-between mb-8">
   <div>
-    <p class="text-xs font-medium uppercase tracking-widest mb-2" style="color:var(--text-muted)">Portafoglio</p>
+    <p class="text-sm mb-2" style="color:var(--text-muted)">Portafoglio</p>
     <div class="flex items-baseline gap-2">
       <span class="num text-2xl" style="color:var(--text-muted)">€</span>
       <h1 class="num font-medium" style="font-size:clamp(1.8rem, 6vw, 3rem);line-height:1;color:var(--sky)">{{ "{:,.0f}".format(total) }}</h1>
@@ -15,13 +15,13 @@
 
 <!-- Trend chart -->
 <div class="card mb-7">
-  <p class="text-xs font-medium uppercase tracking-wider mb-5" style="color:var(--text-muted)">Andamento — 90 giorni</p>
+  <p class="text-sm mb-5" style="color:var(--text-muted)">Andamento — 90 giorni</p>
   <canvas id="investChart" height="75"></canvas>
 </div>
 
 <!-- Per-account breakdown -->
 {% if accounts %}
-<p class="text-xs font-medium uppercase tracking-wider mb-3" style="color:var(--text-muted)">Conti</p>
+<p class="text-sm mb-3" style="color:var(--text-muted)">Conti</p>
 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-7">
   {% for acc in accounts %}
   <div class="card">
@@ -47,7 +47,7 @@
 <script>
 (function() {
   const allData = {{ chart_data | tojson }};
-  const COLORS  = ['#0369a1','#7c3aed','#059669','#ea580c','#db2777'];
+  const COLORS  = ['#2f5bea','#7c3aed','#15803d','#ea580c','#db2777'];
   const GRID    = '#ebebf5';
 
   new Chart(document.getElementById('investChart'), {

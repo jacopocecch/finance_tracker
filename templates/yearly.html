@@ -72,11 +72,11 @@
 <!-- Charts -->
 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-7">
   <div class="card">
-    <p class="text-xs font-medium uppercase tracking-wider mb-4" style="color:var(--text-muted)">Mesi</p>
+    <p class="text-sm mb-4" style="color:var(--text-muted)">Mesi</p>
     <canvas id="monthlyChart" height="190"></canvas>
   </div>
   <div class="card">
-    <p class="text-xs font-medium uppercase tracking-wider mb-4" style="color:var(--text-muted)">Categorie</p>
+    <p class="text-sm mb-4" style="color:var(--text-muted)">Categorie</p>
     <canvas id="catChart" height="190"></canvas>
   </div>
 </div>
@@ -85,12 +85,12 @@
 {% if cat_rows %}
 <div class="card table-wrap mb-7" style="padding:0">
   <div class="px-4 sm:px-5 py-4" style="border-bottom:1px solid var(--border)">
-    <p class="text-xs font-medium uppercase tracking-wider" style="color:var(--text-muted)">Spese per categoria</p>
+    <p class="text-sm" style="color:var(--text-muted)">Spese per categoria</p>
   </div>
   <div class="overflow-x-auto">
   <table class="w-full text-sm" style="min-width:420px">
     <thead>
-      <tr class="text-xs uppercase tracking-wide" style="color:var(--text-dim); border-bottom:1px solid var(--border)">
+      <tr class="text-xs" style="color:var(--text-dim); border-bottom:1px solid var(--border)">
         <th class="text-left px-4 sm:px-5 py-3 font-medium">Categoria</th>
         <th class="text-right px-3 py-3 font-medium">Totale</th>
         <th class="text-right px-3 py-3 font-medium">Media/mese</th>

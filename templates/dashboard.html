@@ -5,156 +5,185 @@
 {% if balance_warnings %}
 <div class="mb-5 space-y-2">
   {% for w in balance_warnings %}
-  <div class="text-xs px-3 py-2 rounded-lg" style="background:rgba(234,179,8,0.08);color:#ca8a04;border:1px solid rgba(234,179,8,0.2)">
-    ⚠ <strong>{{ w.name }}</strong>: saldo {{ "%.2f"|format(w.balance) }} {{ w.currency }} sotto la soglia di {{ "%.2f"|format(w.threshold) }} {{ w.currency }}
+  <div class="text-xs px-3 py-2 rounded-lg" style="background:rgba(217,133,70,0.08);color:var(--amber);border:1px solid rgba(217,133,70,0.2)">
+    <strong>{{ w.name }}</strong>: saldo {{ "%.2f"|format(w.balance) }} {{ w.currency }} sotto la soglia di {{ "%.2f"|format(w.threshold) }} {{ w.currency }}
   </div>
   {% endfor %}
 </div>
 {% endif %}
 
-<div x-data="{ hidden: localStorage.getItem('liquidita_hidden') === '1' }"
-     @hidden-changed.window="hidden = $event.detail">
+{# Fixed-order categorical palette in the app's cool register #}
+{% set acc_colors = ['#2f5bea','#5aa1a8','#d98546','#8b6fd1','#c1a13a','#4d8fd6','#c36a86','#3f9a72','#a67a4f','#3b8f9e'] %}
+{% set type_labels = {'checking': 'corrente', 'savings': 'risparmio', 'investment': 'investimento', 'cash': 'contanti'} %}
 
-<!-- Hero: Net Worth -->
-<div class="mb-8">
-  <div class="flex items-center gap-3 mb-3">
-    <p class="text-xs font-medium uppercase tracking-widest" style="color:var(--text-muted)">Patrimonio Netto</p>
+<div x-data="{ hidden: localStorage.getItem('liquidita_hidden') === '1' }" class="flex flex-col gap-5">
+
+  <div class="flex items-center justify-between">
+    <h1 class="text-xl font-semibold tracking-tight" style="color:var(--text)">Overview</h1>
     <button @click="hidden = !hidden; localStorage.setItem('liquidita_hidden', hidden ? '1' : '0')"
-            class="text-xs transition-opacity opacity-50 hover:opacity-100" style="color:var(--text-muted)" title="Oscura importi">
-      <span x-text="hidden ? '👁' : '🙈'"></span>
+            class="inline-flex items-center gap-1.5 text-sm transition-colors" style="color:var(--text-muted)" :aria-pressed="hidden">
+      <svg x-show="!hidden" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>
+      <svg x-show="hidden" x-cloak class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M3 3l18 18"/><path d="M10.6 10.6a3 3 0 0 0 4.2 4.2"/><path d="M9.9 5.1A10.4 10.4 0 0 1 12 5c6.5 0 10 7 10 7a17.6 17.6 0 0 1-3.2 4.2"/><path d="M6.6 6.6C3.7 8.6 2 12 2 12s3.5 7 10 7c1.4 0 2.7-.3 3.9-.8"/></svg>
+      <span x-text="hidden ? 'Mostra importi' : 'Nascondi importi'"></span>
     </button>
   </div>
-  <div class="flex items-baseline gap-3">
-    <h1 class="num font-medium" style="font-size:clamp(2rem, 8vw, 3.5rem);line-height:1;color:var(--text)">
-      <span x-show="!hidden">{{ "{:,.0f}".format(net_worth) }} €</span>
-      <span x-show="hidden" style="letter-spacing:0.15em">•••••• €</span>
-    </h1>
-  </div>
-</div>
 
-<!-- KPI strip -->
-<div class="grid grid-cols-2 gap-3 mb-7 sm:max-w-lg">
-  <div class="card">
-    <p class="text-xs mb-3" style="color:var(--text-muted)">Liquidità</p>
-    <p class="num text-2xl font-medium" style="color:var(--text)">
-      <span x-show="!hidden">{{ "{:,.0f}".format(liquidity) }} €</span>
-      <span x-show="hidden" style="letter-spacing:0.1em">•••• €</span>
-    </p>
-    <p class="text-xs mt-1.5" style="color:var(--text-dim)">correnti · risparmio · contanti{% if liquidity_etf %} · ETF monetari{% endif %}</p>
-  </div>
-  <div class="card">
-    <p class="text-xs mb-3" style="color:var(--text-muted)">Investimenti</p>
-    <p class="num text-2xl font-medium" style="color:var(--sky)">
-      <span x-show="!hidden">{{ "{:,.0f}".format(portfolio_value) }} €</span>
-      <span x-show="hidden" style="letter-spacing:0.1em">•••• €</span>
-    </p>
-    {% if portfolio_pl is not none %}
-    <p class="text-xs mt-1.5 num" style="color:{% if portfolio_pl >= 0 %}var(--emerald){% else %}var(--rose){% endif %}">
-      <span x-show="!hidden">{{ "{:+,.0f}".format(portfolio_pl) }} € {% if portfolio_pl_pct is not none %}({{ "{:+.1f}%".format(portfolio_pl_pct) }}){% endif %}</span>
-      <span x-show="hidden">•••</span>
-    </p>
-    {% else %}
-    <p class="text-xs mt-1.5" style="color:var(--text-dim)">portafoglio ETF</p>
-    {% endif %}
-  </div>
-</div>
-
-<!-- Net Worth Chart -->
-<div class="card mb-7">
-  <div class="flex items-center justify-between mb-5">
-    <p class="text-xs font-medium uppercase tracking-wider" style="color:var(--text-muted)">Liquidità — 90 giorni</p>
-  </div>
-  <div style="position:relative">
-    <canvas id="networthChart" height="72"></canvas>
-    <!-- blur overlay when hidden -->
-    <div x-show="hidden"
-         style="position:absolute;inset:0;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border-radius:8px;display:flex;align-items:center;justify-content:center">
-      <span style="color:var(--text-dim);font-size:13px">nascosto</span>
+  <!-- Stat strip -->
+  <section class="grid grid-cols-1 sm:grid-cols-3 card" style="padding:0">
+    <div class="flex flex-col gap-2 px-6 py-5">
+      <p class="text-[13px]" style="color:var(--text-muted)">Patrimonio netto</p>
+      <p class="num text-[26px] font-medium leading-none" style="color:var(--text)">
+        <span x-show="!hidden">{{ "{:,.0f}".format(net_worth).replace(",", ".") }} €</span>
+        <span x-show="hidden" x-cloak style="letter-spacing:0.08em">•••••• €</span>
+      </p>
+      <p class="text-xs" style="color:var(--text-dim)">liquidità e investimenti</p>
     </div>
-  </div>
-</div>
+    <div class="flex flex-col gap-2 px-6 py-5 stat-cell">
+      <p class="text-[13px]" style="color:var(--text-muted)">Liquidità</p>
+      <p class="num text-[26px] font-medium leading-none" style="color:var(--text)">
+        <span x-show="!hidden">{{ "{:,.0f}".format(liquidity).replace(",", ".") }} €</span>
+        <span x-show="hidden" x-cloak style="letter-spacing:0.08em">•••• €</span>
+      </p>
+      <p class="text-xs" style="color:var(--text-dim)">conti, risparmio, contanti{% if liquidity_etf %}, ETF monetari{% endif %}</p>
+    </div>
+    <div class="flex flex-col gap-2 px-6 py-5 stat-cell">
+      <p class="text-[13px]" style="color:var(--text-muted)">Investimenti</p>
+      <p class="num text-[26px] font-medium leading-none" style="color:var(--text)">
+        <span x-show="!hidden">{{ "{:,.0f}".format(portfolio_value).replace(",", ".") }} €</span>
+        <span x-show="hidden" x-cloak style="letter-spacing:0.08em">•••• €</span>
+      </p>
+      {% if portfolio_pl is not none %}
+      <p class="text-xs num" style="color:{% if portfolio_pl >= 0 %}var(--emerald){% else %}var(--rose){% endif %}">
+        <span x-show="!hidden">{{ "{:+,.0f}".format(portfolio_pl).replace(",", ".") }} €{% if portfolio_pl_pct is not none %} ({{ "{:+.1f}%".format(portfolio_pl_pct) }}){% endif %}</span>
+        <span x-show="hidden" x-cloak>•••</span>
+      </p>
+      {% else %}
+      <p class="text-xs" style="color:var(--text-dim)">portafoglio ETF</p>
+      {% endif %}
+    </div>
+  </section>
 
-<!-- Accounts -->
-<div>
-  <p class="text-xs font-medium uppercase tracking-wider mb-3" style="color:var(--text-muted)">Conti</p>
-  {% if accounts %}
-  {# Fixed-order categorical palette in the app's dusty register, CVD-validated for adjacent slices #}
-  {% set pie_colors = ['#0369a1','#c2703d','#059669','#8e4a9e','#b08b26','#5b4fb5','#be5b7b','#4a90c2','#b45309','#0d9488','#8e6bc9'] %}
-  <div class="grid grid-cols-1 sm:grid-cols-2 gap-5 items-start">
-    <!-- Pie chart -->
-    <div class="card">
-      <p class="text-xs font-medium uppercase tracking-wider mb-4" style="color:var(--text-muted)">Distribuzione</p>
-      <div x-show="!hidden">
-        <canvas id="accountsPieChart" height="200"></canvas>
+  <!-- Net worth chart -->
+  <section class="card flex flex-col gap-4" style="padding:20px 24px">
+    <div class="flex items-center justify-between gap-4 flex-wrap">
+      <p class="text-sm font-medium" style="color:var(--text)">Andamento dal {{ labels[0] if labels else '—' }}</p>
+      <div class="flex items-center gap-4 text-xs" style="color:var(--text-muted)">
+        <span class="inline-flex items-center gap-1.5"><svg width="20" height="6" viewBox="0 0 20 6"><line x1="0" y1="3" x2="20" y2="3" stroke="#2f5bea" stroke-width="2"/></svg>Patrimonio netto</span>
+        <span class="inline-flex items-center gap-1.5"><svg width="20" height="6" viewBox="0 0 20 6"><line x1="0" y1="3" x2="20" y2="3" stroke="#5aa1a8" stroke-width="2" stroke-dasharray="4 3"/></svg>Liquidità</span>
+        <span class="inline-flex items-center gap-1.5"><svg width="20" height="6" viewBox="0 0 20 6"><line x1="0" y1="3" x2="20" y2="3" stroke="#d98546" stroke-width="2" stroke-dasharray="4 3"/></svg>Investimenti</span>
       </div>
-      <div x-show="hidden" class="flex items-center justify-center" style="height:200px">
+    </div>
+    <div style="position:relative">
+      <canvas id="networthChart" height="72"></canvas>
+      <div x-show="hidden" x-cloak
+           style="position:absolute;inset:0;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border-radius:8px;display:flex;align-items:center;justify-content:center">
         <span style="color:var(--text-dim);font-size:13px">nascosto</span>
       </div>
     </div>
-    <!-- List -->
-    <div class="card" style="padding:0">
+  </section>
+
+  <!-- Accounts -->
+  <section class="card" style="padding:0">
+    <div class="flex flex-col gap-3 px-6 py-4" style="border-bottom:1px solid var(--border)">
+      <div class="flex items-center justify-between">
+        <p class="text-sm font-medium" style="color:var(--text)">Conti</p>
+        <a href="/setup" class="text-[13px]" style="color:var(--accent)">Gestisci</a>
+      </div>
+      {% if accounts %}
+      {% set total_bal = accounts | map(attribute='balance') | select('gt', 0) | sum %}
+      <div x-show="!hidden" class="flex gap-0.5 overflow-hidden" style="height:6px;border-radius:3px">
+        {% for acc in accounts if acc.balance and acc.balance > 0 and total_bal %}
+        <div style="width:{{ '%.2f' % (acc.balance / total_bal * 100) }}%;background:{{ acc_colors[loop.index0 % acc_colors|length] }}" title="{{ acc.display_name or acc.name }}"></div>
+        {% endfor %}
+      </div>
+      <div x-show="hidden" x-cloak style="height:6px;border-radius:3px;background:var(--surface-2)"></div>
+      {% endif %}
+    </div>
+    {% if accounts %}
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-10 px-6 py-1">
       {% for acc in accounts %}
-      <div class="flex items-center justify-between px-5 py-4" style="{% if not loop.last %}border-bottom:1px solid var(--border-subtle){% endif %}">
-        <div class="flex items-center gap-3">
-          <div class="w-3 h-3 rounded-full flex-shrink-0" style="background:{{ pie_colors[loop.index0 % pie_colors|length] }}"></div>
-          <div>
-            <p class="text-sm font-medium" style="color:var(--text)">{{ acc.display_name or acc.name }}</p>
-            <p class="text-xs mt-0.5" style="color:var(--text-muted)">
-              {{ acc.bank_name }}{% if acc.currency and acc.currency != 'EUR' %} · {{ acc.currency }}{% endif %}
-            </p>
+      {% set positive = acc.balance and acc.balance > 0 %}
+      <div class="flex items-center justify-between gap-4 py-3" style="border-bottom:1px solid var(--border-subtle)">
+        <div class="flex items-center gap-3 min-w-0">
+          <span class="w-2 h-2 rounded-full flex-shrink-0" style="background:{{ acc_colors[loop.index0 % acc_colors|length] }}"></span>
+          <div class="min-w-0">
+            <p class="text-sm font-medium truncate" style="color:var(--text)">{{ acc.display_name or acc.name }}</p>
+            <p class="text-xs mt-0.5" style="color:var(--text-muted)">{{ acc.bank_name }}{% if acc.currency and acc.currency != 'EUR' %} · {{ acc.currency }}{% endif %}</p>
           </div>
         </div>
-        <div class="text-right">
-          <p class="num text-sm font-medium" style="color:var(--text)">
+        <div class="text-right flex-shrink-0">
+          <p class="num text-sm" style="color:{% if positive %}var(--text){% else %}var(--text-dim){% endif %}">
             <span x-show="!hidden">
               {% if acc.balance_currency != 'EUR' %}
-                {{ "{:,.2f}".format(acc.balance_native or 0) }} {{ acc.balance_currency }}
-                <span class="text-xs font-normal" style="color:var(--text-muted)">(€{{ "{:,.0f}".format(acc.balance or 0) }})</span>
+                {{ "{:,.2f}".format(acc.balance_native or 0).replace(",", "X").replace(".", ",").replace("X", ".") }} {{ acc.balance_currency }}
+                <span class="text-xs" style="color:var(--text-muted)">({{ "{:,.0f}".format(acc.balance or 0).replace(",", ".") }} €)</span>
               {% else %}
-                {{ "{:,.0f}".format(acc.balance or 0) }} €
+                {{ "{:,.0f}".format(acc.balance or 0).replace(",", ".") }} €
               {% endif %}
             </span>
-            <span x-show="hidden" style="letter-spacing:0.1em">•••• €</span>
+            <span x-show="hidden" x-cloak style="letter-spacing:0.08em">•••• €</span>
           </p>
-          <p class="text-xs mt-0.5" style="color:var(--text-dim)">{{ {'checking': 'corrente', 'savings': 'risparmio', 'investment': 'investimento', 'cash': 'contanti'}.get(acc.type, acc.type) }}</p>
+          <p class="text-[11px] mt-0.5" style="color:var(--text-dim)">{{ type_labels.get(acc.type, acc.type) }}</p>
         </div>
       </div>
       {% endfor %}
     </div>
-  </div>
-  {% else %}
-  <div class="card py-14 text-center">
-    <p class="text-sm mb-2" style="color:var(--text-muted)">Nessun conto connesso.</p>
-    <a href="/setup" class="text-sm" style="color:var(--sky)">Configura banche →</a>
-  </div>
-  {% endif %}
-</div>
+    {% else %}
+    <div class="py-14 text-center">
+      <p class="text-sm mb-2" style="color:var(--text-muted)">Nessun conto connesso.</p>
+      <a href="/setup" class="text-sm" style="color:var(--accent)">Configura banche</a>
+    </div>
+    {% endif %}
+  </section>
 
 </div>{# end x-data #}
+
+<style>
+  @media (min-width: 640px) { .stat-cell { border-left: 1px solid var(--border); } }
+  @media (max-width: 639px) { .stat-cell { border-top: 1px solid var(--border); } }
+</style>
 
 <script>
 (function() {
   const labels = {{ labels | tojson }};
-  const data   = {{ networth_data | tojson }};
+  const series = {{ networth_series | tojson }};
   const ctx    = document.getElementById('networthChart');
+  const eur    = v => v.toLocaleString('it-IT', { maximumFractionDigits: 0 }) + ' €';
+  const base   = { tension: 0.35, pointRadius: 0, pointHoverRadius: 3 };
 
   new Chart(ctx, {
     type: 'line',
     data: {
       labels,
       datasets: [{
-        data,
-        borderColor: '#059669',
+        ...base,
+        label: 'Patrimonio netto',
+        data: series.net_worth,
+        borderColor: '#2f5bea',
         backgroundColor: function(ctx2) {
-          const g = ctx2.chart.ctx.createLinearGradient(0, 0, 0, 220);
-          g.addColorStop(0, 'rgba(5,150,105,0.12)');
-          g.addColorStop(1, 'rgba(5,150,105,0)');
+          const g = ctx2.chart.ctx.createLinearGradient(0, 0, 0, 240);
+          g.addColorStop(0, 'rgba(47,91,234,0.12)');
+          g.addColorStop(1, 'rgba(47,91,234,0)');
           return g;
         },
         fill: true,
-        tension: 0.4,
-        pointRadius: 0,
-        borderWidth: 1.5,
+        borderWidth: 1.8,
+      }, {
+        ...base,
+        label: 'Liquidità',
+        data: series.liquidity,
+        borderColor: '#5aa1a8',
+        borderDash: [4, 4],
+        fill: false,
+        borderWidth: 1.3,
+      }, {
+        ...base,
+        label: 'Investimenti',
+        data: series.investments,
+        borderColor: '#d98546',
+        borderDash: [4, 4],
+        fill: false,
+        borderWidth: 1.3,
       }]
     },
     options: {
@@ -162,80 +191,15 @@
       interaction: { intersect: false, mode: 'index' },
       plugins: {
         legend: { display: false },
-        tooltip: { callbacks: { label: ctx => '  ' + ctx.parsed.y.toLocaleString('it-IT') + ' €' } }
+        tooltip: { callbacks: { label: c => '  ' + c.dataset.label + ': ' + eur(c.parsed.y) } }
       },
       scales: {
         x: { grid: { display: false }, border: { display: false }, ticks: { maxTicksLimit: 7 } },
         y: {
-          grid: { color: '#ebebf5' },
+          grid: { color: '#eef0f4' },
           border: { display: false },
           ticks: { callback: v => (v >= 1000 ? (v/1000).toFixed(0)+'k' : v) + ' €' }
         }
-      }
-    }
-  });
-})();
-
-// Pie chart distribuzione conti
-(function() {
-  const accs = [{% for a in accounts %}{{ (a.display_name or a.name) | tojson }}{% if not loop.last %},{% endif %}{% endfor %}];
-  const bals = {{ accounts | map(attribute='balance') | list | tojson }};
-  const COLORS = {{ pie_colors | tojson }};
-  const ctx = document.getElementById('accountsPieChart');
-  if (!ctx || bals.every(b => b === 0)) return;
-  // Direct labels on slices >= 8% of the total: Figtree, word-wrapped to fit
-  // the ring, skipped when they can't fit, clamped inside the canvas.
-  const sliceLabels = {
-    id: 'sliceLabels',
-    afterDatasetsDraw(chart) {
-      const c = chart.ctx;
-      const ds = chart.data.datasets[0];
-      const total = ds.data.reduce((a, b) => a + b, 0);
-      const area = chart.chartArea;
-      c.save();
-      c.font = "600 11px Figtree, sans-serif";
-      c.textAlign = 'center';
-      c.textBaseline = 'middle';
-      chart.getDatasetMeta(0).data.forEach((arc, i) => {
-        if (!total || ds.data[i] / total < 0.08) return;
-        const pos = arc.tooltipPosition();
-        const maxW = (arc.outerRadius - arc.innerRadius) * 1.15;
-        const words = String(chart.data.labels[i]).split(' ');
-        const lines = [];
-        let cur = '';
-        for (const w of words) {
-          const t = cur ? cur + ' ' + w : w;
-          if (!cur || c.measureText(t).width <= maxW) cur = t;
-          else { lines.push(cur); cur = w; }
-        }
-        lines.push(cur);
-        const widest = Math.max(...lines.map(l => c.measureText(l).width));
-        if (widest > maxW * 1.25) return;   // doesn't fit — tooltip + list cover it
-        const lineH = 13;
-        let x = Math.min(Math.max(pos.x, area.left + widest / 2 + 2), area.right - widest / 2 - 2);
-        let y = pos.y - ((lines.length - 1) * lineH) / 2;
-        y = Math.min(Math.max(y, area.top + lineH / 2), area.bottom - (lines.length - 0.5) * lineH);
-        const hex = ds.backgroundColor[i % ds.backgroundColor.length].substring(1);
-        const lum = 0.299 * parseInt(hex.substr(0, 2), 16) + 0.587 * parseInt(hex.substr(2, 2), 16) + 0.114 * parseInt(hex.substr(4, 2), 16);
-        c.fillStyle = lum > 150 ? '#16162a' : '#ffffff';
-        lines.forEach((l, j) => c.fillText(l, x, y + j * lineH));
-      });
-      c.restore();
-    }
-  };
-  new Chart(ctx, {
-    type: 'doughnut',
-    plugins: [sliceLabels],
-    data: {
-      labels: accs,
-      datasets: [{ data: bals.map(Math.abs), backgroundColor: accs.map((_, i) => COLORS[i % COLORS.length]), borderColor: '#ffffff', borderWidth: 2, hoverOffset: 4 }]
-    },
-    options: {
-      responsive: true,
-      cutout: '60%',
-      plugins: {
-        legend: { display: false },
-        tooltip: { callbacks: { label: ctx => '  €' + Math.abs(ctx.parsed).toLocaleString('it-IT') } }
       }
     }
   });

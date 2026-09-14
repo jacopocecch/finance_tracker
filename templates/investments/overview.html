@@ -9,7 +9,7 @@
     <p class="text-xs mt-0.5" style="color:var(--text-dim)">
       {% if summary.last_updated %}
         Aggiornato {{ summary.last_updated.strftime('%d/%m/%Y %H:%M') }} UTC
-        {% if summary.has_stale_quotes %}<span class="ml-1 px-1.5 py-0.5 rounded text-xs" style="background:rgba(245,158,11,0.1);color:#d97706;border:1px solid rgba(245,158,11,0.2)">stale</span>{% endif %}
+        {% if summary.has_stale_quotes %}<span class="ml-1 px-1.5 py-0.5 rounded text-xs" style="background:rgba(217,133,70,0.1);color:#d98546;border:1px solid rgba(217,133,70,0.2)">stale</span>{% endif %}
       {% else %}
         Nessuna quotazione disponibile
       {% endif %}
@@ -37,7 +37,7 @@
   <a href="/investments/transactions/add" class="btn-primary inline-flex">+ Aggiungi acquisto</a>
 </div>
 {% else %}
-{% set alloc_colors = ['#059669','#0369a1','#7c3aed','#d97706','#e11d48','#0891b2','#65a30d','#9333ea'] %}
+{% set alloc_colors = ['#15803d','#2f5bea','#7c3aed','#d98546','#d93b4f','#0891b2','#65a30d','#9333ea'] %}
 
 <!-- KPI strip -->
 <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
@@ -83,7 +83,7 @@
   <!-- Positions table -->
   <div class="card flex-1 min-w-0" style="padding:0">
     <div class="px-5 py-4" style="border-bottom:1px solid var(--border)">
-      <p class="text-xs font-medium uppercase tracking-wider" style="color:var(--text-muted)">Posizioni</p>
+      <p class="text-sm" style="color:var(--text-muted)">Posizioni</p>
     </div>
     <!-- Mobile cards -->
     <div class="sm:hidden">
@@ -112,7 +112,7 @@
     <div class="hidden sm:block overflow-x-auto">
     <table class="w-full text-sm">
       <thead>
-        <tr class="text-xs uppercase tracking-wide" style="color:var(--text-dim); border-bottom:1px solid var(--border-subtle)">
+        <tr class="text-xs" style="color:var(--text-dim); border-bottom:1px solid var(--border-subtle)">
           <th class="text-left px-5 py-3 font-medium">Strumento</th>
           <th class="text-right px-4 py-3 font-medium">Qtà</th>
           <th class="text-right px-4 py-3 font-medium">PMC</th>
@@ -142,7 +142,7 @@
         <td class="num px-4 py-3.5 text-right text-sm font-medium" style="color:var(--text)">
           {% if pos.market_value is not none %}{{ pos.currency | currency_symbol }}{{ "{:,.2f}".format(pos.market_value) }}{% else %}—{% endif %}
         </td>
-        <td class="num px-5 py-3.5 text-right text-sm font-medium" style="color:{% if pos.unrealized_pl is not none and pos.unrealized_pl >= 0 %}var(--emerald){% elif pos.unrealized_pl is not none %}var(--rose){% else %}var(--text-dim){% endif %}">
+        <td class="num px-5 py-3.5 text-right text-sm font-medium whitespace-nowrap" style="color:{% if pos.unrealized_pl is not none and pos.unrealized_pl >= 0 %}var(--emerald){% elif pos.unrealized_pl is not none %}var(--rose){% else %}var(--text-dim){% endif %}">
           {% if pos.unrealized_pl is not none %}{{ pos.currency | currency_symbol }}{{ "{:+,.2f}".format(pos.unrealized_pl) }}<br><span class="text-xs">{{ "{:+.2f}%".format(pos.unrealized_pl_pct) }}</span>{% else %}—{% endif %}
         </td>
       </tr>
@@ -154,7 +154,7 @@
 
   <!-- Allocation chart -->
   <div class="card lg:w-72 flex-shrink-0">
-    <p class="text-xs font-medium uppercase tracking-wider mb-4" style="color:var(--text-muted)">Allocazione</p>
+    <p class="text-sm mb-4" style="color:var(--text-muted)">Allocazione</p>
     <canvas id="allocChart"></canvas>
   </div>
 </div>
@@ -163,12 +163,12 @@
 {% if closed_positions %}
 <div class="card mb-5" style="padding:0">
   <div class="px-5 py-4" style="border-bottom:1px solid var(--border)">
-    <p class="text-xs font-medium uppercase tracking-wider" style="color:var(--text-muted)">Posizioni chiuse</p>
+    <p class="text-sm" style="color:var(--text-muted)">Posizioni chiuse</p>
   </div>
   <div class="overflow-x-auto">
   <table class="w-full text-sm">
     <thead>
-      <tr class="text-xs uppercase tracking-wide" style="color:var(--text-dim); border-bottom:1px solid var(--border-subtle)">
+      <tr class="text-xs" style="color:var(--text-dim); border-bottom:1px solid var(--border-subtle)">
         <th class="text-left px-5 py-3 font-medium">Strumento</th>
         <th class="text-right px-5 py-3 font-medium">P/L realizzato</th>
       </tr>
@@ -197,7 +197,7 @@
 {% if liq_positions %}
 <div class="card mb-5" style="padding:0">
   <div class="px-5 py-4" style="border-bottom:1px solid var(--border)">
-    <p class="text-xs font-medium uppercase tracking-wider" style="color:var(--text-muted)">Liquidità</p>
+    <p class="text-sm" style="color:var(--text-muted)">Liquidità</p>
   </div>
   <!-- Mobile cards -->
   <div class="sm:hidden">
@@ -217,7 +217,7 @@
   <div class="hidden sm:block overflow-x-auto">
   <table class="w-full text-sm">
     <thead>
-      <tr class="text-xs uppercase tracking-wide" style="color:var(--text-dim); border-bottom:1px solid var(--border-subtle)">
+      <tr class="text-xs" style="color:var(--text-dim); border-bottom:1px solid var(--border-subtle)">
         <th class="text-left px-5 py-3 font-medium">Strumento</th>
         <th class="text-right px-4 py-3 font-medium">Qtà</th>
         <th class="text-right px-4 py-3 font-medium">PMC</th>
@@ -256,7 +256,7 @@
   const labels = {{ chart_labels | tojson }};
   const invested = {{ chart_invested | tojson }};
   const market = {{ chart_market | tojson }};
-  const colors = ['#059669','#0369a1','#7c3aed','#d97706','#e11d48','#0891b2','#65a30d','#9333ea'];
+  const colors = ['#15803d','#2f5bea','#7c3aed','#d98546','#d93b4f','#0891b2','#65a30d','#9333ea'];
 
   new Chart(document.getElementById('allocChart'), {
     type: 'doughnut',
