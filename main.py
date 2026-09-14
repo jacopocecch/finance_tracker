@@ -19,12 +19,12 @@ import config
 import scheduler
 from database import (
     Account, Transaction, BalanceSnapshot, Category, CategoryRule, MerchantCategory, Budget,
-    Instrument, MacroCategory, Trip, engine, init_db, get_session,
+    Instrument, InvestmentTransaction, MarketQuote, MacroCategory, Trip, engine, init_db, get_session,
 )
 from colors import derive_leaf_colors
 from sync import build_auth_url, handle_callback, sync_all, sync_account
 from investments import router as investments_router, _build_portfolio_data
-from portfolio import compute_portfolio
+from portfolio import compute_portfolio, _apply_transactions
 import fx as _fx
 from fx import FxUnavailable
 
@@ -222,63 +222,157 @@ def _balances_by_account(session: Session) -> dict[int, dict]:
 
 CHART_START_DATE = date(2026, 5, 24)
 
-def _networth_series(session: Session) -> tuple[list[str], list[float]]:
+def _account_balance_on(acc, snaps: list, d: date, session: Session) -> Optional[float]:
+    """EUR balance of `acc` on day `d`, forward-filling its last snapshot.
+    Archived/disconnected accounts stop counting after their last snapshot
+    instead of forward-filling a stale balance to today (consistent with
+    _balances_by_account, which excludes them). None when no data."""
+    if (acc.deleted or not acc.connected) and (not snaps or d > snaps[-1].date):
+        return None
+    last_snap = None
+    for s in snaps:
+        if s.date <= d:
+            last_snap = s
+        else:
+            break
+    if last_snap is None:
+        return None
+    balance = last_snap.balance
+    if acc.currency and acc.currency != "EUR":
+        balance = _fx_convert_safe(balance, acc.currency, session)
+    return balance
+
+
+BROKER_SETTLE_DAYS = 5
+
+def _settled_broker_balance(acc, snaps: list, d: date, balance: float, buy_dates: list, session: Session) -> float:
+    """Broker cash balance on day `d` net of purchases the bank has not booked
+    yet. Fineco keeps the buy amount in the cash balance for a few days after
+    the trade while the ETF is already held, which double-counts it. Within
+    BROKER_SETTLE_DAYS after a buy, take the lowest balance seen from `d`
+    through the settlement window instead of the forward-filled one."""
+    recent = [t for t in buy_dates if t <= d <= t + timedelta(days=BROKER_SETTLE_DAYS)]
+    if not recent:
+        return balance
+    window_end = max(recent) + timedelta(days=BROKER_SETTLE_DAYS)
+    lows = [sn.balance for sn in snaps if d <= sn.date <= window_end]
+    if not lows:
+        return balance
+    low = min(lows)
+    if acc.currency and acc.currency != "EUR":
+        low = _fx_convert_safe(low, acc.currency, session)
+    return min(balance, low)
+
+
+def _portfolio_value_on(inst, txs: list, quotes: list, d: date, session: Session) -> Optional[float]:
+    """EUR market value of `inst` on day `d`: quantity held after the
+    transactions dated <= d, priced at the last quote <= d. Falls back to the
+    cost basis when no quote exists yet. None when nothing was held."""
+    held = [t for t in txs if t.trade_date <= d]
+    if not held:
+        return None
+    qty, cost, _ = _apply_transactions(held)
+    if qty <= 0:
+        return None
+    price = None
+    price_ccy = inst.currency
+    for q in quotes:
+        if q.quote_timestamp.date() <= d:
+            price, price_ccy = q.price, (q.currency or inst.currency)
+        else:
+            break
+    if price is None:
+        value, ccy = cost, inst.currency
+    else:
+        value, ccy = qty * price, price_ccy
+    if ccy and ccy != "EUR":
+        value = _fx_convert_safe(value, ccy, session, on_date=d)
+    return value
+
+
+def _networth_series(session: Session) -> tuple[list[str], dict[str, list[float]]]:
+    """Daily series since CHART_START_DATE: liquidity (bank checking/savings/
+    cash + liquidity ETFs), investments (bank investment accounts + ETF
+    portfolio at historical quotes) and their sum (net worth)."""
     start = CHART_START_DATE
     today = date.today()
     # Include archived accounts too: their snapshots must keep contributing to
     # past days, otherwise archiving rewrites history.
-    liquidity_accounts = {
+    accounts = {
         a.id: a for a in session.exec(
-            select(Account).where(Account.type.in_(("checking", "savings", "cash")))
+            select(Account).where(Account.type.in_(("checking", "savings", "cash", "investment")))
         ).all()
     }
-    if not liquidity_accounts:
-        return [], []
 
     # Fetch ALL snapshots for these accounts (including before start, for forward-fill)
-    all_snaps = session.exec(
-        select(BalanceSnapshot)
-        .where(BalanceSnapshot.account_id.in_(list(liquidity_accounts.keys())))
-        .order_by(BalanceSnapshot.date)
-    ).all()
-
-    # Group by account, sorted by date
     by_account: dict[int, list[BalanceSnapshot]] = defaultdict(list)
-    for s in all_snaps:
-        by_account[s.account_id].append(s)
+    if accounts:
+        for s in session.exec(
+            select(BalanceSnapshot)
+            .where(BalanceSnapshot.account_id.in_(list(accounts.keys())))
+            .order_by(BalanceSnapshot.date)
+        ).all():
+            by_account[s.account_id].append(s)
 
-    # For each day in range, forward-fill last known snapshot per account
+    instruments = session.exec(select(Instrument).where(Instrument.active == True)).all()
+    txs_by_inst: dict[int, list] = defaultdict(list)
+    quotes_by_inst: dict[int, list] = defaultdict(list)
+    if instruments:
+        ids = [i.id for i in instruments]
+        for t in session.exec(
+            select(InvestmentTransaction)
+            .where(InvestmentTransaction.instrument_id.in_(ids))
+            .order_by(InvestmentTransaction.trade_date, InvestmentTransaction.id)
+        ).all():
+            txs_by_inst[t.instrument_id].append(t)
+        for q in session.exec(
+            select(MarketQuote)
+            .where(MarketQuote.instrument_id.in_(ids))
+            .order_by(MarketQuote.quote_timestamp)
+        ).all():
+            quotes_by_inst[q.instrument_id].append(q)
+    instruments = [i for i in instruments if txs_by_inst.get(i.id)]
+    buy_dates = sorted({t.trade_date for txs in txs_by_inst.values() for t in txs if t.transaction_type == "BUY"})
+
+    if not accounts and not instruments:
+        return [], {"net_worth": [], "liquidity": [], "investments": []}
+
+    # For each day in range, forward-fill last known snapshot/quote per source
     all_dates = [start + timedelta(days=i) for i in range((today - start).days + 1)]
-    result: dict[date, float] = {}
+    result: dict[date, tuple[float, float]] = {}
     for d in all_dates:
-        total = 0.0
+        liquidity = 0.0
+        investments = 0.0
         has_any = False
-        for acc_id, acc in liquidity_accounts.items():
-            snaps = by_account.get(acc_id, [])
-            # Archived/disconnected accounts stop counting after their last
-            # snapshot instead of forward-filling a stale balance to today
-            # (consistent with _balances_by_account, which excludes them).
-            if (acc.deleted or not acc.connected) and (not snaps or d > snaps[-1].date):
+        for acc_id, acc in accounts.items():
+            bal = _account_balance_on(acc, by_account.get(acc_id, []), d, session)
+            if bal is None:
                 continue
-            last_snap = None
-            for s in snaps:
-                if s.date <= d:
-                    last_snap = s
-                else:
-                    break
-            if last_snap is not None:
-                has_any = True
-                balance = last_snap.balance
-                if acc.currency and acc.currency != "EUR":
-                    balance = _fx_convert_safe(balance, acc.currency, session)
-                total += balance
+            has_any = True
+            if acc.type == "investment":
+                investments += _settled_broker_balance(acc, by_account.get(acc_id, []), d, bal, buy_dates, session)
+            else:
+                liquidity += bal
+        for inst in instruments:
+            val = _portfolio_value_on(inst, txs_by_inst[inst.id], quotes_by_inst.get(inst.id, []), d, session)
+            if val is None:
+                continue
+            has_any = True
+            if inst.is_liquidity:
+                liquidity += val
+            else:
+                investments += val
         if has_any:
-            result[d] = total
+            result[d] = (liquidity, investments)
 
     dates = sorted(result)
     return (
         [d.strftime("%d/%m") for d in dates],
-        [round(result[d], 2) for d in dates],
+        {
+            "net_worth": [round(result[d][0] + result[d][1], 2) for d in dates],
+            "liquidity": [round(result[d][0], 2) for d in dates],
+            "investments": [round(result[d][1], 2) for d in dates],
+        },
     )
 
 
@@ -288,7 +382,7 @@ def _networth_series(session: Session) -> tuple[list[str], list[float]]:
 def dashboard(request: Request, session: Session = Depends(get_session)):
     accounts = session.exec(select(Account).where(Account.connected == True)).all()
     balances = _balances_by_account(session)
-    labels, networth_data = _networth_series(session)
+    labels, networth_series = _networth_series(session)
 
     liquidity = sum(
         balances.get(a.id, {"eur": 0})["eur"] for a in accounts if a.type in ("checking", "savings", "cash")
@@ -358,7 +452,7 @@ def dashboard(request: Request, session: Session = Depends(get_session)):
             for a, b in acc_with_balance
         ],
         "labels": labels,
-        "networth_data": networth_data,
+        "networth_series": networth_series,
     })
 
 

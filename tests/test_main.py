@@ -13,7 +13,8 @@ from sqlmodel import Session, SQLModel, create_engine, select
 
 import main
 from database import (
-    Account, BalanceSnapshot, Budget, Category, CategoryRule, MerchantCategory,
+    Account, BalanceSnapshot, Budget, Category, CategoryRule, Instrument, InvestmentTransaction,
+    MarketQuote, MerchantCategory,
     Transaction, Trip, get_session,
 )
 
@@ -427,8 +428,54 @@ def test_networth_series_disconnected_stops(session, monkeypatch):
     session.add(BalanceSnapshot(account_id=dead.id, date=today - timedelta(days=3), balance=50.0))
     session.add(BalanceSnapshot(account_id=dead.id, date=today - timedelta(days=2), balance=50.0))
     session.commit()
-    labels, values = main._networth_series(session)
-    assert values == [150.0, 150.0, 100.0, 100.0]
+    labels, series = main._networth_series(session)
+    assert series["liquidity"] == [150.0, 150.0, 100.0, 100.0]
+    assert series["investments"] == [0.0, 0.0, 0.0, 0.0]
+    assert series["net_worth"] == [150.0, 150.0, 100.0, 100.0]
+
+
+def test_networth_series_splits_investments(session, monkeypatch):
+    today = date.today()
+    monkeypatch.setattr(main, "CHART_START_DATE", today - timedelta(days=2))
+    bank = Account(bank_name="A", external_id="b", name="b", session_id="s", connected=True)
+    broker = Account(bank_name="A", external_id="i", name="i", session_id="s", connected=True, type="investment")
+    session.add_all([bank, broker]); session.commit()
+    session.add(BalanceSnapshot(account_id=bank.id, date=today - timedelta(days=2), balance=100.0))
+    session.add(BalanceSnapshot(account_id=broker.id, date=today - timedelta(days=1), balance=40.0))
+    etf = Instrument(name="World", isin="IE1", ticker="W.MI", currency="EUR")
+    mm = Instrument(name="Cash ETF", isin="IE2", ticker="C.MI", currency="EUR", is_liquidity=True)
+    session.add_all([etf, mm]); session.commit()
+    session.add(InvestmentTransaction(instrument_id=etf.id, trade_date=today - timedelta(days=2), quantity=2, unit_price=10.0))
+    session.add(InvestmentTransaction(instrument_id=mm.id, trade_date=today - timedelta(days=1), quantity=1, unit_price=50.0))
+    # ETF quote only from yesterday: day -2 falls back to cost basis (20), then 2 × 12 = 24
+    session.add(MarketQuote(instrument_id=etf.id, price=12.0, currency="EUR",
+                            quote_timestamp=datetime.combine(today - timedelta(days=1), datetime.min.time())))
+    session.commit()
+    labels, series = main._networth_series(session)
+    assert series["liquidity"] == [100.0, 150.0, 150.0]
+    assert series["investments"] == [20.0, 64.0, 64.0]
+    assert series["net_worth"] == [120.0, 214.0, 214.0]
+
+
+def test_networth_series_broker_cash_settles_after_buy(session, monkeypatch):
+    """Bank keeps the buy amount in the broker cash balance for a day after
+    the trade: the series must not count it twice (cash + ETF)."""
+    today = date.today()
+    monkeypatch.setattr(main, "CHART_START_DATE", today - timedelta(days=3))
+    broker = Account(bank_name="A", external_id="i", name="i", session_id="s", connected=True, type="investment")
+    session.add(broker); session.commit()
+    # cash arrives day -3, buy on day -2, bank books the drop only on day -1
+    session.add(BalanceSnapshot(account_id=broker.id, date=today - timedelta(days=3), balance=555.0))
+    session.add(BalanceSnapshot(account_id=broker.id, date=today - timedelta(days=2), balance=555.0))
+    session.add(BalanceSnapshot(account_id=broker.id, date=today - timedelta(days=1), balance=5.0))
+    etf = Instrument(name="World", isin="IE1", ticker="W.MI", currency="EUR")
+    session.add(etf); session.commit()
+    session.add(InvestmentTransaction(instrument_id=etf.id, trade_date=today - timedelta(days=2), quantity=5, unit_price=110.0))
+    session.commit()
+    labels, series = main._networth_series(session)
+    # day -3: cash only; day -2: ETF 550 + settled cash 5 (not 555); after: 550 + 5
+    assert series["investments"] == [555.0, 555.0, 555.0, 555.0]
+    assert series["liquidity"] == [0.0, 0.0, 0.0, 0.0]
 
 
 # ── 13. Dashboard P&L from the non-liquidity basket ──────────────────────────
