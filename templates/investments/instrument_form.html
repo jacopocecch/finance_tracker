@@ -1,26 +1,27 @@
 {% extends "base.html" %}
+{% import "_ui.html" as ui %}
 {% block title %}{{ title }} — Ledger{% endblock %}
 {% block content %}
 
-<div class="mb-6">
-  <a href="/investments/instruments" class="btn-ghost inline-flex mb-4">← Strumenti</a>
-  <h1 class="text-xl font-semibold" style="color:var(--text)">{{ title }}</h1>
+<div class="flex items-center gap-3 mb-5">
+  <a href="/investments/instruments" class="btn-ghost btn-icon" aria-label="Torna agli strumenti">{{ ui.icon('arrow-left', 'w-4 h-4') }}</a>
+  <h1 class="page-title">{{ title }}</h1>
 </div>
 
 <div class="card" style="max-width:560px">
   <form method="post" action="{% if instrument %}/investments/instruments/{{ instrument.id }}/edit{% else %}/investments/instruments/add{% endif %}">
     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-5">
       <div class="sm:col-span-2">
-        <label class="text-xs font-medium mb-1.5 block" style="color:var(--text-muted)">Nome *</label>
+        <label class="field-label">Nome *</label>
         <input type="text" name="name" value="{{ instrument.name if instrument else '' }}" placeholder="Vanguard FTSE All-World UCITS ETF" class="input w-full" required>
       </div>
       <div>
-        <label class="text-xs font-medium mb-1.5 block" style="color:var(--text-muted)">ISIN *</label>
+        <label class="field-label">ISIN *</label>
         <input type="text" name="isin" value="{{ instrument.isin if instrument else '' }}" placeholder="IE00B3RBWM25" class="input w-full" style="text-transform:uppercase" {% if instrument %}readonly{% else %}required{% endif %}>
-        {% if instrument %}<p class="text-xs mt-1" style="color:var(--text-dim)">ISIN non modificabile</p>{% endif %}
+        {% if instrument %}<p class="hint mt-1">ISIN non modificabile</p>{% endif %}
       </div>
       <div>
-        <label class="text-xs font-medium mb-1.5 block" style="color:var(--text-muted)">Tipo</label>
+        <label class="field-label">Tipo</label>
         <select name="type" class="input w-full">
           <option value="ETF" {% if not instrument or instrument.type == 'ETF' %}selected{% endif %}>ETF</option>
           <option value="ETC" {% if instrument and instrument.type == 'ETC' %}selected{% endif %}>ETC</option>
@@ -28,18 +29,18 @@
         </select>
       </div>
       <div>
-        <label class="text-xs font-medium mb-1.5 block" style="color:var(--text-muted)">
+        <label class="field-label">
           Ticker yfinance *
-          <span class="font-normal normal-case" style="color:var(--text-dim)">es. VWCE.MI, IWDA.AS</span>
+          <span class="font-normal" style="color:var(--text-dim)">es. VWCE.MI, IWDA.AS</span>
         </label>
         <input type="text" name="ticker" value="{{ instrument.ticker if instrument else '' }}" placeholder="VWCE.MI" class="input w-full" required>
       </div>
       <div>
-        <label class="text-xs font-medium mb-1.5 block" style="color:var(--text-muted)">Exchange</label>
+        <label class="field-label">Exchange</label>
         <input type="text" name="exchange" value="{{ instrument.exchange if instrument else '' }}" placeholder="Borsa Italiana" class="input w-full">
       </div>
       <div>
-        <label class="text-xs font-medium mb-1.5 block" style="color:var(--text-muted)">Valuta quotazione</label>
+        <label class="field-label">Valuta quotazione</label>
         <input type="text" name="currency" value="{{ instrument.currency if instrument else 'EUR' }}" class="input w-full" style="text-transform:uppercase">
       </div>
     </div>
@@ -47,8 +48,8 @@
     <div class="flex items-center gap-2 mb-5">
       <input type="checkbox" name="is_liquidity" id="is_liquidity" value="1"
              {% if instrument and instrument.is_liquidity %}checked{% endif %}
-             class="w-4 h-4 rounded" style="accent-color:var(--sky)">
-      <label for="is_liquidity" class="text-sm" style="color:var(--text)">Strumento liquido <span class="text-xs" style="color:var(--text-dim)">(es. ETF monetario, fondo liquidità)</span></label>
+             class="w-4 h-4 rounded">
+      <label for="is_liquidity" class="text-sm" style="color:var(--text)">Strumento liquido <span class="hint">(es. ETF monetario, fondo liquidità: conta come liquidità nel patrimonio)</span></label>
     </div>
 
     <div class="flex gap-2">

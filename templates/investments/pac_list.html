@@ -1,20 +1,24 @@
 {% extends "base.html" %}
+{% import "_ui.html" as ui %}
 {% block title %}PAC — Ledger{% endblock %}
 {% block content %}
 
-<div class="mb-6">
-  <a href="/investments" class="btn-ghost inline-flex mb-4">← Investimenti</a>
-  <div class="flex items-center justify-between">
-    <h1 class="text-xl font-semibold" style="color:var(--text)">PAC</h1>
-    <a href="/investments/pac/add" class="btn-primary">+ Nuovo PAC</a>
+<div class="flex items-center justify-between gap-3 mb-5">
+  <div class="flex items-center gap-3">
+    <a href="/investments" class="btn-ghost btn-icon" aria-label="Torna a investimenti">{{ ui.icon('arrow-left', 'w-4 h-4') }}</a>
+    <div>
+      <h1 class="page-title">PAC</h1>
+      <p class="hint">Piani di accumulo: gruppi di strumenti acquistati insieme.</p>
+    </div>
   </div>
+  <a href="/investments/pac/add" class="btn-primary">{{ ui.icon('plus') }}<span class="ml-1.5">Nuovo PAC</span></a>
 </div>
 
 {% if pac_data %}
-<div class="card table-wrap" style="padding:0">
+<div class="card" style="padding:0">
   {% for row in pac_data %}
-  <div class="flex items-center justify-between px-5 py-4" style="{% if not loop.last %}border-bottom:1px solid var(--border-subtle){% endif %}">
-    <div>
+  <div class="list-row flex-wrap" style="padding-top:1rem;padding-bottom:1rem">
+    <div class="min-w-0">
       <p class="text-sm font-medium" style="color:var(--text)">{{ row.pac.name }}</p>
       {% if row.pac.description %}
       <p class="text-xs mt-0.5" style="color:var(--text-muted)">{{ row.pac.description }}</p>
@@ -22,26 +26,24 @@
       <div class="flex flex-wrap gap-1.5 mt-2">
         {% for comp in row.components %}
         {% set inst = row.instruments.get(comp.instrument_id) %}
-        <span class="tag" style="background:var(--surface-2);border:1px solid var(--border);color:var(--text-muted)">
-          {{ inst.ticker if inst else '?' }}{% if comp.target_weight %} <span style="color:var(--text-dim)">× {{ comp.target_weight | int }}</span>{% endif %}
-        </span>
+        <span class="badge badge-neutral num">{{ inst.ticker if inst else '?' }}{% if comp.target_weight %} <span style="color:var(--text-dim)">× {{ comp.target_weight | int }}</span>{% endif %}</span>
         {% endfor %}
       </div>
     </div>
-    <div class="flex gap-2 items-center">
-      <a href="/investments/pac/{{ row.pac.id }}/execute" class="btn-primary" style="white-space:nowrap">+ Esegui</a>
+    <div class="flex gap-2 items-center flex-shrink-0">
+      <a href="/investments/pac/{{ row.pac.id }}/execute" class="btn-primary" style="white-space:nowrap">Esegui</a>
       <a href="/investments/pac/{{ row.pac.id }}/edit" class="btn-ghost">Modifica</a>
       <form method="post" action="/investments/pac/{{ row.pac.id }}/delete" onsubmit="return confirm({{ ('Archiviare ' ~ row.pac.name ~ '?') | tojson }})">
-        <button type="submit" class="btn-ghost" style="color:var(--rose)">Rimuovi</button>
+        <button type="submit" class="btn-ghost btn-danger">Rimuovi</button>
       </form>
     </div>
   </div>
   {% endfor %}
 </div>
 {% else %}
-<div class="card py-20 text-center">
-  <p class="text-sm mb-1" style="color:var(--text-muted)">Nessun PAC attivo.</p>
-  <a href="/investments/pac/add" class="btn-primary inline-flex mt-4">+ Crea PAC</a>
+<div class="card empty" style="padding:5rem 1.25rem">
+  <p class="mb-4" style="color:var(--text-muted)">Nessun PAC attivo.</p>
+  <a href="/investments/pac/add" class="btn-primary inline-flex">Crea PAC</a>
 </div>
 {% endif %}
 {% endblock %}

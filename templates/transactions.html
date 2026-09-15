@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% import "_ui.html" as ui %}
 {% block title %}Transazioni — Ledger{% endblock %}
 {% block content %}
 
@@ -120,521 +121,379 @@ document.addEventListener('alpine:init', () => {
 });
 </script>
 
-<!-- Header -->
-<div class="flex items-center justify-between mb-6 gap-3">
-  <h1 class="text-xl font-semibold" style="color:var(--text)">Transazioni</h1>
-  <div class="flex items-center gap-2">
-    <form method="post" action="/transactions/detect-transfers">
-      <button type="submit" class="btn-ghost text-xs" style="color:var(--sky)">⇄ Trasferimenti</button>
-    </form>
-    {% if cash_accounts %}
-    <form method="post" action="/transactions/detect-prelievi" class="flex items-center gap-1.5">
-      {% if cash_accounts|length > 1 %}
-      <select name="cash_account_id" class="input text-xs">
-        {% for acc in cash_accounts %}
-        <option value="{{ acc.id }}">{{ acc.display_name or acc.name }}</option>
-        {% endfor %}
-      </select>
-      {% else %}
-      <input type="hidden" name="cash_account_id" value="{{ cash_accounts[0].id }}">
-      {% endif %}
-      <button type="submit" class="btn-ghost text-xs" style="color:var(--sky)">💵 Prelievi</button>
-    </form>
-    {% endif %}
+{#- Category dropdown option list, shared by the manual-tx form and the filter bar -#}
+{% macro cat_options(all_label) %}
+<div @click="choose('', {{ all_label | tojson | replace("'", "&#39;") }})" data-optid="" x-show="match({{ all_label | tojson | replace("'", "&#39;") }})" class="panel-item" style="color:var(--text-muted)">{{ all_label }}</div>
+{% for cat in categories %}
+<div @click='choose("{{ cat.id }}", {{ (cat.icon ~ " " ~ cat.name) | tojson | replace("'", "&#39;") }})' data-optid="{{ cat.id }}" x-show='match({{ cat.name | tojson | replace("'", "&#39;") }})' class="panel-item">
+  <span class="inline-flex items-center justify-center text-xs flex-shrink-0" style="width:20px;height:20px;border-radius:6px;background:{{ cat.color }}20">{{ cat.icon }}</span>
+  <span class="font-medium">{{ cat.name }}</span>
+</div>
+{% endfor %}
+{% endmacro %}
+
+{#- Inline category picker for a transaction row (uses txRow state) -#}
+{% macro row_cat_picker(tx) %}
+<div class="relative inline-block" style="max-width:100%">
+  <div @click="toggleEditing($el)" class="cat-chip cursor-pointer" :style="`background:${catColor}14;border:1px solid ${catColor}35`">
+    <span class="inline-flex items-center justify-center text-xs" :style="`width:18px;height:18px;border-radius:5px;background:${catColor}35;flex-shrink:0`" x-text="catIcon"></span>
+    <span x-text="catName"></span>
+  </div>
+  <div x-show="editing" x-transition @click.outside="editing = false" @keydown.escape.window="editing = false"
+       class="absolute z-50 panel" :style="(dropUp ? 'bottom:calc(100% + 6px)' : 'top:calc(100% + 6px)') + ';left:0;width:210px;max-height:260px;overflow-y:auto'">
+    <input x-model="catSearch" @click.stop @keydown.enter.prevent="selectFirstCat()" placeholder="Cerca…"
+           class="cat-search input w-full text-xs" style="height:28px;padding:0 8px;position:sticky;top:-6px;z-index:1;margin-bottom:4px">
+    {% set tx_type = 'income' if tx.amount > 0 else 'expense' %}
+    {% for cat in categories if cat.type == tx_type or cat.type == 'transfer' or cat.type == 'both' or cat.type == 'investment' %}
+    <div @click="saveCategory('{{ cat.id }}')" data-catid="{{ cat.id }}" x-show='catMatch({{ cat.name|tojson }})' class="panel-item"
+         {% if tx.category_id == cat.id %}x-init="$el.style.background='{{ cat.color }}12'"{% endif %}>
+      <span class="inline-flex items-center justify-center text-xs flex-shrink-0" style="width:20px;height:20px;border-radius:6px;background:{{ cat.color }}20">{{ cat.icon }}</span>
+      <span class="font-medium">{{ cat.name }}</span>
+    </div>
+    {% endfor %}
   </div>
 </div>
+{% endmacro %}
 
-<!-- Nuova transazione manuale -->
-{% if manual_accounts %}
-<div class="card mb-5" x-data="{ open: false }">
-  <button @click="open = !open" class="flex items-center gap-2 text-sm font-medium w-full" style="color:var(--text)">
-    <span x-text="open ? '−' : '+'"></span>
-    Nuova transazione manuale
-  </button>
-  <div x-show="open" x-transition class="mt-4">
-    <form method="post" action="/transactions/new" class="flex flex-wrap gap-3 items-end">
-      <div>
-        <label class="text-xs mb-1.5 block font-medium" style="color:var(--text-muted)">Conto *</label>
-        <select name="account_id" required class="input">
-          {% for acc in manual_accounts %}
+{#- Merchant-link toggle + trip marker (uses txRow state) -#}
+{% macro row_marks(tx) %}
+{% if tx.merchant %}
+<button @click="saveMerchant()" :title="isMapped ? 'Rimuovi associazione esercente' : 'Associa esercente a categoria'"
+        class="icon-btn" :class="{ on: isMapped }">{{ ui.icon('link') }}</button>
+{% endif %}
+<span x-show="tripId" x-cloak :title="'Viaggio: ' + tripName" class="inline-flex items-center justify-center" style="width:28px;height:28px;color:var(--accent)">{{ ui.icon('plane') }}</span>
+{% endmacro %}
+
+{#- Confirm + delete controls (uses txRow state) -#}
+{% macro row_actions(tx) %}
+<button @click="toggleConfirm()" title="Segna come confermata" class="icon-btn" :class="{ on: isConfirmed }">{{ ui.icon('check-circle', 'w-4 h-4') }}</button>
+{% if tx.deletable %}
+<form method="post" action="/transactions/{{ tx.id }}/delete" onsubmit="return confirm('Eliminare questa transazione?')">
+  <input type="hidden" name="redirect_to" value="{{ request.url }}">
+  <button type="submit" title="Elimina transazione" class="icon-btn danger">{{ ui.icon('trash') }}</button>
+</form>
+{% endif %}
+{% endmacro %}
+
+{#- Amount cell with personal-share / reimbursement inline editor -#}
+{% macro row_amount(tx, align='right') %}
+{% set is_foreign = tx.currency and tx.currency != 'EUR' %}
+<div class="{% if align == 'right' %}text-right{% endif %}">
+  <span @click="editShare = !editShare" class="num text-sm font-medium cursor-pointer" style="color:{% if tx.amount >= 0 %}var(--emerald){% else %}var(--text){% endif %}"
+        title="{% if tx.amount < 0 %}Clicca per modificare quota personale{% else %}Clicca per segnare come rimborso{% endif %}">{{ tx.amount | money(tx.currency if is_foreign else 'EUR', 2, true) }}</span>
+  {% if is_foreign and tx.eur_amount is not none %}<div class="num text-xs" style="color:var(--text-muted)">≈ {{ tx.eur_amount | eur(2, true) }}</div>{% endif %}
+  {% if tx.amount < 0 and tx.personal_share is not none %}
+  <div class="mt-0.5"><span class="badge badge-accent num" title="Quota personale">quota {{ tx.personal_share | eur(2) }}</span></div>
+  {% elif tx.amount > 0 and tx.is_reimbursement %}
+  <div class="mt-0.5"><span class="badge badge-amber" title="Rimborso: non conta come entrata">rimborso</span></div>
+  {% endif %}
+</div>
+{% if tx.amount < 0 %}
+<template x-if="editShare">
+  <form method="post" action="/transactions/{{ tx.id }}/share" class="mt-1.5 flex gap-1 {% if align == 'right' %}justify-end{% endif %}">
+    <input type="hidden" name="redirect_to" value="{{ request.url }}">
+    <input type="number" name="personal_share" value="{{ tx.personal_share or '' }}" placeholder="quota €" step="0.01" min="0" class="input num text-xs" style="width:96px;height:28px;padding:0 8px">
+    <button type="submit" class="btn-primary" style="height:28px;padding:0 8px" title="Salva quota">{{ ui.icon('check') }}</button>
+  </form>
+</template>
+{% elif tx.amount > 0 %}
+<template x-if="editShare">
+  <form method="post" action="/transactions/{{ tx.id }}/reimbursement" class="mt-1.5 flex gap-1 {% if align == 'right' %}justify-end{% endif %}">
+    <input type="hidden" name="redirect_to" value="{{ request.url }}">
+    <button type="submit" class="btn-primary text-xs" style="height:28px;padding:0 10px;{% if tx.is_reimbursement %}background:var(--amber);border-color:var(--amber){% endif %}">
+      {% if tx.is_reimbursement %}Togli rimborso{% else %}Segna rimborso{% endif %}
+    </button>
+  </form>
+</template>
+{% endif %}
+{% endmacro %}
+
+{% macro date_cell(tx, is_new) %}
+<span class="num">{{ tx.date.strftime('%d/%m/%Y') }}</span>
+{% if tx.status == 'PDNG' %}<span class="badge badge-amber ml-1">PDNG</span>
+{% elif is_new %}<span class="badge badge-accent ml-1">Nuova</span>{% endif %}
+{% endmacro %}
+
+{% set pages = (total // page_size) + (1 if total % page_size else 0) %}
+
+<div class="flex flex-col gap-5">
+
+  <!-- Header -->
+  <div class="flex items-center justify-between gap-3 flex-wrap">
+    <h1 class="page-title">Transazioni</h1>
+    <div class="flex items-center gap-2 flex-wrap">
+      <form method="post" action="/transactions/detect-transfers">
+        <button type="submit" class="btn-ghost">{{ ui.icon('swap') }} Trasferimenti</button>
+      </form>
+      {% if cash_accounts %}
+      <form method="post" action="/transactions/detect-prelievi" class="flex items-center gap-1.5">
+        {% if cash_accounts|length > 1 %}
+        <select name="cash_account_id" class="input">
+          {% for acc in cash_accounts %}
           <option value="{{ acc.id }}">{{ acc.display_name or acc.name }}</option>
           {% endfor %}
         </select>
+        {% else %}
+        <input type="hidden" name="cash_account_id" value="{{ cash_accounts[0].id }}">
+        {% endif %}
+        <button type="submit" class="btn-ghost">{{ ui.icon('cash') }} Prelievi</button>
+      </form>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Manual transaction -->
+  {% if manual_accounts %}
+  <section class="card" x-data="{ open: false }">
+    <button @click="open = !open" class="disclosure" :class="{ open: open }">
+      <span>Nuova transazione manuale</span>
+      {{ ui.icon('chevron', 'w-4 h-4') }}
+    </button>
+    <div x-show="open" x-transition x-cloak class="mt-4">
+      <form method="post" action="/transactions/new" class="flex flex-wrap gap-3 items-end">
+        <div>
+          <label class="field-label">Conto *</label>
+          <select name="account_id" required class="input">
+            {% for acc in manual_accounts %}
+            <option value="{{ acc.id }}">{{ acc.display_name or acc.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label class="field-label">Data *</label>
+          <input type="date" name="tx_date" required value="{{ today }}" class="input num">
+        </div>
+        <div>
+          <label class="field-label">Importo * <span class="font-normal" style="color:var(--text-dim)">(− uscita)</span></label>
+          <input type="number" name="amount" required step="0.01" placeholder="-45.00" class="input num" style="width:120px">
+        </div>
+        <div>
+          <label class="field-label">Descrizione</label>
+          <input type="text" name="description" placeholder="es. Supermercato" class="input" style="width:180px">
+        </div>
+        <div>
+          <label class="field-label">Esercente</label>
+          <input type="text" name="merchant" placeholder="es. Esselunga" class="input" style="width:140px">
+        </div>
+        <div x-data='catSelect({"value": "", "label": "Auto", "placeholder": "Auto"})'>
+          <label class="field-label">Categoria</label>
+          <input type="hidden" name="category_id" :value="value">
+          <button type="button" @click="toggle()" class="input text-left truncate" style="min-width:140px" x-text="label">Auto</button>
+          <div class="relative">
+            <div x-show="open" x-transition @click.outside="open = false" @keydown.escape.window="open = false"
+                 class="absolute z-50 panel" style="top:4px;left:0;min-width:210px;max-height:260px;overflow-y:auto">
+              <input x-model="search" @keydown.enter.prevent="selectFirst()" placeholder="Cerca…"
+                     class="cs-search input w-full text-xs" style="height:28px;padding:0 8px;position:sticky;top:-6px;z-index:1;margin-bottom:4px">
+              {{ cat_options('Auto') }}
+            </div>
+          </div>
+        </div>
+        <button type="submit" class="btn-primary">Aggiungi</button>
+      </form>
+    </div>
+  </section>
+  {% endif %}
+
+  <!-- Filters -->
+  <section class="card">
+    <form method="get" action="/transactions" class="flex gap-3 items-end flex-wrap">
+      <div class="w-full">
+        <label class="field-label">Cerca</label>
+        <input type="text" name="search" value="{{ search }}" placeholder="Descrizione o esercente…" class="input w-full">
       </div>
-      <div>
-        <label class="text-xs mb-1.5 block font-medium" style="color:var(--text-muted)">Data *</label>
-        <input type="date" name="tx_date" required value="{{ today }}" class="input num">
-      </div>
-      <div>
-        <label class="text-xs mb-1.5 block font-medium" style="color:var(--text-muted)">Importo * <span style="color:var(--text-dim)">(− uscita)</span></label>
-        <input type="number" name="amount" required step="0.01" placeholder="-45.00" class="input num" style="width:120px">
-      </div>
-      <div>
-        <label class="text-xs mb-1.5 block font-medium" style="color:var(--text-muted)">Descrizione</label>
-        <input type="text" name="description" placeholder="es. Supermercato" class="input" style="width:180px">
-      </div>
-      <div>
-        <label class="text-xs mb-1.5 block font-medium" style="color:var(--text-muted)">Esercente</label>
-        <input type="text" name="merchant" placeholder="es. Esselunga" class="input" style="width:140px">
-      </div>
-      <div x-data='catSelect({"value": "", "label": "Auto", "placeholder": "Auto"})'>
-        <label class="text-xs mb-1.5 block font-medium" style="color:var(--text-muted)">Categoria</label>
-        <input type="hidden" name="category_id" :value="value">
-        <button type="button" @click="toggle()" class="input text-left truncate" style="min-width:140px" x-text="label">Auto</button>
+      {% set ns = namespace(cat_label='Tutte') %}
+      {% for cat in categories %}{% if selected_cat == cat.id|string %}{% set ns.cat_label = cat.icon ~ ' ' ~ cat.name %}{% endif %}{% endfor %}
+      <div class="flex-1 min-w-36" x-data='catSelect({{ {"value": selected_cat, "label": ns.cat_label, "placeholder": "Tutte", "submit": true} | tojson | replace("'", "&#39;") }})'>
+        <label class="field-label">Categoria</label>
+        <input type="hidden" name="cat" :value="value">
+        <button type="button" @click="toggle()" class="input w-full text-left truncate" x-text="label">{{ ns.cat_label }}</button>
         <div class="relative">
           <div x-show="open" x-transition @click.outside="open = false" @keydown.escape.window="open = false"
-               class="absolute z-50 card" style="top:4px;left:0;min-width:200px;padding:6px;box-shadow:0 8px 24px rgba(0,0,0,0.18);max-height:260px;overflow-y:auto">
+               class="absolute z-50 panel" style="top:4px;left:0;min-width:100%;max-height:260px;overflow-y:auto">
             <input x-model="search" @keydown.enter.prevent="selectFirst()" placeholder="Cerca…"
-                   class="cs-search input w-full text-xs" style="height:28px;padding:4px 8px;position:sticky;top:-6px;z-index:1;background:var(--surface);margin-bottom:4px">
-            <div @click="choose('', 'Auto')" data-optid="" x-show="match('Auto')" class="tr-hover px-1.5 py-1 rounded-lg cursor-pointer text-xs" style="color:var(--text-muted)">Auto</div>
-            {% for cat in categories %}
-            <div @click='choose("{{ cat.id }}", {{ (cat.icon ~ " " ~ cat.name) | tojson | replace("'", "&#39;") }})' data-optid="{{ cat.id }}" x-show='match({{ cat.name | tojson | replace("'", "&#39;") }})'
-                 class="tr-hover flex items-center gap-2 px-1.5 py-1 rounded-lg cursor-pointer">
-              <span class="inline-flex items-center justify-center text-xs flex-shrink-0" style="width:20px;height:20px;border-radius:6px;background:{{ cat.color }}20">{{ cat.icon }}</span>
-              <span class="text-xs font-medium" style="color:var(--text)">{{ cat.name }}</span>
-            </div>
-            {% endfor %}
+                   class="cs-search input w-full text-xs" style="height:28px;padding:0 8px;position:sticky;top:-6px;z-index:1;margin-bottom:4px">
+            {{ cat_options('Tutte') }}
           </div>
         </div>
       </div>
-      <button type="submit" class="btn-primary">Aggiungi</button>
-    </form>
-  </div>
-</div>
-{% endif %}
-
-<!-- Filters -->
-<div class="card mb-5">
-  <form method="get" action="/transactions" class="flex gap-3 items-end flex-wrap">
-    <div class="w-full">
-      <label class="text-xs mb-1.5 block font-medium" style="color:var(--text-muted)">Cerca</label>
-      <input type="text" name="search" value="{{ search }}" placeholder="Descrizione o esercente…" class="input w-full">
-    </div>
-    {% set ns = namespace(cat_label='Tutte') %}
-    {% for cat in categories %}{% if selected_cat == cat.id|string %}{% set ns.cat_label = cat.icon ~ ' ' ~ cat.name %}{% endif %}{% endfor %}
-    <div class="flex-1 min-w-36" x-data='catSelect({{ {"value": selected_cat, "label": ns.cat_label, "placeholder": "Tutte", "submit": true} | tojson | replace("'", "&#39;") }})'>
-      <label class="text-xs mb-1.5 block font-medium" style="color:var(--text-muted)">Categoria</label>
-      <input type="hidden" name="cat" :value="value">
-      <button type="button" @click="toggle()" class="input w-full text-left truncate" x-text="label">{{ ns.cat_label }}</button>
-      <div class="relative">
-        <div x-show="open" x-transition @click.outside="open = false" @keydown.escape.window="open = false"
-             class="absolute z-50 card" style="top:4px;left:0;min-width:100%;padding:6px;box-shadow:0 8px 24px rgba(0,0,0,0.18);max-height:260px;overflow-y:auto">
-          <input x-model="search" @keydown.enter.prevent="selectFirst()" placeholder="Cerca…"
-                 class="cs-search input w-full text-xs" style="height:28px;padding:4px 8px;position:sticky;top:-6px;z-index:1;background:var(--surface);margin-bottom:4px">
-          <div @click="choose('', 'Tutte')" data-optid="" x-show="match('Tutte')" class="tr-hover px-1.5 py-1 rounded-lg cursor-pointer text-xs" style="color:var(--text-muted)">Tutte</div>
-          {% for cat in categories %}
-          <div @click='choose("{{ cat.id }}", {{ (cat.icon ~ " " ~ cat.name) | tojson | replace("'", "&#39;") }})' data-optid="{{ cat.id }}" x-show='match({{ cat.name | tojson | replace("'", "&#39;") }})'
-               class="tr-hover flex items-center gap-2 px-1.5 py-1 rounded-lg cursor-pointer">
-            <span class="inline-flex items-center justify-center text-xs flex-shrink-0" style="width:20px;height:20px;border-radius:6px;background:{{ cat.color }}20">{{ cat.icon }}</span>
-            <span class="text-xs font-medium" style="color:var(--text)">{{ cat.name }}</span>
-          </div>
+      <div class="flex-1 min-w-36">
+        <label class="field-label">Conto</label>
+        <select name="account" class="input w-full" onchange="this.form.submit()">
+          <option value="">Tutti</option>
+          {% for acc in accounts %}
+          <option value="{{ acc.id }}" {% if selected_account == acc.id|string %}selected{% endif %}>
+            {{ acc.display_name or (acc.bank_name ~ ' / ' ~ acc.name) }}{% if acc.deleted %} (archiviato){% endif %}
+          </option>
           {% endfor %}
-        </div>
+        </select>
       </div>
+      <div class="flex-1 min-w-28">
+        <label class="field-label">Tipo</label>
+        <select name="type" class="input w-full" onchange="this.form.submit()">
+          <option value=""       {% if selected_type == '' %}selected{% endif %}>Tutti</option>
+          <option value="income" {% if selected_type == 'income' %}selected{% endif %}>Entrate</option>
+          <option value="expense"{% if selected_type == 'expense' %}selected{% endif %}>Uscite</option>
+        </select>
+      </div>
+      <div>
+        <label class="field-label">Da</label>
+        <input type="date" name="from" value="{{ date_from or '' }}" class="input num">
+      </div>
+      <div>
+        <label class="field-label">A</label>
+        <input type="date" name="to" value="{{ date_to or '' }}" class="input num">
+      </div>
+      <div class="flex gap-2 items-end">
+        <button type="submit" class="btn-primary">Filtra</button>
+        <a href="/transactions" class="btn-ghost">Reset</a>
+      </div>
+    </form>
+  </section>
+
+  <!-- Spinner (shown until Alpine initializes) -->
+  <div id="tx-spinner" class="card flex items-center justify-center gap-3" style="padding:2.5rem">
+    <svg class="w-4 h-4" style="animation:spin 0.8s linear infinite;color:var(--text-muted)" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-2.6-6.4"/></svg>
+    <span class="text-sm" style="color:var(--text-muted)">Caricamento…</span>
+  </div>
+
+  <!-- Table -->
+  <script>window.__pageTxIds = {{ transactions | map(attribute='id') | list | tojson }};</script>
+  <section id="tx-table" x-data class="card" style="padding:0;display:none">
+    <div class="card-head">
+      <span class="num text-xs" style="color:var(--text-muted)">{{ total }} risultati</span>
+      {% if total > page_size %}
+      <div class="flex items-center gap-1">
+        {% if page > 1 %}<a href="?{{ query_string }}&page={{ page - 1 }}" class="btn-ghost btn-icon" style="height:28px;width:28px" aria-label="Pagina precedente">{{ ui.icon('chevron-left') }}</a>{% endif %}
+        <span class="num text-xs px-2" style="color:var(--text-muted)">{{ page }}/{{ pages }}</span>
+        {% if page * page_size < total %}<a href="?{{ query_string }}&page={{ page + 1 }}" class="btn-ghost btn-icon" style="height:28px;width:28px" aria-label="Pagina successiva">{{ ui.icon('chevron-right') }}</a>{% endif %}
+      </div>
+      {% endif %}
     </div>
-    <div class="flex-1 min-w-36">
-      <label class="text-xs mb-1.5 block font-medium" style="color:var(--text-muted)">Conto</label>
-      <select name="account" class="input w-full" onchange="this.form.submit()">
-        <option value="">Tutti</option>
-        {% for acc in accounts %}
-        <option value="{{ acc.id }}" {% if selected_account == acc.id|string %}selected{% endif %}>
-          {{ acc.display_name or (acc.bank_name ~ ' / ' ~ acc.name) }}{% if acc.deleted %} (archiviato){% endif %}
-        </option>
+
+    <!-- Mobile card list -->
+    <div class="sm:hidden">
+      {% for tx in transactions %}
+      {% set cat_color = tx.category.color if tx.category else '#9ca3af' %}
+      {% set is_mapped = tx.merchant and tx.merchant.lower() in mapped_merchants %}
+      {% set _is_new = new_since_dt and tx.created_at and tx.created_at >= new_since_dt %}
+      {% set _state = {'isMapped': true if is_mapped else false, 'catId': tx.category_id|string if tx.category_id else '', 'catColor': cat_color, 'catName': tx.category.name if tx.category else 'Altro', 'catIcon': tx.category.icon if tx.category else '❓', 'catTextColor': cat_color | tag_text_color, 'txId': tx.id, 'isConfirmed': tx.is_confirmed, 'tripId': tx.trip_id|string if tx.trip_id else '', 'tripName': trip_map.get(tx.trip_id, '') if tx.trip_id else ''} %}
+      <div x-data="txRow($el)" data-state='{{ _state | tojson | replace("'", "&#39;") }}'
+           class="px-5 py-3" :style="isConfirmed ? 'background:rgba(21,128,61,0.04)' : ''" style="border-bottom:1px solid var(--border-subtle)">
+        <div class="flex items-center justify-between gap-2 mb-1">
+          <label class="flex items-center gap-2.5 text-xs" style="color:var(--text-muted)">
+            <input type="checkbox" style="width:15px;height:15px;cursor:pointer" :checked="$store.sel.has(txId)" @change="$store.sel.toggle(txId)">
+            {{ date_cell(tx, _is_new) }}
+          </label>
+          <div class="flex items-center gap-0.5">{{ row_actions(tx) }}</div>
+        </div>
+        <p class="text-sm font-medium truncate" style="color:var(--text)" title="{{ tx.merchant or tx.description or '' }}">{{ tx.merchant or tx.description or '—' }}</p>
+        {% if tx.merchant and tx.description %}
+        <p class="text-xs truncate" style="color:var(--text-dim)" title="{{ tx.description }}">{{ tx.description }}</p>
+        {% endif %}
+        <div class="flex items-end justify-between gap-3 mt-2">
+          <div class="flex items-center gap-1 flex-wrap min-w-0">
+            {{ row_cat_picker(tx) }}
+            {{ row_marks(tx) }}
+          </div>
+          <div class="flex-shrink-0">{{ row_amount(tx) }}</div>
+        </div>
+        {% if tx.account %}
+        <p class="text-xs mt-1.5" style="color:var(--text-dim)">{{ tx.account.display_name or tx.account.bank_name }}</p>
+        {% endif %}
+      </div>
+      {% else %}
+      <p class="empty">Nessuna transazione trovata</p>
+      {% endfor %}
+    </div>
+
+    <!-- Desktop table -->
+    <div class="hidden sm:block table-wrap">
+      <table class="tbl" style="min-width:640px">
+        <thead>
+          <tr>
+            <th style="width:36px;padding-right:0">
+              <input type="checkbox" style="width:15px;height:15px;cursor:pointer;vertical-align:middle"
+                     :checked="$store.sel.ids.length > 0 && $store.sel.ids.length === window.__pageTxIds.length"
+                     @change="$store.sel.toggleAll(window.__pageTxIds)" title="Seleziona tutte">
+            </th>
+            <th>Data</th>
+            <th style="width:300px">Descrizione</th>
+            <th>Categoria</th>
+            <th style="width:64px"></th>
+            <th style="width:100px">Conto</th>
+            <th class="r">Importo</th>
+            <th style="width:76px"></th>
+          </tr>
+        </thead>
+        <tbody>
+        {% for tx in transactions %}
+        {% set cat_color = tx.category.color if tx.category else '#9ca3af' %}
+        {% set is_mapped = tx.merchant and tx.merchant.lower() in mapped_merchants %}
+        {% set _is_new = new_since_dt and tx.created_at and tx.created_at >= new_since_dt %}
+        {% set _state = {'isMapped': true if is_mapped else false, 'catId': tx.category_id|string if tx.category_id else '', 'catColor': cat_color, 'catName': tx.category.name if tx.category else 'Altro', 'catIcon': tx.category.icon if tx.category else '❓', 'catTextColor': cat_color | tag_text_color, 'txId': tx.id, 'isConfirmed': tx.is_confirmed, 'tripId': tx.trip_id|string if tx.trip_id else '', 'tripName': trip_map.get(tx.trip_id, '') if tx.trip_id else ''} %}
+        <tr x-data="txRow($el)" data-state='{{ _state | tojson | replace("'", "&#39;") }}' :style="isConfirmed ? 'background:rgba(21,128,61,0.04)' : ''">
+          <td style="padding-right:0">
+            <input type="checkbox" style="width:15px;height:15px;cursor:pointer;vertical-align:middle" :checked="$store.sel.has(txId)" @change="$store.sel.toggle(txId)">
+          </td>
+          <td class="mut nw">{{ date_cell(tx, _is_new) }}</td>
+          <td style="width:300px;max-width:300px">
+            <p class="truncate" style="color:var(--text)" title="{{ tx.merchant or tx.description or '' }}">{{ tx.merchant or tx.description or '—' }}</p>
+            {% if tx.merchant and tx.description %}
+            <p class="text-xs truncate mt-0.5" style="color:var(--text-dim)" title="{{ tx.description }}">{{ tx.description }}</p>
+            {% endif %}
+          </td>
+          <td>{{ row_cat_picker(tx) }}</td>
+          <td><div class="flex items-center gap-0.5">{{ row_marks(tx) }}</div></td>
+          <td class="mut">{{ (tx.account.display_name or tx.account.bank_name) if tx.account else '—' }}</td>
+          <td class="r nw">{{ row_amount(tx) }}</td>
+          <td><div class="flex items-center justify-end gap-0.5">{{ row_actions(tx) }}</div></td>
+        </tr>
+        {% else %}
+        <tr><td colspan="8" class="empty">Nessuna transazione trovata</td></tr>
         {% endfor %}
-      </select>
+        </tbody>
+      </table>
     </div>
-    <div class="flex-1 min-w-28">
-      <label class="text-xs mb-1.5 block font-medium" style="color:var(--text-muted)">Tipo</label>
-      <select name="type" class="input w-full" onchange="this.form.submit()">
-        <option value=""       {% if selected_type == '' %}selected{% endif %}>Tutti</option>
-        <option value="income" {% if selected_type == 'income' %}selected{% endif %}>↑ Entrate</option>
-        <option value="expense"{% if selected_type == 'expense' %}selected{% endif %}>↓ Uscite</option>
-      </select>
-    </div>
-    <div>
-      <label class="text-xs mb-1.5 block font-medium" style="color:var(--text-muted)">Da</label>
-      <input type="date" name="from" value="{{ date_from or '' }}" class="input">
-    </div>
-    <div>
-      <label class="text-xs mb-1.5 block font-medium" style="color:var(--text-muted)">A</label>
-      <input type="date" name="to" value="{{ date_to or '' }}" class="input">
-    </div>
-    <div class="flex gap-2 items-end">
-      <button type="submit" class="btn-primary">Filtra</button>
-      <a href="/transactions" class="btn-ghost">Reset</a>
-    </div>
-  </form>
-</div>
 
-<!-- Spinner (shown until Alpine initializes) -->
-<div id="tx-spinner" class="card" style="padding:2.5rem;display:flex;align-items:center;justify-content:center;gap:0.75rem">
-  <svg style="width:20px;height:20px;animation:spin 0.8s linear infinite;color:var(--text-muted)" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-    <circle style="opacity:0.25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3"/>
-    <path style="opacity:0.75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
-  </svg>
-  <span class="text-sm" style="color:var(--text-muted)">Caricamento…</span>
-</div>
-<style>@keyframes spin { to { transform: rotate(360deg); } }</style>
-
-<!-- Table -->
-<script>window.__pageTxIds = {{ transactions | map(attribute='id') | list | tojson }};</script>
-<div id="tx-table" x-data class="card table-wrap" style="padding:0;overflow-x:auto;display:none">
-  <!-- Count + pagination -->
-  <div class="flex items-center justify-between px-4 sm:px-5 py-3" style="border-bottom:1px solid var(--border)">
-    <span class="num text-xs" style="color:var(--text-muted)">{{ total }} risultati</span>
+    <!-- Pagination -->
     {% if total > page_size %}
-    <div class="flex items-center gap-1">
-      {% if page > 1 %}
-      <a href="?{{ query_string }}&page={{ page - 1 }}" class="btn-ghost text-xs px-2.5 py-1.5">←</a>
-      {% endif %}
-      <span class="num text-xs px-2" style="color:var(--text-muted)">{{ page }}/{{ (total // page_size) + (1 if total % page_size else 0) }}</span>
-      {% if page * page_size < total %}
-      <a href="?{{ query_string }}&page={{ page + 1 }}" class="btn-ghost text-xs px-2.5 py-1.5">→</a>
-      {% endif %}
+    <div class="flex items-center justify-between px-5 py-3" style="border-top:1px solid var(--border)">
+      <span class="num text-xs" style="color:var(--text-muted)">{{ (page-1)*page_size + 1 }}–{{ [page*page_size, total] | min }} di {{ total }}</span>
+      <div class="flex items-center gap-1">
+        {% if page > 1 %}<a href="?{{ query_string }}&page={{ page - 1 }}" class="btn-ghost" style="height:28px;padding:0 10px;font-size:12px">{{ ui.icon('chevron-left', 'w-3 h-3') }} Prec</a>{% endif %}
+        <span class="num text-xs px-2" style="color:var(--text-muted)">{{ page }} / {{ pages }}</span>
+        {% if page * page_size < total %}<a href="?{{ query_string }}&page={{ page + 1 }}" class="btn-ghost" style="height:28px;padding:0 10px;font-size:12px">Succ {{ ui.icon('chevron-right', 'w-3 h-3') }}</a>{% endif %}
+      </div>
     </div>
     {% endif %}
-  </div>
-  <!-- ── Mobile card list (hidden sm+) ─────────────────────────────────────── -->
-  <div class="sm:hidden">
-    {% for tx in transactions %}
-    {% set cat_color = tx.category.color if tx.category else '#6b6b88' %}
-    {% set is_mapped = tx.merchant and tx.merchant.lower() in mapped_merchants %}
-    {% set _is_new = new_since_dt and tx.created_at and tx.created_at >= new_since_dt %}
-    {% set _state = {'isMapped': true if is_mapped else false, 'catId': tx.category_id|string if tx.category_id else '', 'catColor': cat_color, 'catName': tx.category.name if tx.category else 'Altro', 'catIcon': tx.category.icon if tx.category else '❓', 'catTextColor': cat_color | tag_text_color, 'txId': tx.id, 'isConfirmed': tx.is_confirmed, 'tripId': tx.trip_id|string if tx.trip_id else '', 'tripName': trip_map.get(tx.trip_id, '') if tx.trip_id else ''} %}
-    <div x-data="txRow($el)" data-state='{{ _state | tojson | replace("'", "&#39;") }}'
-         :style="isConfirmed ? 'border-bottom:1px solid var(--border-subtle);background:rgba(16,185,129,0.04)' : 'border-bottom:1px solid var(--border-subtle)'"
-         class="px-4 py-3 tr-hover">
-      <!-- Row 1: checkbox + date + amount + confirm -->
-      <div class="flex items-center justify-between gap-2 mb-1">
-        <div class="flex items-center gap-2">
-          <input type="checkbox" style="accent-color:var(--sky);width:15px;height:15px;cursor:pointer;flex-shrink:0"
-                 :checked="$store.sel.has(txId)" @change="$store.sel.toggle(txId)">
-          <p class="num text-xs" style="color:var(--text-muted)">
-            {{ tx.date.strftime('%d/%m/%Y') }}
-            {% if tx.status == 'PDNG' %}<span class="inline-block ml-1 px-1.5 rounded text-[10px] font-semibold" style="background:rgba(217,133,70,0.15);color:#f59e0b">PDNG</span>
-            {% elif _is_new %}<span class="inline-block ml-1 px-1.5 rounded text-[10px] font-semibold" style="background:rgba(14,165,233,0.15);color:#0ea5e9">NUOVA</span>{% endif %}
-          </p>
-        </div>
-        <div class="flex items-center gap-2">
-          {% set is_foreign = tx.currency and tx.currency != 'EUR' %}
-          {% if tx.amount < 0 %}
-          <div class="text-right">
-            <span @click="editShare = !editShare" class="num text-sm font-medium" style="color:var(--rose);cursor:pointer">{{ "{:+,.2f}".format(tx.amount) }} {{ tx.currency | currency_symbol if is_foreign else '€' }}</span>
-            {% if is_foreign and tx.eur_amount is not none %}
-            <div class="num text-xs" style="color:var(--text-muted)">≈ {{ "{:+,.2f}".format(tx.eur_amount) }} €</div>
-            {% endif %}
-          </div>
-          {% else %}
-          <div class="text-right">
-            <span @click="editShare = !editShare" class="num text-sm font-medium" style="color:var(--emerald);cursor:pointer" title="Clicca per segnare come rimborso">{{ "{:+,.2f}".format(tx.amount) }} {{ tx.currency | currency_symbol if is_foreign else '€' }}</span>
-            {% if is_foreign and tx.eur_amount is not none %}
-            <div class="num text-xs" style="color:var(--text-muted)">≈ {{ "{:+,.2f}".format(tx.eur_amount) }} €</div>
-            {% endif %}
-          </div>
-          {% endif %}
-          <button @click="toggleConfirm()" :style="isConfirmed ? 'color:#10b981' : 'color:var(--text-dim);opacity:0.4'" class="hover:opacity-100 transition-opacity flex-shrink-0">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" style="width:16px;height:16px">
-              <path fill-rule="evenodd" d="M10 18a8 8 0 1 0 0-16 8 8 0 0 0 0 16Zm3.857-9.809a.75.75 0 0 0-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 1 0-1.06 1.061l2.5 2.5a.75.75 0 0 0 1.137-.089l4-5.5Z" clip-rule="evenodd"/>
-            </svg>
-          </button>
-          {% if tx.deletable %}
-          <form method="post" action="/transactions/{{ tx.id }}/delete" class="flex-shrink-0" onsubmit="return confirm('Eliminare questa transazione?')">
-            <input type="hidden" name="redirect_to" value="{{ request.url }}">
-            <button type="submit" title="Elimina" style="color:#ef4444;opacity:0.6" class="hover:opacity-100 transition-opacity">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" style="width:15px;height:15px">
-                <path fill-rule="evenodd" d="M8.75 1A2.75 2.75 0 0 0 6 3.75v.443c-.795.077-1.584.176-2.365.298a.75.75 0 1 0 .23 1.482l.149-.022.841 10.518A2.75 2.75 0 0 0 7.596 19h4.807a2.75 2.75 0 0 0 2.742-2.53l.841-10.52.149.023a.75.75 0 0 0 .23-1.482A41.03 41.03 0 0 0 14 4.193V3.75A2.75 2.75 0 0 0 11.25 1h-2.5ZM10 4c.84 0 1.673.025 2.5.075V3.75c0-.69-.56-1.25-1.25-1.25h-2.5c-.69 0-1.25.56-1.25 1.25v.325C8.327 4.025 9.16 4 10 4ZM8.58 7.72a.75.75 0 0 0-1.5.06l.3 7.5a.75.75 0 1 0 1.5-.06l-.3-7.5Zm4.34.06a.75.75 0 1 0-1.5-.06l-.3 7.5a.75.75 0 1 0 1.5.06l.3-7.5Z" clip-rule="evenodd"/>
-              </svg>
-            </button>
-          </form>
-          {% endif %}
-        </div>
-      </div>
-      <!-- Row 2: merchant -->
-      <p class="text-sm font-medium truncate mb-1.5" style="color:var(--text)" title="{{ tx.merchant or tx.description or '' }}">{{ tx.merchant or tx.description or '—' }}</p>
-      {% if tx.merchant and tx.description %}
-      <p class="text-xs truncate mb-1.5" style="color:var(--text-dim)" title="{{ tx.description }}">{{ tx.description }}</p>
-      {% endif %}
-      <!-- Row 3: category + associa -->
-      <div class="flex items-center gap-2 flex-wrap">
-        <div class="relative inline-block">
-          <div @click="toggleEditing($el)" class="cursor-pointer inline-flex items-center gap-1.5"
-               :style="`background:${catColor}14;border:1px solid ${catColor}35;border-radius:8px;padding:3px 8px 3px 4px`">
-            <span class="inline-flex items-center justify-center text-xs" :style="`width:18px;height:18px;border-radius:5px;background:${catColor}35;flex-shrink:0`" x-text="catIcon"></span>
-            <span class="text-xs font-medium" style="color:var(--text)" x-text="catName"></span>
-          </div>
-          <div x-show="editing" x-transition @click.outside="editing = false" @keydown.escape.window="editing = false"
-               class="absolute z-50 card" :style="dropUp ? 'bottom:calc(100% + 6px);left:0;width:200px;padding:6px;box-shadow:0 8px 24px rgba(0,0,0,0.18);max-height:260px;overflow-y:auto' : 'top:calc(100% + 6px);left:0;width:200px;padding:6px;box-shadow:0 8px 24px rgba(0,0,0,0.18);max-height:260px;overflow-y:auto'">
-            <input x-model="catSearch" @click.stop @keydown.enter.prevent="selectFirstCat()" placeholder="Cerca…"
-                   class="cat-search input w-full text-xs" style="height:28px;padding:4px 8px;position:sticky;top:-6px;z-index:1;background:var(--surface);margin-bottom:4px">
-            {% set tx_type = 'income' if tx.amount > 0 else 'expense' %}
-            {% for cat in categories if cat.type == tx_type or cat.type == 'transfer' or cat.type == 'both' or cat.type == 'investment' %}
-            <div @click="saveCategory('{{ cat.id }}')" data-catid="{{ cat.id }}" x-show='catMatch({{ cat.name|tojson }})' class="tr-hover flex items-center gap-2 px-1.5 py-1 rounded-lg cursor-pointer" style="color:var(--text)"
-                 {% if tx.category_id == cat.id %}x-init="$el.style.background='{{ cat.color }}12'"{% endif %}>
-              <span class="inline-flex items-center justify-center text-xs flex-shrink-0" style="width:20px;height:20px;border-radius:6px;background:{{ cat.color }}20">{{ cat.icon }}</span>
-              <span class="text-xs font-medium" style="color:var(--text)">{{ cat.name }}</span>
-            </div>
-            {% endfor %}
-          </div>
-        </div>
-        {% if tx.merchant %}
-        <button @click="saveMerchant()" :title="isMapped ? 'Rimuovi associazione esercente' : 'Associa esercente a categoria'"
-          :style="isMapped ? 'color:var(--emerald);opacity:1' : 'color:var(--text-dim);opacity:0.4'"
-          class="hover:opacity-100 transition-opacity">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" style="width:15px;height:15px">
-            <path d="M12.232 4.232a2.5 2.5 0 0 1 3.536 3.536l-1.225 1.224a.75.75 0 0 0 1.061 1.06l1.224-1.224a4 4 0 0 0-5.656-5.656l-3 3a4 4 0 0 0 .225 5.865.75.75 0 0 0 .977-1.138 2.5 2.5 0 0 1-.142-3.667l3-3Z"/>
-            <path d="M11.603 7.963a.75.75 0 0 0-.977 1.138 2.5 2.5 0 0 1 .142 3.667l-3 3a2.5 2.5 0 0 1-3.536-3.536l1.225-1.224a.75.75 0 0 0-1.061-1.06l-1.224 1.224a4 4 0 1 0 5.656 5.656l3-3a4 4 0 0 0-.225-5.865Z"/>
-          </svg>
-        </button>
-        {% endif %}
-        <span x-show="tripId" x-cloak :title="'Viaggio: ' + tripName" style="color:var(--sky)">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" style="width:13px;height:13px">
-            <path d="M3.105 2.289a.75.75 0 0 0-.826.95l1.414 4.925A1.5 1.5 0 0 0 5.135 9.25h6.115a.75.75 0 0 1 0 1.5H5.135a1.5 1.5 0 0 0-1.442 1.086l-1.414 4.926a.75.75 0 0 0 .826.95 28.896 28.896 0 0 0 15.293-7.154.75.75 0 0 0 0-1.115A28.897 28.897 0 0 0 3.105 2.289Z"/>
-          </svg>
-        </span>
-        {% if tx.account %}
-        <span class="text-xs ml-auto" style="color:var(--text-dim)">{{ tx.account.display_name or tx.account.bank_name }}</span>
-        {% endif %}
-      </div>
-      <!-- personal share / reimbursement inline form -->
-      {% if tx.amount < 0 %}
-      <template x-if="editShare">
-        <form method="post" action="/transactions/{{ tx.id }}/share" class="mt-2 flex gap-1">
-          <input type="hidden" name="redirect_to" value="{{ request.url }}">
-          <input type="number" name="personal_share" value="{{ tx.personal_share or '' }}" placeholder="quota €" step="0.01" min="0" class="input text-xs" style="width:90px;padding:3px 6px;height:28px">
-          <button type="submit" class="btn-primary text-xs" style="padding:3px 8px;height:28px">✓</button>
-        </form>
-      </template>
-      {% endif %}
-      {% if tx.amount > 0 %}
-      {% if tx.is_reimbursement %}
-      <span class="tag mt-1 inline-block" style="background:rgba(217,133,70,0.1);color:var(--amber);border:1px solid rgba(217,133,70,0.2);font-size:10px">rimborso</span>
-      {% endif %}
-      <template x-if="editShare">
-        <form method="post" action="/transactions/{{ tx.id }}/reimbursement" class="mt-2 flex gap-1">
-          <input type="hidden" name="redirect_to" value="{{ request.url }}">
-          <button type="submit" class="btn-primary text-xs" style="padding:3px 8px;height:28px;{% if tx.is_reimbursement %}background:var(--amber){% endif %}">
-            {% if tx.is_reimbursement %}✗ rimborso{% else %}rimborso{% endif %}
-          </button>
-        </form>
-      </template>
-      {% endif %}
-    </div>
-    {% else %}
-    <p class="px-5 py-14 text-center text-sm" style="color:var(--text-dim)">Nessuna transazione trovata</p>
-    {% endfor %}
-  </div>
+  </section>
 
-  <!-- ── Desktop table (hidden on mobile) ───────────────────────────────────── -->
-  <table class="hidden sm:table w-full text-sm" style="min-width:600px">
-    <thead>
-      <tr class="text-xs" style="color:var(--text-dim); border-bottom:1px solid var(--border)">
-        <th class="px-3 py-3" style="width:32px">
-          <input type="checkbox" style="accent-color:var(--sky);width:15px;height:15px;cursor:pointer;vertical-align:middle"
-                 :checked="$store.sel.ids.length > 0 && $store.sel.ids.length === window.__pageTxIds.length"
-                 @change="$store.sel.toggleAll(window.__pageTxIds)" title="Seleziona tutte">
-        </th>
-        <th class="text-left px-4 sm:px-5 py-3 font-medium">Data</th>
-        <th class="text-left px-4 sm:px-5 py-3 font-medium" style="width:300px">Descrizione</th>
-        <th class="text-left px-3 py-3 font-medium">Categoria</th>
-        <th class="px-2 py-3 w-8"></th>
-        <th class="text-left px-3 py-3 font-medium" style="width:90px">Conto</th>
-        <th class="text-right px-4 sm:px-5 py-3 font-medium">Importo</th>
-        <th class="px-3 py-3 w-8"></th>
-      </tr>
-    </thead>
-    <tbody>
-    {% for tx in transactions %}
-    {% set cat_color = tx.category.color if tx.category else '#6b6b88' %}
-    {% set is_mapped = tx.merchant and tx.merchant.lower() in mapped_merchants %}
-    {% set _is_new = new_since_dt and tx.created_at and tx.created_at >= new_since_dt %}
-    {% set _state = {'isMapped': true if is_mapped else false, 'catId': tx.category_id|string if tx.category_id else '', 'catColor': cat_color, 'catName': tx.category.name if tx.category else 'Altro', 'catIcon': tx.category.icon if tx.category else '❓', 'catTextColor': cat_color | tag_text_color, 'txId': tx.id, 'isConfirmed': tx.is_confirmed, 'tripId': tx.trip_id|string if tx.trip_id else '', 'tripName': trip_map.get(tx.trip_id, '') if tx.trip_id else ''} %}
-    <tr class="tr-hover" x-data="txRow($el)" data-state='{{ _state | tojson | replace("'", "&#39;") }}'
-        :style="isConfirmed ? 'border-bottom:1px solid var(--border-subtle);background:rgba(16,185,129,0.04)' : 'border-bottom:1px solid var(--border-subtle)'">
-      <td class="px-3 py-3.5 text-center" style="width:32px">
-        <input type="checkbox" style="accent-color:var(--sky);width:15px;height:15px;cursor:pointer;vertical-align:middle"
-               :checked="$store.sel.has(txId)" @change="$store.sel.toggle(txId)">
-      </td>
-      <td class="num px-4 sm:px-5 py-3.5 text-xs" style="color:var(--text-muted); white-space:nowrap">
-        {{ tx.date.strftime('%d/%m/%Y') }}
-        {% if tx.status == 'PDNG' %}<span class="inline-block ml-1.5 px-1.5 py-0.5 rounded text-[10px] font-semibold" style="background:rgba(217,133,70,0.15);color:#f59e0b;line-height:1.4">PDNG</span>
-        {% elif _is_new %}<span class="inline-block ml-1.5 px-1.5 py-0.5 rounded text-[10px] font-semibold" style="background:rgba(14,165,233,0.15);color:#0ea5e9;line-height:1.4">NUOVA</span>{% endif %}
-      </td>
-      <td class="px-4 sm:px-5 py-3.5" style="width:300px;max-width:300px">
-        <p class="truncate" style="color:var(--text)" title="{{ tx.merchant or tx.description or '' }}">{{ tx.merchant or tx.description or '—' }}</p>
-        {% if tx.merchant and tx.description %}
-        <p class="text-xs truncate mt-0.5" style="color:var(--text-dim)" title="{{ tx.description }}">{{ tx.description }}</p>
-        {% endif %}
-      </td>
-      <!-- Category cell -->
-      <td class="px-3 py-3.5">
-        <div class="relative inline-block">
-          <div @click="toggleEditing($el)" class="cursor-pointer inline-flex items-center gap-1.5"
-               :style="`background:${catColor}14;border:1px solid ${catColor}35;border-radius:8px;padding:3px 8px 3px 4px`">
-            <span class="inline-flex items-center justify-center text-xs"
-                  :style="`width:18px;height:18px;border-radius:5px;background:${catColor}35;flex-shrink:0`"
-                  x-text="catIcon"></span>
-            <span class="text-xs font-medium" style="color:var(--text)" x-text="catName"></span>
-          </div>
-          <div x-show="editing" x-transition @click.outside="editing = false" @keydown.escape.window="editing = false"
-               class="absolute z-50 card"
-               :style="dropUp ? 'bottom:calc(100% + 6px);left:0;width:200px;padding:6px;box-shadow:0 8px 24px rgba(0,0,0,0.18);box-sizing:border-box;max-height:260px;overflow-y:auto' : 'top:calc(100% + 6px);left:0;width:200px;padding:6px;box-shadow:0 8px 24px rgba(0,0,0,0.18);box-sizing:border-box;max-height:260px;overflow-y:auto'">
-            <input x-model="catSearch" @click.stop @keydown.enter.prevent="selectFirstCat()" placeholder="Cerca…"
-                   class="cat-search input w-full text-xs" style="height:28px;padding:4px 8px;position:sticky;top:-6px;z-index:1;background:var(--surface);margin-bottom:4px">
-            {% set tx_type = 'income' if tx.amount > 0 else 'expense' %}
-            {% for cat in categories if cat.type == tx_type or cat.type == 'transfer' or cat.type == 'both' or cat.type == 'investment' %}
-            <div @click="saveCategory('{{ cat.id }}')" data-catid="{{ cat.id }}" x-show='catMatch({{ cat.name|tojson }})' class="tr-hover flex items-center gap-2 px-1.5 py-1 rounded-lg cursor-pointer"
-                 style="color:var(--text)"
-                 {% if tx.category_id == cat.id %}x-init="$el.style.background='{{ cat.color }}12'"{% endif %}>
-              <span class="inline-flex items-center justify-center text-xs flex-shrink-0"
-                    style="width:20px;height:20px;border-radius:6px;background:{{ cat.color }}20">{{ cat.icon }}</span>
-              <span class="text-xs font-medium" style="color:var(--text)">{{ cat.name }}</span>
-            </div>
-            {% endfor %}
-          </div>
-        </div>
-      </td>
-      <!-- Associa cell -->
-      <td class="px-2 py-3.5 text-center">
-        <div class="flex items-center justify-center gap-1.5">
-          {% if tx.merchant %}
-          <button @click="saveMerchant()" :title="isMapped ? 'Rimuovi associazione esercente' : 'Associa esercente a categoria'"
-            :style="isMapped ? 'color:var(--emerald);opacity:1' : 'color:var(--text-dim);opacity:0.4'"
-            class="hover:opacity-100 transition-opacity">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" style="width:15px;height:15px">
-              <path d="M12.232 4.232a2.5 2.5 0 0 1 3.536 3.536l-1.225 1.224a.75.75 0 0 0 1.061 1.06l1.224-1.224a4 4 0 0 0-5.656-5.656l-3 3a4 4 0 0 0 .225 5.865.75.75 0 0 0 .977-1.138 2.5 2.5 0 0 1-.142-3.667l3-3Z"/>
-              <path d="M11.603 7.963a.75.75 0 0 0-.977 1.138 2.5 2.5 0 0 1 .142 3.667l-3 3a2.5 2.5 0 0 1-3.536-3.536l1.225-1.224a.75.75 0 0 0-1.061-1.06l-1.224 1.224a4 4 0 1 0 5.656 5.656l3-3a4 4 0 0 0-.225-5.865Z"/>
-            </svg>
-          </button>
-          {% endif %}
-          <span x-show="tripId" x-cloak :title="'Viaggio: ' + tripName" style="color:var(--sky)">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" style="width:13px;height:13px">
-              <path d="M3.105 2.289a.75.75 0 0 0-.826.95l1.414 4.925A1.5 1.5 0 0 0 5.135 9.25h6.115a.75.75 0 0 1 0 1.5H5.135a1.5 1.5 0 0 0-1.442 1.086l-1.414 4.926a.75.75 0 0 0 .826.95 28.896 28.896 0 0 0 15.293-7.154.75.75 0 0 0 0-1.115A28.897 28.897 0 0 0 3.105 2.289Z"/>
-            </svg>
-          </span>
-        </div>
-      </td>
-      <td class="px-3 py-3.5 text-xs" style="color:var(--text-muted)">{{ (tx.account.display_name or tx.account.bank_name) if tx.account else '—' }}</td>
-      <td class="num px-4 sm:px-5 py-3.5 text-right font-medium" style="white-space:nowrap">
-        {% set is_foreign = tx.currency and tx.currency != 'EUR' %}
-        {% if tx.amount < 0 %}
-        <div>
-          {% if is_foreign %}
-          <span @click="editShare = !editShare" style="color:var(--rose);cursor:pointer" title="Clicca per modificare quota personale">{{ "{:+,.2f}".format(tx.amount) }} {{ tx.currency | currency_symbol }}</span>
-          {% if tx.eur_amount is not none %}
-          <div class="text-xs" style="color:var(--text-muted)">≈ {{ "{:+,.2f}".format(tx.eur_amount) }} €</div>
-          {% endif %}
-          {% else %}
-          <span @click="editShare = !editShare" style="color:var(--rose);cursor:pointer" title="Clicca per modificare quota personale">{{ "{:+,.2f}".format(tx.amount) }} €</span>
-          {% endif %}
-          {% if tx.personal_share is not none %}
-          <span class="tag ml-1" style="background:rgba(47,91,234,0.1);color:var(--sky);border:1px solid rgba(47,91,234,0.2);font-size:10px" title="Quota personale">{{ "{:.2f}".format(tx.personal_share) }} €</span>
-          {% endif %}
-        </div>
-        <template x-if="editShare">
-          <form method="post" action="/transactions/{{ tx.id }}/share" class="mt-1 flex gap-1 justify-end">
-            <input type="hidden" name="redirect_to" value="{{ request.url }}">
-            <input type="number" name="personal_share" value="{{ tx.personal_share or '' }}" placeholder="quota €" step="0.01" min="0" class="input text-xs" style="width:90px;padding:3px 6px;height:28px">
-            <button type="submit" class="btn-primary text-xs" style="padding:3px 8px;height:28px">✓</button>
-          </form>
-        </template>
-        {% else %}
-        {% if is_foreign %}
-        <span @click="editShare = !editShare" style="color:var(--emerald);cursor:pointer" title="Clicca per segnare come rimborso">{{ "{:+,.2f}".format(tx.amount) }} {{ tx.currency | currency_symbol }}</span>
-        {% if tx.eur_amount is not none %}
-        <div class="text-xs" style="color:var(--text-muted)">≈ {{ "{:+,.2f}".format(tx.eur_amount) }} €</div>
-        {% endif %}
-        {% else %}
-        <span @click="editShare = !editShare" style="color:var(--emerald);cursor:pointer" title="Clicca per segnare come rimborso">{{ "{:+,.2f}".format(tx.amount) }} €</span>
-        {% endif %}
-        {% if tx.is_reimbursement %}
-        <span class="tag ml-1" style="background:rgba(217,133,70,0.1);color:var(--amber);border:1px solid rgba(217,133,70,0.2);font-size:10px" title="Rimborso — non conta come entrata">rimborso</span>
-        {% endif %}
-        <template x-if="editShare">
-          <form method="post" action="/transactions/{{ tx.id }}/reimbursement" class="mt-1 flex gap-1 justify-end">
-            <input type="hidden" name="redirect_to" value="{{ request.url }}">
-            <button type="submit" class="btn-primary text-xs" style="padding:3px 8px;height:28px;{% if tx.is_reimbursement %}background:var(--amber){% endif %}">
-              {% if tx.is_reimbursement %}✗ rimosso{% else %}rimborso{% endif %}
-            </button>
-          </form>
-        </template>
-        {% endif %}
-      </td>
-      <td class="px-3 py-3.5 text-center" style="width:36px">
-        <div class="flex items-center justify-center gap-1.5">
-          <button @click="toggleConfirm()" title="Segna come confermata"
-                  :style="isConfirmed ? 'color:#10b981;opacity:1' : 'color:var(--text-dim);opacity:0.4'"
-                  class="hover:opacity-100 transition-opacity">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" style="width:16px;height:16px">
-              <path fill-rule="evenodd" d="M10 18a8 8 0 1 0 0-16 8 8 0 0 0 0 16Zm3.857-9.809a.75.75 0 0 0-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 1 0-1.06 1.061l2.5 2.5a.75.75 0 0 0 1.137-.089l4-5.5Z" clip-rule="evenodd" />
-            </svg>
-          </button>
-          {% if tx.deletable %}
-          <form method="post" action="/transactions/{{ tx.id }}/delete" onsubmit="return confirm('Eliminare questa transazione?')">
-            <input type="hidden" name="redirect_to" value="{{ request.url }}">
-            <button type="submit" title="Elimina transazione" style="color:var(--text-dim);opacity:0.4"
-                    class="hover:opacity-100 transition-opacity" onmouseover="this.style.color='#ef4444'" onmouseout="this.style.color='var(--text-dim)'">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" style="width:15px;height:15px">
-                <path fill-rule="evenodd" d="M8.75 1A2.75 2.75 0 0 0 6 3.75v.443c-.795.077-1.584.176-2.365.298a.75.75 0 1 0 .23 1.482l.149-.022.841 10.518A2.75 2.75 0 0 0 7.596 19h4.807a2.75 2.75 0 0 0 2.742-2.53l.841-10.52.149.023a.75.75 0 0 0 .23-1.482A41.03 41.03 0 0 0 14 4.193V3.75A2.75 2.75 0 0 0 11.25 1h-2.5ZM10 4c.84 0 1.673.025 2.5.075V3.75c0-.69-.56-1.25-1.25-1.25h-2.5c-.69 0-1.25.56-1.25 1.25v.325C8.327 4.025 9.16 4 10 4ZM8.58 7.72a.75.75 0 0 0-1.5.06l.3 7.5a.75.75 0 1 0 1.5-.06l-.3-7.5Zm4.34.06a.75.75 0 1 0-1.5-.06l-.3 7.5a.75.75 0 1 0 1.5.06l.3-7.5Z" clip-rule="evenodd" />
-              </svg>
-            </button>
-          </form>
-          {% endif %}
-        </div>
-      </td>
-    </tr>
-    {% else %}
-    <tr>
-      <td colspan="8" class="px-5 py-14 text-center text-sm" style="color:var(--text-dim)">
-        Nessuna transazione trovata
-      </td>
-    </tr>
-    {% endfor %}
-    </tbody>
-  </table>
-
-  <!-- Pagination -->
-  {% if total > page_size %}
-  <div class="flex items-center justify-between px-5 py-4" style="border-top:1px solid var(--border)">
-    <span class="num text-xs" style="color:var(--text-muted)">
-      {{ (page-1)*page_size + 1 }}–{{ [page*page_size, total] | min }} di {{ total }}
-    </span>
-    <div class="flex items-center gap-2">
-      {% if page > 1 %}
-      <a href="?{{ query_string }}&page={{ page - 1 }}" class="btn-ghost text-xs px-3 py-1.5" style="border-radius:6px">← Prec</a>
-      {% endif %}
-      <span class="num text-xs px-3 py-1.5" style="color:var(--text-muted)">{{ page }} / {{ (total // page_size) + (1 if total % page_size else 0) }}</span>
-      {% if page * page_size < total %}
-      <a href="?{{ query_string }}&page={{ page + 1 }}" class="btn-ghost text-xs px-3 py-1.5" style="border-radius:6px">Succ →</a>
-      {% endif %}
-    </div>
-  </div>
-  {% endif %}
 </div>
 
 <!-- Bulk action bar -->
 <div x-data x-show="$store.sel.ids.length > 0" x-cloak
-     class="fixed card" style="bottom:20px;left:50%;transform:translateX(-50%);z-index:70;padding:10px 14px;box-shadow:0 8px 30px rgba(0,0,0,0.25);display:flex;align-items:center;gap:10px;flex-wrap:wrap;max-width:calc(100vw - 24px)">
-  <span class="num text-xs font-medium whitespace-nowrap" style="color:var(--text)" x-text="$store.sel.ids.length + ' selezionate'"></span>
-  <div class="flex items-center gap-1.5">
-    <select x-ref="bulkcat" class="input text-xs" style="height:30px;max-width:150px">
+     class="fixed panel flex items-center gap-2.5 flex-wrap" style="bottom:20px;left:50%;transform:translateX(-50%);z-index:70;padding:8px 12px;box-shadow:0 12px 32px rgba(17,24,39,0.18);max-width:calc(100vw - 24px)">
+  <span class="num text-xs font-medium whitespace-nowrap px-1" style="color:var(--text)" x-text="$store.sel.ids.length + ' selezionate'"></span>
+  <div class="flex items-center gap-1">
+    <select x-ref="bulkcat" class="input text-xs" style="height:30px;max-width:160px">
       <option value="">Categoria…</option>
       {% for cat in categories %}
       <option value="{{ cat.id }}">{{ cat.icon }} {{ cat.name }}</option>
       {% endfor %}
     </select>
-    <button @click="$store.sel.apply('category', $refs.bulkcat.value)" class="btn-primary text-xs" style="height:30px;padding:0 10px">✓</button>
+    <button @click="$store.sel.apply('category', $refs.bulkcat.value)" class="btn-primary" style="height:30px;padding:0 10px" title="Applica categoria">{{ ui.icon('check') }}</button>
   </div>
-  <div class="flex items-center gap-1.5">
-    <select x-ref="bulktrip" class="input text-xs" style="height:30px;max-width:150px">
+  <div class="flex items-center gap-1">
+    <select x-ref="bulktrip" class="input text-xs" style="height:30px;max-width:160px">
       <option value="">Viaggio…</option>
-      <option value="__none__">— Rimuovi viaggio —</option>
+      <option value="__none__">Rimuovi dal viaggio</option>
       {% for trip in trips %}
-      <option value="{{ trip.id }}">✈️ {{ trip.name }}</option>
+      <option value="{{ trip.id }}">{{ trip.name }}</option>
       {% endfor %}
     </select>
-    <button @click="$store.sel.apply('trip', $refs.bulktrip.value)" class="btn-primary text-xs" style="height:30px;padding:0 10px">✓</button>
+    <button @click="$store.sel.apply('trip', $refs.bulktrip.value)" class="btn-primary" style="height:30px;padding:0 10px" title="Applica viaggio">{{ ui.icon('check') }}</button>
   </div>
-  <button @click="$store.sel.clear()" class="btn-ghost text-xs" style="height:30px" title="Deseleziona tutto">✕</button>
+  <button @click="$store.sel.clear()" class="icon-btn" title="Deseleziona tutto">{{ ui.icon('x') }}</button>
 </div>
 
 <script>

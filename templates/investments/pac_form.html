@@ -1,39 +1,40 @@
 {% extends "base.html" %}
+{% import "_ui.html" as ui %}
 {% block title %}{{ title }} — Ledger{% endblock %}
 {% block content %}
 
-<div class="mb-6">
-  <a href="/investments/pac" class="btn-ghost inline-flex mb-4">← PAC</a>
-  <h1 class="text-xl font-semibold" style="color:var(--text)">{{ title }}</h1>
+<div class="flex items-center gap-3 mb-5">
+  <a href="/investments/pac" class="btn-ghost btn-icon" aria-label="Torna ai PAC">{{ ui.icon('arrow-left', 'w-4 h-4') }}</a>
+  <h1 class="page-title">{{ title }}</h1>
 </div>
 
 <div class="card" style="max-width:560px" x-data='{ "components": {{ initial_components | tojson }} }'>
   <form method="post" action="{{ form_action }}">
     <div class="mb-5">
-      <label class="text-xs font-medium mb-1.5 block" style="color:var(--text-muted)">Nome PAC *</label>
+      <label class="field-label">Nome PAC *</label>
       <input type="text" name="name" value="{{ pac.name if pac else '' }}" placeholder="es. PAC Mensile Globale" class="input w-full" required>
     </div>
     <div class="mb-5">
-      <label class="text-xs font-medium mb-1.5 block" style="color:var(--text-muted)">Descrizione</label>
+      <label class="field-label">Descrizione</label>
       <input type="text" name="description" value="{{ pac.description if pac and pac.description else '' }}" placeholder="Opzionale" class="input w-full">
     </div>
 
     <!-- Components -->
     <div class="mb-5">
-      <label class="text-xs font-medium mb-3 block" style="color:var(--text-muted)">Strumenti inclusi</label>
+      <label class="field-label mb-3">Strumenti inclusi</label>
       <template x-for="(comp, idx) in components" :key="idx">
         <div class="flex gap-2 mb-2 items-center">
           <select name="instrument_ids" class="input flex-1" x-model="comp.id" required>
-            <option value="">— Strumento —</option>
+            <option value="">Strumento</option>
             {% for inst in instruments %}
             <option value="{{ inst.id }}">{{ inst.ticker }} — {{ inst.name }}</option>
             {% endfor %}
           </select>
           <input type="number" name="target_weights" placeholder="Qtà" step="1" min="0" class="input w-20" x-model="comp.weight">
-          <button type="button" @click="components.splice(idx,1)" class="btn-ghost" style="color:var(--rose)">✕</button>
+          <button type="button" @click="components.splice(idx,1)" class="icon-btn danger" title="Rimuovi">{{ ui.icon('x') }}</button>
         </div>
       </template>
-      <button type="button" @click="components.push({id:'',weight:''})" class="btn-ghost mt-1">+ Strumento</button>
+      <button type="button" @click="components.push({id:'',weight:''})" class="btn-ghost mt-1">{{ ui.icon('plus') }} Strumento</button>
     </div>
 
     <div class="flex gap-2">

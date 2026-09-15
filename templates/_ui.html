@@ -1,0 +1,59 @@
+{#- Shared UI macros. Import with: {% import "_ui.html" as ui %} -#}
+
+{#- Inline stroke icon. Names: plus, x, chevron, chevron-right, arrow-left, arrow-right,
+    refresh, edit, trash, plane, link, check, check-circle, swap, cash, drop, search, eye, eye-off -#}
+{% macro icon(name, cls='w-3.5 h-3.5') -%}
+<svg class="{{ cls }}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" aria-hidden="true">
+{%- if name == 'plus' %}<path d="M12 5v14M5 12h14"/>
+{%- elif name == 'x' %}<path d="M18 6L6 18M6 6l12 12"/>
+{%- elif name == 'chevron' %}<path d="M6 9l6 6 6-6"/>
+{%- elif name == 'chevron-right' %}<path d="M9 6l6 6-6 6"/>
+{%- elif name == 'chevron-left' %}<path d="M15 6l-6 6 6 6"/>
+{%- elif name == 'arrow-left' %}<path d="M19 12H5M12 19l-7-7 7-7"/>
+{%- elif name == 'arrow-right' %}<path d="M5 12h14M12 5l7 7-7 7"/>
+{%- elif name == 'refresh' %}<path d="M21 12a9 9 0 1 1-2.6-6.4"/><path d="M21 3v6h-6"/>
+{%- elif name == 'edit' %}<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/>
+{%- elif name == 'trash' %}<path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/>
+{%- elif name == 'plane' %}<path d="M22 2L11 13"/><path d="M22 2L15 22l-4-9-9-4z"/>
+{%- elif name == 'link' %}<path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/>
+{%- elif name == 'check' %}<path d="M5 12l5 5L20 7"/>
+{%- elif name == 'check-circle' %}<circle cx="12" cy="12" r="9"/><path d="M8.5 12.5l2.5 2.5 4.5-5"/>
+{%- elif name == 'swap' %}<path d="M7 16V4M7 4L3 8M7 4l4 4"/><path d="M17 8v12M17 20l4-4M17 20l-4-4"/>
+{%- elif name == 'cash' %}<rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="3"/>
+{%- elif name == 'drop' %}<path d="M12 3s6 6.5 6 11a6 6 0 0 1-12 0c0-4.5 6-11 6-11z"/>
+{%- elif name == 'search' %}<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/>
+{%- elif name == 'eye' %}<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>
+{%- elif name == 'eye-off' %}<path d="M3 3l18 18"/><path d="M10.6 10.6a3 3 0 0 0 4.2 4.2"/><path d="M9.9 5.1A10.4 10.4 0 0 1 12 5c6.5 0 10 7 10 7a17.6 17.6 0 0 1-3.2 4.2"/><path d="M6.6 6.6C3.7 8.6 2 12 2 12s3.5 7 10 7c1.4 0 2.7-.3 3.9-.8"/>
+{%- elif name == 'wand' %}<path d="M15 4V2M15 16v-2M8 9h2M20 9h2M17.8 11.8L19 13M17.8 6.2L19 5M3 21l9-9M12.2 6.2L11 5"/>
+{%- endif %}
+</svg>
+{%- endmacro %}
+
+{#- Chart legend. items: list of (label, color, style) where style is 'line', 'dash' or 'bar' -#}
+{% macro legend(items) -%}
+<div class="legend">
+  {%- for label, color, style in items %}
+  <span>
+    {%- if style == 'bar' -%}
+    <span class="inline-block rounded-sm" style="width:10px;height:10px;background:{{ color }}"></span>
+    {%- else -%}
+    <svg width="20" height="6" viewBox="0 0 20 6"><line x1="0" y1="3" x2="20" y2="3" stroke="{{ color }}" stroke-width="2"{% if style == 'dash' %} stroke-dasharray="4 3"{% endif %}/></svg>
+    {%- endif -%}
+    {{ label }}
+  </span>
+  {%- endfor %}
+</div>
+{%- endmacro %}
+
+{#- Category chip: emoji icon + name tinted with the category color -#}
+{% macro cat_chip(icon, name, color) -%}
+<span class="cat-chip" style="background:{{ color }}14;border:1px solid {{ color }}35" title="{{ name }}">{% if icon %}<span>{{ icon }}</span>{% endif %}<span>{{ name }}</span></span>
+{%- endmacro %}
+
+{#- Prev/next arrows for period navigation -#}
+{% macro nav_arrows(prev_href, next_href, next_disabled=false) -%}
+<div class="flex items-center gap-1">
+  <a href="{{ prev_href }}" class="btn-ghost btn-icon" aria-label="Precedente">{{ icon('chevron-left', 'w-4 h-4') }}</a>
+  <a href="{{ next_href }}" class="btn-ghost btn-icon {% if next_disabled %}opacity-30 pointer-events-none{% endif %}" aria-label="Successivo">{{ icon('chevron-right', 'w-4 h-4') }}</a>
+</div>
+{%- endmacro %}

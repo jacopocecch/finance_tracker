@@ -1,290 +1,214 @@
 {% extends "base.html" %}
+{% import "_ui.html" as ui %}
 {% block title %}Investimenti — Ledger{% endblock %}
 {% block content %}
 
-<!-- Header -->
-<div class="flex flex-wrap items-center justify-between gap-3 mb-7">
-  <div>
-    <h1 class="text-xl font-semibold" style="color:var(--text)">Investimenti</h1>
-    <p class="text-xs mt-0.5" style="color:var(--text-dim)">
-      {% if summary.last_updated %}
-        Aggiornato {{ summary.last_updated.strftime('%d/%m/%Y %H:%M') }} UTC
-        {% if summary.has_stale_quotes %}<span class="ml-1 px-1.5 py-0.5 rounded text-xs" style="background:rgba(217,133,70,0.1);color:#d98546;border:1px solid rgba(217,133,70,0.2)">stale</span>{% endif %}
-      {% else %}
-        Nessuna quotazione disponibile
-      {% endif %}
-    </p>
-  </div>
-  <div class="flex items-center gap-2 flex-wrap">
-    <a href="/investments/pac" class="btn-ghost">PAC</a>
-    <form method="post" action="/investments/quotes/refresh">
-      <button type="submit" class="btn-ghost">
-        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
-        </svg>
-        Aggiorna quotazioni
-      </button>
-    </form>
-    <a href="/investments/transactions/add" class="btn-primary">+ Acquisto</a>
-  </div>
-</div>
+{% set alloc_colors = ['#2f5bea','#5aa1a8','#d98546','#8b6fd1','#c1a13a','#4d8fd6','#c36a86','#3f9a72','#a67a4f','#3b8f9e'] %}
 
-{% if summary.n_instruments == 0 %}
-<!-- Empty state -->
-<div class="card py-20 text-center">
-  <p class="text-sm mb-1" style="color:var(--text-muted)">Nessun investimento registrato.</p>
-  <p class="text-xs mb-5" style="color:var(--text-dim)">Aggiungi il tuo primo acquisto ETF.</p>
-  <a href="/investments/transactions/add" class="btn-primary inline-flex">+ Aggiungi acquisto</a>
-</div>
-{% else %}
-{% set alloc_colors = ['#15803d','#2f5bea','#7c3aed','#d98546','#d93b4f','#0891b2','#65a30d','#9333ea'] %}
+{% macro pl_color(v) -%}{% if v is none %}var(--text-dim){% elif v >= 0 %}var(--emerald){% else %}var(--rose){% endif %}{%- endmacro %}
 
-<!-- KPI strip -->
-<div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
-  <div class="card">
-    <p class="text-xs mb-2" style="color:var(--text-muted)">Investito</p>
-    <p class="num text-xl font-medium" style="color:var(--text)">€{{ "{:,.2f}".format(summary.total_invested) }}</p>
-  </div>
-  <div class="card">
-    <p class="text-xs mb-2" style="color:var(--text-muted)">Valore attuale</p>
-    {% if summary.total_market_value is not none %}
-    <p class="num text-xl font-medium" style="color:var(--text)">€{{ "{:,.2f}".format(summary.total_market_value) }}</p>
-    {% else %}
-    <p class="num text-xl font-medium" style="color:var(--text-dim)">—</p>
-    {% endif %}
-  </div>
-  <div class="card">
-    <p class="text-xs mb-2" style="color:var(--text-muted)">P/L</p>
-    {% if summary.total_unrealized_pl is not none %}
-    <p class="num text-xl font-medium" style="color:{% if summary.total_unrealized_pl >= 0 %}var(--emerald){% else %}var(--rose){% endif %}">
-      {{ "€{:+,.2f}".format(summary.total_unrealized_pl) }}
-    </p>
-    {% else %}
-    <p class="num text-xl font-medium" style="color:var(--text-dim)">—</p>
-    {% endif %}
-    {% if summary.total_realized_pl %}
-    <p class="num text-xs mt-1" style="color:var(--text-muted)">realizzato {{ "€{:+,.2f}".format(summary.total_realized_pl) }}</p>
-    {% endif %}
-  </div>
-  <div class="card">
-    <p class="text-xs mb-2" style="color:var(--text-muted)">P/L %</p>
-    {% if summary.total_unrealized_pl_pct is not none %}
-    <p class="num text-xl font-medium" style="color:{% if summary.total_unrealized_pl_pct >= 0 %}var(--emerald){% else %}var(--rose){% endif %}">
-      {{ "{:+.2f}%".format(summary.total_unrealized_pl_pct) }}
-    </p>
-    {% else %}
-    <p class="num text-xl font-medium" style="color:var(--text-dim)">—</p>
-    {% endif %}
-  </div>
-</div>
+<div class="flex flex-col gap-5">
 
-<div class="flex flex-col lg:flex-row gap-5 mb-6">
-
-  <!-- Positions table -->
-  <div class="card flex-1 min-w-0" style="padding:0">
-    <div class="px-5 py-4" style="border-bottom:1px solid var(--border)">
-      <p class="text-sm" style="color:var(--text-muted)">Posizioni</p>
+  <!-- Header -->
+  <div class="flex flex-wrap items-start justify-between gap-3">
+    <div>
+      <h1 class="page-title">Investimenti</h1>
+      <p class="text-xs mt-1 flex items-center gap-1.5" style="color:var(--text-dim)">
+        {% if summary.last_updated %}
+          Quotazioni del {{ summary.last_updated.strftime('%d/%m/%Y %H:%M') }} UTC
+          {% if summary.has_stale_quotes %}<span class="badge badge-amber">non aggiornate</span>{% endif %}
+        {% else %}
+          Nessuna quotazione disponibile
+        {% endif %}
+      </p>
     </div>
+    <div class="flex items-center gap-2 flex-wrap">
+      <a href="/investments/instruments" class="btn-ghost">Strumenti</a>
+      <a href="/investments/pac" class="btn-ghost">PAC</a>
+      <form method="post" action="/investments/quotes/refresh">
+        <button type="submit" class="btn-ghost">{{ ui.icon('refresh') }} Aggiorna quotazioni</button>
+      </form>
+      <a href="/investments/transactions/add" class="btn-primary">{{ ui.icon('plus') }}<span class="ml-1.5">Acquisto</span></a>
+    </div>
+  </div>
+
+  {% if summary.n_instruments == 0 %}
+  <section class="card empty" style="padding:5rem 1.25rem">
+    <p class="mb-1" style="color:var(--text-muted)">Nessun investimento registrato.</p>
+    <p class="mb-5">Aggiungi il tuo primo acquisto ETF.</p>
+    <a href="/investments/transactions/add" class="btn-primary inline-flex">Aggiungi acquisto</a>
+  </section>
+  {% else %}
+
+  <!-- Stat strip -->
+  <section class="stat-strip" style="--cols:3">
+    <div class="stat-cell">
+      <p class="stat-label">Valore attuale</p>
+      <p class="stat-value" {% if summary.total_market_value is none %}style="color:var(--text-dim)"{% endif %}>{{ summary.total_market_value | eur if summary.total_market_value is not none else '—' }}</p>
+      <p class="stat-sub">{{ summary.n_instruments }} strumenti</p>
+    </div>
+    <div class="stat-cell">
+      <p class="stat-label">Investito</p>
+      <p class="stat-value">{{ summary.total_invested | eur }}</p>
+      <p class="stat-sub">costo totale, commissioni incluse</p>
+    </div>
+    <div class="stat-cell">
+      <p class="stat-label">P/L non realizzato</p>
+      <p class="stat-value" style="color:{{ pl_color(summary.total_unrealized_pl) }}">{{ summary.total_unrealized_pl | eur(0, true) if summary.total_unrealized_pl is not none else '—' }}</p>
+      <p class="stat-sub num">
+        {% if summary.total_unrealized_pl_pct is not none %}<span style="color:{{ pl_color(summary.total_unrealized_pl_pct) }}">{{ "{:+.2f}%".format(summary.total_unrealized_pl_pct) }}</span>{% endif %}
+        {% if summary.total_realized_pl %}{% if summary.total_unrealized_pl_pct is not none %} · {% endif %}realizzato {{ summary.total_realized_pl | eur(0, true) }}{% endif %}
+      </p>
+    </div>
+  </section>
+
+  <!-- Positions + allocation -->
+  {% set alloc_total = chart_market | sum %}
+  <section class="card" style="padding:0">
+    <div class="card-head stack gap-3">
+      <div class="flex items-center justify-between">
+        <p class="card-title">Posizioni</p>
+        <span class="text-xs" style="color:var(--text-dim)">allocazione per valore</span>
+      </div>
+      {% if alloc_total %}
+      <div class="alloc-bar">
+        {% for v in chart_market if v > 0 %}
+        <div style="width:{{ '%.2f' % (v / alloc_total * 100) }}%;background:{{ alloc_colors[loop.index0 % alloc_colors|length] }}" title="{{ chart_labels[loop.index0] }}"></div>
+        {% endfor %}
+      </div>
+      {% endif %}
+    </div>
+
     <!-- Mobile cards -->
     <div class="sm:hidden">
       {% for pos in open_positions %}
       {% set pos_color = alloc_colors[loop.index0 % alloc_colors|length] %}
-      <a href="/investments/instruments/{{ pos.instrument_id }}" class="block px-4 py-3 tr-hover" style="border-bottom:1px solid var(--border-subtle);color:inherit;text-decoration:none">
-        <div class="flex items-start justify-between gap-2 mb-1">
-          <div class="flex items-center gap-2 min-w-0">
-            <div class="w-2.5 h-2.5 rounded-full flex-shrink-0" style="background:{{ pos_color }}"></div>
+      <a href="/investments/instruments/{{ pos.instrument_id }}" class="block px-5 py-3" style="border-bottom:1px solid var(--border-subtle);text-decoration:none">
+        <div class="flex items-start justify-between gap-3 mb-1">
+          <div class="flex items-center gap-2.5 min-w-0">
+            <span class="dot" style="background:{{ pos_color }}"></span>
             <p class="font-medium text-sm truncate" style="color:var(--text)">{{ pos.name }}</p>
           </div>
-          <p class="num text-sm font-medium flex-shrink-0" style="color:var(--text)">
-            {% if pos.market_value is not none %}{{ pos.currency | currency_symbol }}{{ "{:,.0f}".format(pos.market_value) }}{% else %}—{% endif %}
-          </p>
+          <p class="num text-sm font-medium flex-shrink-0" style="color:var(--text)">{{ pos.market_value | money(pos.currency, 0) }}</p>
         </div>
-        <div class="flex items-center justify-between gap-2 pl-4">
-          <p class="text-xs" style="color:var(--text-dim)">{{ pos.ticker }}</p>
-          <p class="num text-xs font-medium" style="color:{% if pos.unrealized_pl is not none and pos.unrealized_pl >= 0 %}var(--emerald){% elif pos.unrealized_pl is not none %}var(--rose){% else %}var(--text-dim){% endif %}">
-            {% if pos.unrealized_pl is not none %}{{ "{:+.2f}%".format(pos.unrealized_pl_pct) }}{% endif %}
-          </p>
+        <div class="flex items-center justify-between gap-2 pl-5">
+          <p class="text-xs" style="color:var(--text-dim)">{{ pos.ticker }}{% if alloc_total and pos.market_value_eur %} · {{ '%.0f' % (pos.market_value_eur / alloc_total * 100) }}%{% endif %}</p>
+          <p class="num text-xs font-medium" style="color:{{ pl_color(pos.unrealized_pl) }}">{% if pos.unrealized_pl is not none %}{{ "{:+.2f}%".format(pos.unrealized_pl_pct) }}{% endif %}</p>
         </div>
       </a>
       {% endfor %}
     </div>
+
     <!-- Desktop table -->
-    <div class="hidden sm:block overflow-x-auto">
-    <table class="w-full text-sm">
-      <thead>
-        <tr class="text-xs" style="color:var(--text-dim); border-bottom:1px solid var(--border-subtle)">
-          <th class="text-left px-5 py-3 font-medium">Strumento</th>
-          <th class="text-right px-4 py-3 font-medium">Qtà</th>
-          <th class="text-right px-4 py-3 font-medium">PMC</th>
-          <th class="text-right px-4 py-3 font-medium">Prezzo</th>
-          <th class="text-right px-4 py-3 font-medium">Valore</th>
-          <th class="text-right px-5 py-3 font-medium">P/L</th>
+    <div class="hidden sm:block table-wrap">
+      <table class="tbl">
+        <thead>
+          <tr>
+            <th>Strumento</th>
+            <th class="r">Quota</th>
+            <th class="r">Qtà</th>
+            <th class="r">PMC</th>
+            <th class="r">Prezzo</th>
+            <th class="r">Valore</th>
+            <th class="r">P/L</th>
+          </tr>
+        </thead>
+        <tbody>
+        {% for pos in open_positions %}
+        {% set pos_color = alloc_colors[loop.index0 % alloc_colors|length] %}
+        <tr>
+          <td>
+            <a href="/investments/instruments/{{ pos.instrument_id }}" class="flex items-center gap-3 min-w-0" style="color:var(--text);text-decoration:none">
+              <span class="dot" style="background:{{ pos_color }}"></span>
+              <span class="min-w-0">
+                <span class="font-medium text-sm block truncate">{{ pos.name }}</span>
+                <span class="text-xs block mt-0.5 num" style="color:var(--text-dim)">{{ pos.ticker }} · {{ pos.isin }}</span>
+              </span>
+            </a>
+          </td>
+          <td class="num r mut">{% if alloc_total and pos.market_value_eur %}{{ '%.0f' % (pos.market_value_eur / alloc_total * 100) }}%{% else %}—{% endif %}</td>
+          <td class="num r mut">{{ pos.total_quantity }}</td>
+          <td class="num r mut">{{ pos.average_cost_basis | money(pos.currency) }}</td>
+          <td class="num r" style="color:var(--text)">{% if pos.last_price is not none %}{{ pos.last_price | money(pos.currency) }}{% if pos.is_stale %}<span style="color:var(--text-dim)">*</span>{% endif %}{% else %}—{% endif %}</td>
+          <td class="num r font-medium" style="color:var(--text)">{{ pos.market_value | money(pos.currency) }}</td>
+          <td class="num r nw font-medium" style="color:{{ pl_color(pos.unrealized_pl) }}">
+            {% if pos.unrealized_pl is not none %}{{ pos.unrealized_pl | money(pos.currency, 2, true) }}<div class="text-xs font-normal">{{ "{:+.2f}%".format(pos.unrealized_pl_pct) }}</div>{% else %}—{% endif %}
+          </td>
         </tr>
-      </thead>
-      <tbody>
-      {% for pos in open_positions %}
-      {% set pos_color = alloc_colors[loop.index0 % alloc_colors|length] %}
-      <tr class="tr-hover" style="border-bottom:1px solid var(--border-subtle)">
-        <td class="px-5 py-3.5">
-          <a href="/investments/instruments/{{ pos.instrument_id }}" style="color:var(--text)" class="flex items-center gap-3">
-            <div class="w-3 h-3 rounded-full flex-shrink-0" style="background:{{ pos_color }}"></div>
-            <div>
-              <p class="font-medium text-sm">{{ pos.name }}</p>
-              <p class="text-xs mt-0.5" style="color:var(--text-dim)">{{ pos.ticker }} · {{ pos.isin }}</p>
-            </div>
-          </a>
-        </td>
-        <td class="num px-4 py-3.5 text-right text-sm" style="color:var(--text-muted)">{{ pos.total_quantity }}</td>
-        <td class="num px-4 py-3.5 text-right text-sm" style="color:var(--text-muted)">{{ pos.currency | currency_symbol }}{{ "{:,.2f}".format(pos.average_cost_basis) }}</td>
-        <td class="num px-4 py-3.5 text-right text-sm" style="color:var(--text)">
-          {% if pos.last_price is not none %}{{ pos.currency | currency_symbol }}{{ "{:,.2f}".format(pos.last_price) }}{% if pos.is_stale %}<span style="color:var(--text-dim)">*</span>{% endif %}{% else %}—{% endif %}
-        </td>
-        <td class="num px-4 py-3.5 text-right text-sm font-medium" style="color:var(--text)">
-          {% if pos.market_value is not none %}{{ pos.currency | currency_symbol }}{{ "{:,.2f}".format(pos.market_value) }}{% else %}—{% endif %}
-        </td>
-        <td class="num px-5 py-3.5 text-right text-sm font-medium whitespace-nowrap" style="color:{% if pos.unrealized_pl is not none and pos.unrealized_pl >= 0 %}var(--emerald){% elif pos.unrealized_pl is not none %}var(--rose){% else %}var(--text-dim){% endif %}">
-          {% if pos.unrealized_pl is not none %}{{ pos.currency | currency_symbol }}{{ "{:+,.2f}".format(pos.unrealized_pl) }}<br><span class="text-xs">{{ "{:+.2f}%".format(pos.unrealized_pl_pct) }}</span>{% else %}—{% endif %}
-        </td>
-      </tr>
-      {% endfor %}
-      </tbody>
-    </table>
+        {% endfor %}
+        </tbody>
+      </table>
     </div>
-  </div>
+    {% if summary.has_stale_quotes %}<p class="hint px-5 py-2.5" style="border-top:1px solid var(--border-subtle)">* quotazione non aggiornata</p>{% endif %}
+  </section>
 
-  <!-- Allocation chart -->
-  <div class="card lg:w-72 flex-shrink-0">
-    <p class="text-sm mb-4" style="color:var(--text-muted)">Allocazione</p>
-    <canvas id="allocChart"></canvas>
-  </div>
+  <!-- Closed positions -->
+  {% if closed_positions %}
+  <section class="card" style="padding:0">
+    <div class="card-head"><p class="card-title">Posizioni chiuse</p></div>
+    <div class="table-wrap">
+      <table class="tbl">
+        <thead><tr><th>Strumento</th><th class="r">P/L realizzato</th></tr></thead>
+        <tbody>
+        {% for pos in closed_positions %}
+        <tr>
+          <td>
+            <a href="/investments/instruments/{{ pos.instrument_id }}" style="color:var(--text);text-decoration:none">
+              <span class="font-medium text-sm block">{{ pos.name }}</span>
+              <span class="text-xs block mt-0.5 num" style="color:var(--text-dim)">{{ pos.ticker }} · {{ pos.isin }}</span>
+            </a>
+          </td>
+          <td class="num r font-medium" style="color:{{ pl_color(pos.realized_pl) }}">{{ pos.realized_pl | money(pos.currency, 2, true) }}</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+  {% endif %}
+
+  <!-- Liquidity instruments -->
+  {% if liq_positions %}
+  <section class="card" style="padding:0">
+    <div class="card-head">
+      <p class="card-title">Liquidità</p>
+      <span class="text-xs" style="color:var(--text-dim)">ETF monetari, contati come liquidità</span>
+    </div>
+    <div class="sm:hidden">
+      {% for pos in liq_positions %}
+      <a href="/investments/instruments/{{ pos.instrument_id }}" class="block px-5 py-3" style="border-bottom:1px solid var(--border-subtle);text-decoration:none">
+        <div class="flex items-start justify-between gap-3 mb-1">
+          <p class="font-medium text-sm truncate" style="color:var(--text)">{{ pos.name }}</p>
+          <p class="num text-sm font-medium flex-shrink-0" style="color:var(--text)">{{ pos.market_value | money(pos.currency) }}</p>
+        </div>
+        <p class="text-xs" style="color:var(--text-dim)">{{ pos.ticker }} · qtà {{ pos.total_quantity }}</p>
+      </a>
+      {% endfor %}
+    </div>
+    <div class="hidden sm:block table-wrap">
+      <table class="tbl">
+        <thead><tr><th>Strumento</th><th class="r">Qtà</th><th class="r">PMC</th><th class="r">Prezzo</th><th class="r">Valore</th></tr></thead>
+        <tbody>
+        {% for pos in liq_positions %}
+        <tr>
+          <td>
+            <a href="/investments/instruments/{{ pos.instrument_id }}" style="color:var(--text);text-decoration:none">
+              <span class="font-medium text-sm block">{{ pos.name }}</span>
+              <span class="text-xs block mt-0.5 num" style="color:var(--text-dim)">{{ pos.ticker }} · {{ pos.isin }}</span>
+            </a>
+          </td>
+          <td class="num r mut">{{ pos.total_quantity }}</td>
+          <td class="num r mut">{{ pos.average_cost_basis | money(pos.currency) }}</td>
+          <td class="num r" style="color:var(--text)">{% if pos.last_price is not none %}{{ pos.last_price | money(pos.currency) }}{% if pos.is_stale %}<span style="color:var(--text-dim)">*</span>{% endif %}{% else %}—{% endif %}</td>
+          <td class="num r font-medium" style="color:var(--text)">{{ pos.market_value | money(pos.currency) }}</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+  {% endif %}
+
+  {% endif %}
 </div>
-
-<!-- Posizioni chiuse -->
-{% if closed_positions %}
-<div class="card mb-5" style="padding:0">
-  <div class="px-5 py-4" style="border-bottom:1px solid var(--border)">
-    <p class="text-sm" style="color:var(--text-muted)">Posizioni chiuse</p>
-  </div>
-  <div class="overflow-x-auto">
-  <table class="w-full text-sm">
-    <thead>
-      <tr class="text-xs" style="color:var(--text-dim); border-bottom:1px solid var(--border-subtle)">
-        <th class="text-left px-5 py-3 font-medium">Strumento</th>
-        <th class="text-right px-5 py-3 font-medium">P/L realizzato</th>
-      </tr>
-    </thead>
-    <tbody>
-    {% for pos in closed_positions %}
-    <tr class="tr-hover" style="border-bottom:1px solid var(--border-subtle)">
-      <td class="px-5 py-3.5">
-        <a href="/investments/instruments/{{ pos.instrument_id }}" style="color:var(--text)">
-          <p class="font-medium text-sm">{{ pos.name }}</p>
-          <p class="text-xs mt-0.5" style="color:var(--text-dim)">{{ pos.ticker }} · {{ pos.isin }}</p>
-        </a>
-      </td>
-      <td class="num px-5 py-3.5 text-right text-sm font-medium" style="color:{% if pos.realized_pl >= 0 %}var(--emerald){% else %}var(--rose){% endif %}">
-        {{ pos.currency | currency_symbol }}{{ "{:+,.2f}".format(pos.realized_pl) }}
-      </td>
-    </tr>
-    {% endfor %}
-    </tbody>
-  </table>
-  </div>
-</div>
-{% endif %}
-
-<!-- Liquidità section -->
-{% if liq_positions %}
-<div class="card mb-5" style="padding:0">
-  <div class="px-5 py-4" style="border-bottom:1px solid var(--border)">
-    <p class="text-sm" style="color:var(--text-muted)">Liquidità</p>
-  </div>
-  <!-- Mobile cards -->
-  <div class="sm:hidden">
-    {% for pos in liq_positions %}
-    <a href="/investments/instruments/{{ pos.instrument_id }}" class="block px-4 py-3 tr-hover" style="border-bottom:1px solid var(--border-subtle);color:inherit;text-decoration:none">
-      <div class="flex items-start justify-between gap-2 mb-1">
-        <p class="font-medium text-sm truncate" style="color:var(--text)">{{ pos.name }}</p>
-        <p class="num text-sm font-medium flex-shrink-0" style="color:var(--text)">
-          {% if pos.market_value is not none %}{{ pos.currency | currency_symbol }}{{ "{:,.2f}".format(pos.market_value) }}{% else %}—{% endif %}
-        </p>
-      </div>
-      <p class="text-xs" style="color:var(--text-dim)">{{ pos.ticker }} · Qtà {{ pos.total_quantity }}</p>
-    </a>
-    {% endfor %}
-  </div>
-  <!-- Desktop table -->
-  <div class="hidden sm:block overflow-x-auto">
-  <table class="w-full text-sm">
-    <thead>
-      <tr class="text-xs" style="color:var(--text-dim); border-bottom:1px solid var(--border-subtle)">
-        <th class="text-left px-5 py-3 font-medium">Strumento</th>
-        <th class="text-right px-4 py-3 font-medium">Qtà</th>
-        <th class="text-right px-4 py-3 font-medium">PMC</th>
-        <th class="text-right px-4 py-3 font-medium">Prezzo</th>
-        <th class="text-right px-5 py-3 font-medium">Valore</th>
-      </tr>
-    </thead>
-    <tbody>
-    {% for pos in liq_positions %}
-    <tr class="tr-hover" style="border-bottom:1px solid var(--border-subtle)">
-      <td class="px-5 py-3.5">
-        <a href="/investments/instruments/{{ pos.instrument_id }}" style="color:var(--text)">
-          <p class="font-medium text-sm">{{ pos.name }}</p>
-          <p class="text-xs mt-0.5" style="color:var(--text-dim)">{{ pos.ticker }} · {{ pos.isin }}</p>
-        </a>
-      </td>
-      <td class="num px-4 py-3.5 text-right text-sm" style="color:var(--text-muted)">{{ pos.total_quantity }}</td>
-      <td class="num px-4 py-3.5 text-right text-sm" style="color:var(--text-muted)">{{ pos.currency | currency_symbol }}{{ "{:,.2f}".format(pos.average_cost_basis) }}</td>
-      <td class="num px-4 py-3.5 text-right text-sm" style="color:var(--text)">
-        {% if pos.last_price is not none %}{{ pos.currency | currency_symbol }}{{ "{:,.2f}".format(pos.last_price) }}{% if pos.is_stale %}<span style="color:var(--text-dim)">*</span>{% endif %}{% else %}—{% endif %}
-      </td>
-      <td class="num px-5 py-3.5 text-right text-sm font-medium" style="color:var(--text)">
-        {% if pos.market_value is not none %}{{ pos.currency | currency_symbol }}{{ "{:,.2f}".format(pos.market_value) }}{% else %}—{% endif %}
-      </td>
-    </tr>
-    {% endfor %}
-    </tbody>
-  </table>
-  </div>
-</div>
-{% endif %}
-
-
-<script>
-(function() {
-  const labels = {{ chart_labels | tojson }};
-  const invested = {{ chart_invested | tojson }};
-  const market = {{ chart_market | tojson }};
-  const colors = ['#15803d','#2f5bea','#7c3aed','#d98546','#d93b4f','#0891b2','#65a30d','#9333ea'];
-
-  new Chart(document.getElementById('allocChart'), {
-    type: 'doughnut',
-    data: {
-      labels,
-      datasets: [{
-        data: market,
-        backgroundColor: colors.map(c => c + '22'),
-        borderColor: colors,
-        borderWidth: 1.5,
-        hoverOffset: 4,
-      }]
-    },
-    options: {
-      responsive: true,
-      cutout: '65%',
-      plugins: {
-        legend: { display: false },
-        tooltip: {
-          callbacks: {
-            label: ctx => `  €${ctx.parsed.toLocaleString('it-IT', {minimumFractionDigits:2})}`
-          }
-        }
-      }
-    }
-  });
-})();
-</script>
-
-{% endif %}
 {% endblock %}

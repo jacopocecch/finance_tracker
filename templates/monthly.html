@@ -1,283 +1,232 @@
 {% extends "base.html" %}
+{% import "_ui.html" as ui %}
 {% block title %}{{ month_label }} — Ledger{% endblock %}
 {% block content %}
 
-<!-- Month nav -->
-<div class="flex flex-wrap items-center justify-between gap-3 mb-7">
-  <div class="flex items-center gap-3 sm:gap-4">
-    <div class="flex items-center gap-1">
-      <a href="/monthly?month={{ prev_month }}"
-         class="w-8 h-8 rounded-lg flex items-center justify-center text-sm transition-colors btn-ghost"
-         style="border:1px solid var(--border)">‹</a>
-      <a href="/monthly?month={{ next_month }}"
-         class="w-8 h-8 rounded-lg flex items-center justify-center text-sm transition-colors btn-ghost {% if next_month > current_month %}opacity-25 pointer-events-none{% endif %}"
-         style="border:1px solid var(--border)">›</a>
+<div class="flex flex-col gap-5">
+
+  <!-- Header: month nav + filters -->
+  <div class="flex flex-wrap items-center justify-between gap-3">
+    <div class="flex items-center gap-3">
+      {{ ui.nav_arrows('/monthly?month=' ~ prev_month, '/monthly?month=' ~ next_month, next_month > current_month) }}
+      <h1 class="page-title">{{ month_label }}</h1>
     </div>
-    <h1 class="text-xl font-semibold" style="color:var(--text)">{{ month_label }}</h1>
+    <form hx-get="/monthly" hx-target="body" hx-push-url="true" hx-trigger="change from:select"
+          class="flex items-center gap-2 flex-wrap">
+      <input type="hidden" name="month" value="{{ month }}">
+      <select name="cat" class="input">
+        <option value="">Tutte le categorie</option>
+        {% for c in categories %}
+        <option value="{{ c.id }}" {% if selected_cat == c.id|string %}selected{% endif %}>{{ c.icon }} {{ c.name }}</option>
+        {% endfor %}
+      </select>
+      <select name="tx_type" class="input">
+        <option value=""  {% if tx_type == '' %}selected{% endif %}>Entrate e uscite</option>
+        <option value="out" {% if tx_type == 'out' %}selected{% endif %}>Solo uscite</option>
+        <option value="in"  {% if tx_type == 'in' %}selected{% endif %}>Solo entrate</option>
+      </select>
+    </form>
   </div>
 
-  <!-- Filters -->
-  <form hx-get="/monthly" hx-target="body" hx-push-url="true" hx-trigger="change from:select"
-        class="flex items-center gap-2">
-    <input type="hidden" name="month" value="{{ month }}">
-    <select name="cat" class="input text-xs" style="padding:6px 10px">
-      <option value="">Tutte le categorie</option>
-      {% for c in categories %}
-      <option value="{{ c.id }}" {% if selected_cat == c.id|string %}selected{% endif %}>
-        {{ c.icon }} {{ c.name }}
-      </option>
-      {% endfor %}
-    </select>
-    <select name="tx_type" class="input text-xs" style="padding:6px 10px">
-      <option value=""  {% if tx_type == '' %}selected{% endif %}>Entrate e uscite</option>
-      <option value="out" {% if tx_type == 'out' %}selected{% endif %}>Solo uscite</option>
-      <option value="in"  {% if tx_type == 'in' %}selected{% endif %}>Solo entrate</option>
-    </select>
-  </form>
-</div>
+  <!-- Stat strip -->
+  <section class="stat-strip m2" style="--cols:4">
+    <div class="stat-cell">
+      <p class="stat-label">Entrate</p>
+      <p class="stat-value">{{ total_in | eur }}</p>
+    </div>
+    <div class="stat-cell">
+      <p class="stat-label">Uscite</p>
+      <p class="stat-value">{{ total_out | eur }}</p>
+    </div>
+    <div class="stat-cell">
+      <p class="stat-label">Investiti</p>
+      <p class="stat-value" {% if not total_invested %}style="color:var(--text-dim)"{% endif %}>{{ total_invested | eur if total_invested > 0 else '—' }}</p>
+    </div>
+    <div class="stat-cell">
+      <p class="stat-label">Saldo</p>
+      <p class="stat-value" style="color:{% if balance >= 0 %}var(--emerald){% else %}var(--rose){% endif %}">{{ balance | eur(0, true) }}</p>
+    </div>
+  </section>
 
-<!-- KPI strip -->
-<div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-7">
-  <div class="card">
-    <div class="flex items-center gap-2 mb-3">
-      <div class="w-1.5 h-1.5 rounded-full" style="background:var(--emerald)"></div>
-      <p class="text-xs" style="color:var(--text-muted)">Entrate</p>
+  <!-- Weekly chart -->
+  <section class="card flex flex-col gap-4">
+    <div class="flex items-center justify-between gap-4 flex-wrap">
+      <p class="card-title">Settimane</p>
+      {{ ui.legend([('Entrate', '#15803d', 'bar'), ('Uscite', '#d93b4f', 'bar')]) }}
     </div>
-    <p class="num text-2xl font-medium" style="color:var(--emerald)">+€{{ "{:,.0f}".format(total_in) }}</p>
-  </div>
-  <div class="card">
-    <div class="flex items-center gap-2 mb-3">
-      <div class="w-1.5 h-1.5 rounded-full" style="background:var(--rose)"></div>
-      <p class="text-xs" style="color:var(--text-muted)">Uscite</p>
-    </div>
-    <p class="num text-2xl font-medium" style="color:var(--rose)">-€{{ "{:,.0f}".format(total_out) }}</p>
-  </div>
-  <div class="card">
-    <div class="flex items-center gap-2 mb-3">
-      <div class="w-1.5 h-1.5 rounded-full" style="background:var(--sky)"></div>
-      <p class="text-xs" style="color:var(--text-muted)">Investiti</p>
-    </div>
-    <p class="num text-2xl font-medium" style="color:var(--sky)">
-      {% if total_invested > 0 %}-€{{ "{:,.0f}".format(total_invested) }}{% else %}<span style="color:var(--text-dim)">—</span>{% endif %}
-    </p>
-  </div>
-  <div class="card">
-    <div class="flex items-center gap-2 mb-3">
-      <div class="w-1.5 h-1.5 rounded-full" style="background:{% if balance >= 0 %}var(--emerald){% else %}var(--rose){% endif %}"></div>
-      <p class="text-xs" style="color:var(--text-muted)">Saldo</p>
-    </div>
-    <p class="num text-2xl font-medium" style="color:{% if balance >= 0 %}var(--emerald){% else %}var(--rose){% endif %}">
-      {{ "€{:+,.0f}".format(balance) }}
-    </p>
-  </div>
-</div>
+    <div class="chart-box"><canvas id="weeklyChart"></canvas></div>
+  </section>
 
-<!-- Charts -->
-<div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-7">
-  <div class="card">
-    <p class="text-sm mb-4" style="color:var(--text-muted)">Settimane</p>
-    <canvas id="weeklyChart" height="190"></canvas>
-  </div>
-  <div class="card">
-    <p class="text-sm mb-4" style="color:var(--text-muted)">Categorie</p>
-    <canvas id="catChart" height="190"></canvas>
-  </div>
-</div>
+  {% set rows_with_budget = cat_rows | selectattr('budget') | list %}
+  {% set cat_total = cat_data | sum %}
 
-<!-- Budget progress bars -->
-{% set rows_with_budget = cat_rows | selectattr('budget') | list %}
-{% if rows_with_budget %}
-<div class="card mb-7">
-  <div class="flex items-center justify-between mb-4">
-    <p class="text-sm" style="color:var(--text-muted)">Budget mensili</p>
-    <a href="/budgets" class="text-xs" style="color:var(--sky)">Gestisci →</a>
-  </div>
-  <div class="flex flex-col gap-3">
-    {% for row in rows_with_budget %}
-    <div>
-      <div class="flex items-center justify-between mb-1">
-        <span class="text-xs font-medium" style="color:var(--text)">{{ row.name }}</span>
-        <span class="num text-xs" style="color:{% if row.pct >= 100 %}var(--rose){% elif row.pct >= 80 %}var(--amber, #d98546){% else %}var(--text-muted){% endif %}">
-          {{ "{:,.0f}".format(row.total) }} / {{ "{:,.0f}".format(row.budget) }} €
-        </span>
+  <div class="grid grid-cols-1 {% if rows_with_budget %}lg:grid-cols-2{% endif %} gap-5 items-start">
+
+    <!-- Categories: allocation bar + ranked list -->
+    <section class="card" style="padding:0">
+      <div class="card-head stack gap-3">
+        <div class="flex items-center justify-between">
+          <p class="card-title">Categorie</p>
+          <span class="text-xs num" style="color:var(--text-dim)">{{ cat_total | eur }}</span>
+        </div>
+        {% if cat_rows %}
+        <div class="alloc-bar">
+          {% for row in cat_rows if row.total > 0 and cat_total %}
+          <div style="width:{{ '%.2f' % (row.total / cat_total * 100) }}%;background:{{ row.color }}" title="{{ row.name }}"></div>
+          {% endfor %}
+        </div>
+        {% endif %}
       </div>
-      <div class="w-full rounded-full" style="background:var(--surface-2);height:6px">
-        <div class="rounded-full" style="width:{{ row.pct }}%;height:6px;background:{% if row.pct >= 100 %}var(--rose){% elif row.pct >= 80 %}#d98546{% else %}{{ row.color }}{% endif %};transition:width 0.4s ease"></div>
+      {% if cat_rows %}
+      <div class="px-5 py-1">
+        {% for row in cat_rows %}
+        <div class="flex items-center justify-between gap-4 py-2.5" style="{% if not loop.last %}border-bottom:1px solid var(--border-subtle){% endif %}">
+          <div class="flex items-center gap-3 min-w-0">
+            <span class="dot" style="background:{{ row.color }}"></span>
+            <p class="text-sm truncate" style="color:var(--text)">{{ row.name }}</p>
+          </div>
+          <div class="flex items-center gap-4 flex-shrink-0">
+            <span class="num text-xs" style="color:var(--text-dim);min-width:2.5rem;text-align:right">{{ '%.0f' % (row.total / cat_total * 100 if cat_total else 0) }}%</span>
+            <span class="num text-sm" style="color:var(--text);min-width:5rem;text-align:right">{{ row.total | eur }}</span>
+          </div>
+        </div>
+        {% endfor %}
       </div>
+      {% else %}
+      <p class="empty">Nessuna uscita categorizzata</p>
+      {% endif %}
+    </section>
+
+    <!-- Budget progress -->
+    {% if rows_with_budget %}
+    <section class="card" style="padding:0">
+      <div class="card-head">
+        <p class="card-title">Budget mensili</p>
+        <a href="/budgets" class="link">Gestisci</a>
+      </div>
+      <div class="flex flex-col gap-3.5 card-pad">
+        {% for row in rows_with_budget %}
+        <div>
+          <div class="flex items-center justify-between mb-1.5">
+            <span class="text-sm" style="color:var(--text)">{{ row.name }}</span>
+            <span class="num text-xs" style="color:{% if row.pct >= 100 %}var(--rose){% elif row.pct >= 80 %}var(--amber){% else %}var(--text-muted){% endif %}">
+              {{ row.total | num }} / {{ row.budget | eur }}
+            </span>
+          </div>
+          <div class="bar-track">
+            <div class="bar-fill" style="width:{{ row.pct }}%;background:{% if row.pct >= 100 %}var(--rose){% elif row.pct >= 80 %}var(--amber){% else %}{{ row.color }}{% endif %}"></div>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </section>
+    {% endif %}
+  </div>
+
+  {% if not rows_with_budget %}
+  <div class="flex justify-end -mt-2">
+    <a href="/budgets" class="link">Imposta budget</a>
+  </div>
+  {% endif %}
+
+  <!-- Transactions -->
+  {% set tx_out = transactions | selectattr('amount', 'lt', 0) | list %}
+  {% set tx_in  = transactions | selectattr('amount', 'ge', 0) | list %}
+
+  {% macro tx_table(rows, empty_label) %}
+  <!-- Mobile cards -->
+  <div class="sm:hidden">
+    {% for tx in rows %}
+    {% set is_foreign = tx.currency and tx.currency != 'EUR' %}
+    <div class="px-5 py-3" style="border-bottom:1px solid var(--border-subtle)">
+      <div class="flex items-start justify-between gap-3">
+        <div class="flex-1 min-w-0">
+          <p class="text-sm font-medium truncate" style="color:var(--text)">{{ tx.merchant or tx.description or '—' }}</p>
+          <p class="num text-xs mt-0.5" style="color:var(--text-muted)">{{ tx.date.strftime('%d/%m') }}{% if tx.account %} · {{ tx.account.bank_name }}{% endif %}</p>
+        </div>
+        <div class="text-right flex-shrink-0">
+          <p class="num text-sm font-medium" style="color:{% if tx.amount >= 0 %}var(--emerald){% else %}var(--text){% endif %}">{{ tx.amount | money(tx.currency if is_foreign else 'EUR', 2, true) }}</p>
+          {% if is_foreign and tx.eur_amount is not none %}<p class="num text-xs" style="color:var(--text-muted)">≈ {{ tx.eur_amount | eur(2, true) }}</p>{% endif %}
+        </div>
+      </div>
+      {% if tx.category %}
+      <div class="mt-1.5">{{ ui.cat_chip(tx.category.icon, tx.category.name, tx.category.color) }}</div>
+      {% endif %}
     </div>
+    {% else %}
+    <p class="empty">{{ empty_label }}</p>
     {% endfor %}
   </div>
-</div>
-{% else %}
-<div class="flex items-center justify-between mb-7">
-  <span></span>
-  <a href="/budgets" class="text-xs" style="color:var(--text-dim)">+ Imposta budget →</a>
-</div>
-{% endif %}
-
-<!-- Transactions -->
-{% set tx_out = transactions | selectattr('amount', 'lt', 0) | list %}
-{% set tx_in  = transactions | selectattr('amount', 'ge', 0) | list %}
-
-{% macro tx_table(rows, empty_label) %}
-<!-- Mobile cards (hidden on sm+) -->
-<div class="sm:hidden">
-  {% for tx in rows %}
-  <div class="px-4 py-3 tr-hover" style="border-bottom:1px solid var(--border-subtle)">
-    <div class="flex items-start justify-between gap-2">
-      <div class="flex-1 min-w-0">
-        <p class="text-sm font-medium truncate" style="color:var(--text)">{{ tx.merchant or tx.description or '—' }}</p>
-        <p class="text-xs mt-0.5" style="color:var(--text-muted)">{{ tx.date.strftime('%d/%m') }}</p>
-      </div>
+  <!-- Desktop table -->
+  <div class="hidden sm:block table-wrap">
+    <table class="tbl" style="min-width:480px">
+      <thead>
+        <tr>
+          <th>Data</th>
+          <th>Descrizione</th>
+          <th>Categoria</th>
+          <th>Conto</th>
+          <th class="r">Importo</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for tx in rows %}
       {% set is_foreign = tx.currency and tx.currency != 'EUR' %}
-      <div class="text-right flex-shrink-0">
-        <p class="num text-sm font-medium" style="color:{% if tx.amount >= 0 %}var(--emerald){% else %}var(--rose){% endif %}">{{ "{:+,.2f}".format(tx.amount) }} {{ tx.currency | currency_symbol if is_foreign else '€' }}</p>
-        {% if is_foreign and tx.eur_amount is not none %}<p class="num text-xs" style="color:var(--text-muted)">≈ {{ "{:+,.2f}".format(tx.eur_amount) }} €</p>{% endif %}
-      </div>
-    </div>
-    <div class="mt-1.5">
-      {% if tx.category %}
-      <span class="tag text-xs" style="background:{{ tx.category.color }}22;border:1px solid {{ tx.category.color }}44;color:var(--text)">
-        {{ tx.category.icon }} {{ tx.category.name }}
-      </span>
-      {% endif %}
-    </div>
-  </div>
-  {% else %}
-  <p class="px-4 py-10 text-center text-sm" style="color:var(--text-dim)">{{ empty_label }}</p>
-  {% endfor %}
-</div>
-<!-- Desktop table (hidden on mobile) -->
-<div class="hidden sm:block overflow-x-auto">
-<table class="w-full text-sm" style="min-width:480px">
-  <thead>
-    <tr class="text-xs" style="color:var(--text-dim); border-bottom:1px solid var(--border)">
-      <th class="text-left px-4 sm:px-5 py-3 font-medium">Data</th>
-      <th class="text-left px-4 sm:px-5 py-3 font-medium">Descrizione</th>
-      <th class="text-left px-3 py-3 font-medium">Categoria</th>
-      <th class="text-left px-3 py-3 font-medium">Conto</th>
-      <th class="text-right px-4 sm:px-5 py-3 font-medium">Importo</th>
-    </tr>
-  </thead>
-  <tbody>
-  {% for tx in rows %}
-  <tr class="tr-hover" style="border-bottom:1px solid var(--border-subtle)">
-    <td class="num px-4 sm:px-5 py-3 text-xs" style="color:var(--text-muted); white-space:nowrap">{{ tx.date.strftime('%d/%m') }}</td>
-    <td class="px-4 sm:px-5 py-3" style="max-width:200px">
-      <span class="truncate block" style="color:var(--text)">{{ tx.merchant or tx.description or '—' }}</span>
-    </td>
-    <td class="px-3 py-3">
-      {% if tx.category %}
-      <span class="tag text-xs" style="background:{{ tx.category.color }}22;border:1px solid {{ tx.category.color }}44;color:var(--text)">
-        {{ tx.category.icon }} {{ tx.category.name }}
-      </span>
+      <tr>
+        <td class="num mut nw">{{ tx.date.strftime('%d/%m') }}</td>
+        <td style="max-width:260px"><span class="truncate block" style="color:var(--text)">{{ tx.merchant or tx.description or '—' }}</span></td>
+        <td>{% if tx.category %}{{ ui.cat_chip(tx.category.icon, tx.category.name, tx.category.color) }}{% else %}<span class="dim">—</span>{% endif %}</td>
+        <td class="mut">{{ tx.account.bank_name if tx.account else '—' }}</td>
+        <td class="num r nw font-medium" style="color:{% if tx.amount >= 0 %}var(--emerald){% else %}var(--text){% endif %}">
+          {{ tx.amount | money(tx.currency if is_foreign else 'EUR', 2, true) }}
+          {% if is_foreign and tx.eur_amount is not none %}<div class="num text-xs font-normal" style="color:var(--text-muted)">≈ {{ tx.eur_amount | eur(2, true) }}</div>{% endif %}
+        </td>
+      </tr>
       {% else %}
-      <span class="tag" style="color:var(--text-dim)">—</span>
-      {% endif %}
-    </td>
-    <td class="px-3 py-3 text-xs" style="color:var(--text-muted)">{{ tx.account.bank_name if tx.account else '—' }}</td>
-    <td class="num px-4 sm:px-5 py-3 text-right text-sm font-medium" style="color:{% if tx.amount >= 0 %}var(--emerald){% else %}var(--rose){% endif %}; white-space:nowrap">
-      {% set is_foreign = tx.currency and tx.currency != 'EUR' %}
-      {{ "{:+,.2f}".format(tx.amount) }} {{ tx.currency | currency_symbol if is_foreign else '€' }}
-      {% if is_foreign and tx.eur_amount is not none %}<div class="num text-xs" style="color:var(--text-muted)">≈ {{ "{:+,.2f}".format(tx.eur_amount) }} €</div>{% endif %}
-    </td>
-  </tr>
-  {% else %}
-  <tr>
-    <td colspan="5" class="px-5 py-10 text-center text-sm" style="color:var(--text-dim)">{{ empty_label }}</td>
-  </tr>
-  {% endfor %}
-  </tbody>
-</table>
-</div>
-{% endmacro %}
+      <tr><td colspan="5" class="empty">{{ empty_label }}</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endmacro %}
 
-<div class="flex flex-col gap-4">
-  <div class="card table-wrap" style="padding:0">
-    <div class="px-4 sm:px-5 py-4" style="border-bottom:1px solid var(--border)">
-      <p class="text-sm" style="color:var(--rose)">Uscite</p>
+  <section class="card" style="padding:0">
+    <div class="card-head">
+      <p class="card-title">Uscite</p>
+      <span class="num text-xs" style="color:var(--text-dim)">{{ tx_out | length }}</span>
     </div>
     {{ tx_table(tx_out, 'Nessuna uscita in questo mese') }}
-  </div>
+  </section>
 
-  <div class="card table-wrap" style="padding:0">
-    <div class="px-4 sm:px-5 py-4" style="border-bottom:1px solid var(--border)">
-      <p class="text-sm" style="color:var(--emerald)">Entrate</p>
+  <section class="card" style="padding:0">
+    <div class="card-head">
+      <p class="card-title">Entrate</p>
+      <span class="num text-xs" style="color:var(--text-dim)">{{ tx_in | length }}</span>
     </div>
     {{ tx_table(tx_in, 'Nessuna entrata in questo mese') }}
-  </div>
+  </section>
+
 </div>
 
 <script>
 (function() {
-  const GRID = '#ebebf5';
-
   new Chart(document.getElementById('weeklyChart'), {
     type: 'bar',
     data: {
       labels: {{ weekly_labels | tojson }},
       datasets: [
-        {
-          label: 'Entrate',
-          data: {{ weekly_in | tojson }},
-          backgroundColor: 'rgba(52,211,153,0.6)',
-          borderRadius: 4,
-          borderSkipped: false,
-        },
-        {
-          label: 'Uscite',
-          data: {{ weekly_out | tojson }},
-          backgroundColor: 'rgba(251,113,133,0.6)',
-          borderRadius: 4,
-          borderSkipped: false,
-        },
+        CHART.bar('Entrate', {{ weekly_in | tojson }}, CHART.emerald),
+        CHART.bar('Uscite',  {{ weekly_out | tojson }}, CHART.rose),
       ]
     },
     options: {
       responsive: true,
-      plugins: {
-        legend: {
-          labels: { color: '#6b6b88', boxWidth: 10, boxHeight: 10, borderRadius: 2, useBorderRadius: true }
-        },
-        tooltip: { callbacks: { label: ctx => '  €' + ctx.parsed.y.toLocaleString('it-IT') } }
-      },
-      scales: {
-        x: { grid: { display: false }, border: { display: false } },
-        y: { grid: { color: GRID }, border: { display: false }, ticks: { callback: v => Math.abs(v) >= 1000 ? '€' + (v/1000).toLocaleString('it-IT', {maximumFractionDigits: 1}) + 'k' : '€' + v.toLocaleString('it-IT') } }
-      }
+      maintainAspectRatio: false,
+      interaction: { intersect: false, mode: 'index' },
+      plugins: { tooltip: { callbacks: { label: c => c.dataset.label + ': ' + CHART.eur(c.parsed.y) } } },
+      scales: CHART.axes()
     }
   });
-
-  const catLabels  = {{ cat_labels | tojson }};
-  const catData    = {{ cat_data | tojson }};
-  const catColors  = {{ cat_colors | tojson }};
-
-  if (catData.length > 0) {
-    new Chart(document.getElementById('catChart'), {
-      type: 'doughnut',
-      data: {
-        labels: catLabels,
-        datasets: [{
-          data: catData,
-          backgroundColor: catColors.map(c => c + 'cc'),
-          borderColor: '#f0f0f6',
-          borderWidth: 2,
-          hoverOffset: 4,
-        }]
-      },
-      options: {
-        responsive: true,
-        cutout: '65%',
-        plugins: {
-          legend: {
-            position: window.innerWidth < 640 ? 'bottom' : 'right',
-            labels: { color: '#6b6b88', boxWidth: 10, boxHeight: 10, borderRadius: 2, useBorderRadius: true, font: { size: 11 } }
-          },
-          tooltip: { callbacks: { label: ctx => '  €' + ctx.parsed.toLocaleString('it-IT') } }
-        }
-      }
-    });
-  }
 })();
 </script>
 {% endblock %}

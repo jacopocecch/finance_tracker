@@ -15,24 +15,15 @@ from database import (
 from market_data import refresh_quote, refresh_all_quotes, latest_quote
 from portfolio import compute_position, compute_pac_position, compute_portfolio
 import fx as _fx
+from fmt import FILTERS
 
 log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/investments")
 templates = Jinja2Templates(directory="templates")
 
-# Mirrors main.py's filter (separate Jinja environment; main imports this module).
-_CURRENCY_SYMBOLS = {"EUR": "€", "USD": "$", "GBP": "£", "JPY": "¥", "CHF": "CHF",
-                     "SEK": "kr", "NOK": "kr", "DKK": "kr", "PLN": "zł", "CZK": "Kč",
-                     "HUF": "Ft", "RON": "lei", "TRY": "₺", "CNY": "¥", "HKD": "HK$",
-                     "SGD": "S$", "AUD": "A$", "CAD": "C$", "NZD": "NZ$", "MXN": "MX$"}
-
-
-def _currency_symbol(code: str) -> str:
-    return _CURRENCY_SYMBOLS.get((code or "EUR").upper(), code or "€")
-
-
-templates.env.filters["currency_symbol"] = _currency_symbol
+# Separate Jinja environment from main.py; both register the shared filters.
+templates.env.filters.update(FILTERS)
 
 TRANSACTION_TYPES = ("BUY", "SELL")
 INSTRUMENT_TYPES = ("ETF", "ETC", "Fondo")

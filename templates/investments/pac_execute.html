@@ -1,11 +1,14 @@
 {% extends "base.html" %}
+{% import "_ui.html" as ui %}
 {% block title %}Esegui {{ pac.name }} — Ledger{% endblock %}
 {% block content %}
 
-<div class="mb-6">
-  <a href="/investments/pac" class="btn-ghost inline-flex mb-4">← PAC</a>
-  <h1 class="text-xl font-semibold" style="color:var(--text)">{{ pac.name }}</h1>
-  {% if pac.description %}<p class="text-xs mt-1" style="color:var(--text-muted)">{{ pac.description }}</p>{% endif %}
+<div class="flex items-start gap-3 mb-5">
+  <a href="/investments/pac" class="btn-ghost btn-icon flex-shrink-0" aria-label="Torna ai PAC">{{ ui.icon('arrow-left', 'w-4 h-4') }}</a>
+  <div>
+    <h1 class="page-title">Esegui {{ pac.name }}</h1>
+    {% if pac.description %}<p class="hint mt-1">{{ pac.description }}</p>{% endif %}
+  </div>
 </div>
 
 <form method="post" action="/investments/pac/{{ pac.id }}/execute" style="max-width:680px">
@@ -14,11 +17,11 @@
   <div class="card mb-4">
     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
       <div>
-        <label class="text-xs font-medium mb-1.5 block" style="color:var(--text-muted)">Data acquisto *</label>
+        <label class="field-label">Data acquisto *</label>
         <input type="date" name="trade_date" value="{{ today }}" required class="input w-full">
       </div>
       <div>
-        <label class="text-xs font-medium mb-1.5 block" style="color:var(--text-muted)">Broker</label>
+        <label class="field-label">Broker</label>
         <input type="text" name="broker_name" value="{{ broker }}" class="input w-full">
       </div>
     </div>
@@ -30,21 +33,21 @@
     {% for comp, inst in components %}
     <input type="hidden" name="instrument_ids" value="{{ inst.id }}">
     <div class="card">
-      <p class="text-sm font-medium mb-3" style="color:var(--text)">{{ inst.ticker }} <span class="text-xs font-normal" style="color:var(--text-muted)">{{ inst.name[:50] }}{% if inst.name|length > 50 %}…{% endif %}</span></p>
+      <p class="card-title mb-3"><span class="num">{{ inst.ticker }}</span> <span class="text-xs font-normal" style="color:var(--text-muted)">{{ inst.name[:50] }}{% if inst.name|length > 50 %}…{% endif %}</span></p>
       <div class="grid grid-cols-3 gap-3">
         <div>
-          <label class="text-xs font-medium mb-1 block" style="color:var(--text-muted)">Quantità</label>
+          <label class="field-label">Quantità</label>
           <input type="number" name="quantities"
                  value="{{ comp.target_weight | int if comp.target_weight else '' }}"
                  placeholder="0" step="1" min="0" class="input w-full">
         </div>
         <div>
-          <label class="text-xs font-medium mb-1 block" style="color:var(--text-muted)">Prezzo unit.</label>
+          <label class="field-label">Prezzo unit.</label>
           <input type="number" name="unit_prices"
                  placeholder="0.0000" step="0.0001" min="0" class="input w-full">
         </div>
         <div>
-          <label class="text-xs font-medium mb-1 block" style="color:var(--text-muted)">Commissioni</label>
+          <label class="field-label">Commissioni</label>
           <input type="number" name="fees_list"
                  placeholder="0.00" step="0.01" min="0" value="0" class="input w-full">
         </div>
@@ -53,11 +56,9 @@
     {% endfor %}
   </div>
 
-  <p class="text-xs mb-5" style="color:var(--text-dim)">Lascia quantità vuota per saltare uno strumento.</p>
+  <p class="hint mb-5">Lascia quantità vuota per saltare uno strumento.</p>
   {% else %}
-  <div class="card mb-4 py-10 text-center">
-    <p class="text-sm" style="color:var(--text-dim)">Nessuno strumento nel PAC.</p>
-  </div>
+  <div class="card empty mb-4">Nessuno strumento nel PAC.</div>
   {% endif %}
 
   <div class="flex gap-2">

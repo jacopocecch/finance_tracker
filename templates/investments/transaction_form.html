@@ -1,10 +1,11 @@
 {% extends "base.html" %}
+{% import "_ui.html" as ui %}
 {% block title %}{{ title }} — Ledger{% endblock %}
 {% block content %}
 
-<div class="mb-6">
-  <a href="/investments" class="text-xs btn-ghost inline-flex mb-4" style="color:var(--text-muted)">← Investimenti</a>
-  <h1 class="text-xl font-semibold" style="color:var(--text)">{{ title }}</h1>
+<div class="flex items-center gap-3 mb-5">
+  <a href="/investments" class="btn-ghost btn-icon" aria-label="Torna a investimenti">{{ ui.icon('arrow-left', 'w-4 h-4') }}</a>
+  <h1 class="page-title">{{ title }}</h1>
 </div>
 
 <div class="card" style="max-width:680px" x-data='{ "newInstrument": false, "mode": "single", "selectedPac": {{ pacs[0].id if pacs else "null" }}, "pacComponents": {{ pac_components | tojson if pac_components is defined else "{}" }} }'>
@@ -12,13 +13,13 @@
   {% if not transaction and pacs %}
   <!-- Mode tabs -->
   <div class="flex gap-1 mb-5 p-1 rounded-lg" style="background:var(--surface-2);width:fit-content">
-    <button type="button" @click="mode='single'"
-      :class="mode==='single' ? 'btn-primary' : 'btn-ghost'"
-      class="text-xs px-4 py-1.5 rounded-md transition-all">Acquisto singolo</button>
-    <button type="button" @click="mode='pac'"
-      :class="mode==='pac' ? 'btn-primary' : 'btn-ghost'"
-      class="text-xs px-4 py-1.5 rounded-md transition-all">Esegui PAC</button>
+    <button type="button" @click="mode='single'" class="seg-btn" :class="{ active: mode==='single' }">Acquisto singolo</button>
+    <button type="button" @click="mode='pac'" class="seg-btn" :class="{ active: mode==='pac' }">Esegui PAC</button>
   </div>
+  <style>
+    .seg-btn { height: 28px; padding: 0 14px; border-radius: 7px; font-size: 12px; font-weight: 500; color: var(--text-muted); transition: background 0.1s, color 0.1s; }
+    .seg-btn.active { background: var(--surface); color: var(--text); box-shadow: 0 1px 2px rgba(17,24,39,0.08); }
+  </style>
   {% endif %}
 
   <!-- ── Single instrument form ── -->
@@ -27,53 +28,53 @@
     <!-- Instrument selector -->
     {% if not transaction %}
     <div class="mb-5">
-      <label class="text-xs font-medium mb-1.5 block" style="color:var(--text-muted)">Strumento *</label>
+      <label class="field-label">Strumento *</label>
       <select name="instrument_id" class="input w-full" required @change="newInstrument = ($event.target.value === 'new')">
-        <option value="">— Seleziona —</option>
+        <option value="">Seleziona</option>
         {% for inst in instruments %}
         <option value="{{ inst.id }}">{{ inst.name }} ({{ inst.ticker }}) — {{ inst.isin }}</option>
         {% endfor %}
-        <option value="new">+ Nuovo strumento…</option>
+        <option value="new">Nuovo strumento…</option>
       </select>
     </div>
 
     <!-- New instrument fields -->
     <div x-show="newInstrument" class="mb-5 p-4 rounded-lg" style="background:var(--surface-2);border:1px solid var(--border)">
-      <p class="text-sm mb-4" style="color:var(--text-muted)">Nuovo strumento</p>
+      <p class="card-title mb-4">Nuovo strumento</p>
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div>
-          <label class="text-xs font-medium mb-1 block" style="color:var(--text-muted)">Nome *</label>
+          <label class="field-label">Nome *</label>
           <input type="text" name="new_name" placeholder="Vanguard FTSE All-World" class="input w-full">
         </div>
         <div>
-          <label class="text-xs font-medium mb-1 block" style="color:var(--text-muted)">ISIN *</label>
+          <label class="field-label">ISIN *</label>
           <input type="text" name="new_isin" placeholder="IE00B3RBWM25" class="input w-full" style="text-transform:uppercase">
         </div>
         <div>
-          <label class="text-xs font-medium mb-1 block" style="color:var(--text-muted)">Ticker yfinance *
-            <span class="font-normal normal-case" style="color:var(--text-dim)">es. VWCE.MI</span>
+          <label class="field-label">Ticker yfinance *
+            <span class="font-normal" style="color:var(--text-dim)">es. VWCE.MI</span>
           </label>
           <input type="text" name="new_ticker" placeholder="VWCE.MI" class="input w-full">
         </div>
         <div>
-          <label class="text-xs font-medium mb-1 block" style="color:var(--text-muted)">Exchange</label>
+          <label class="field-label">Exchange</label>
           <input type="text" name="new_exchange" placeholder="Borsa Italiana" class="input w-full">
         </div>
         <div>
-          <label class="text-xs font-medium mb-1 block" style="color:var(--text-muted)">Valuta quotazione</label>
+          <label class="field-label">Valuta quotazione</label>
           <input type="text" name="new_currency" value="EUR" class="input w-full" style="text-transform:uppercase">
         </div>
       </div>
       <div class="flex items-center gap-2 mt-3">
         <input type="checkbox" name="new_is_liquidity" id="new_is_liquidity" value="1"
-               class="w-4 h-4 rounded" style="accent-color:var(--sky)">
-        <label for="new_is_liquidity" class="text-sm" style="color:var(--text)">Strumento liquido <span class="text-xs" style="color:var(--text-dim)">(es. ETF monetario)</span></label>
+               class="w-4 h-4 rounded">
+        <label for="new_is_liquidity" class="text-sm" style="color:var(--text)">Strumento liquido <span class="hint">(es. ETF monetario)</span></label>
       </div>
     </div>
     {% else %}
     <!-- In edit mode: instrument is fixed -->
     <div class="mb-5 px-4 py-3 rounded-lg" style="background:var(--surface-2);border:1px solid var(--border)">
-      <p class="text-xs" style="color:var(--text-muted)">Strumento (non modificabile)</p>
+      <p class="hint">Strumento (non modificabile)</p>
       <p class="text-sm font-medium mt-0.5" style="color:var(--text)">
         {% set inst = instruments | selectattr('id', 'equalto', transaction.instrument_id) | first %}
         {{ inst.name if inst else transaction.instrument_id }} — {{ inst.ticker if inst else '' }}
@@ -84,46 +85,46 @@
     <!-- Transaction fields -->
     <div class="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-5">
       <div>
-        <label class="text-xs font-medium mb-1.5 block" style="color:var(--text-muted)">Tipo</label>
+        <label class="field-label">Tipo</label>
         <select name="transaction_type" class="input w-full">
           <option value="BUY" {% if not transaction or transaction.transaction_type == 'BUY' %}selected{% endif %}>BUY</option>
           <option value="SELL" {% if transaction and transaction.transaction_type == 'SELL' %}selected{% endif %}>SELL</option>
         </select>
       </div>
       <div>
-        <label class="text-xs font-medium mb-1.5 block" style="color:var(--text-muted)">Data *</label>
+        <label class="field-label">Data *</label>
         <input type="date" name="trade_date" value="{{ transaction.trade_date.isoformat() if transaction else today }}" class="input w-full" required>
       </div>
       <div>
-        <label class="text-xs font-medium mb-1.5 block" style="color:var(--text-muted)">Broker</label>
+        <label class="field-label">Broker</label>
         <input type="text" name="broker_name" value="{{ transaction.broker_name if transaction else 'Fineco' }}" class="input w-full">
       </div>
     </div>
 
     <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-5">
       <div>
-        <label class="text-xs font-medium mb-1.5 block" style="color:var(--text-muted)">Quantità *</label>
+        <label class="field-label">Quantità *</label>
         <input type="number" name="quantity" step="0.000001" min="0.000001" value="{{ transaction.quantity if transaction else '' }}" class="input w-full" required>
       </div>
       <div>
-        <label class="text-xs font-medium mb-1.5 block" style="color:var(--text-muted)">Prezzo unitario *</label>
+        <label class="field-label">Prezzo unitario *</label>
         <input type="number" name="unit_price" step="0.0001" min="0.0001" value="{{ transaction.unit_price if transaction else '' }}" class="input w-full" required>
       </div>
       <div>
-        <label class="text-xs font-medium mb-1.5 block" style="color:var(--text-muted)">Commissioni</label>
+        <label class="field-label">Commissioni</label>
         <input type="number" name="fees" step="0.01" min="0" value="{{ transaction.fees if transaction else '0' }}" class="input w-full">
       </div>
       <div>
-        <label class="text-xs font-medium mb-1.5 block" style="color:var(--text-muted)">Valuta</label>
+        <label class="field-label">Valuta</label>
         <input type="text" name="currency" value="{{ transaction.currency if transaction else 'EUR' }}" class="input w-full" style="text-transform:uppercase">
       </div>
     </div>
 
     <!-- PAC -->
     <div class="mb-5">
-      <label class="text-xs font-medium mb-1.5 block" style="color:var(--text-muted)">PAC (opzionale)</label>
+      <label class="field-label">PAC (opzionale)</label>
       <select name="pac_id" class="input w-full">
-        <option value="">— Nessun PAC —</option>
+        <option value="">Nessun PAC</option>
         {% for pac in pacs %}
         <option value="{{ pac.id }}" {% if transaction and transaction.pac_id == pac.id %}selected{% endif %}>{{ pac.name }}</option>
         {% endfor %}
@@ -132,7 +133,7 @@
 
     <!-- Notes -->
     <div class="mb-6">
-      <label class="text-xs font-medium mb-1.5 block" style="color:var(--text-muted)">Note</label>
+      <label class="field-label">Note</label>
       <input type="text" name="notes" value="{{ transaction.notes or '' if transaction else '' }}" placeholder="Opzionale" class="input w-full">
     </div>
 
@@ -147,7 +148,7 @@
   <form x-show="mode==='pac'" method="post" :action="'/investments/pac/' + selectedPac + '/execute'">
     <!-- PAC selector -->
     <div class="mb-5">
-      <label class="text-xs font-medium mb-1.5 block" style="color:var(--text-muted)">PAC *</label>
+      <label class="field-label">PAC *</label>
       <select class="input w-full" x-model="selectedPac">
         {% for pac in pacs %}
         <option value="{{ pac.id }}">{{ pac.name }}</option>
@@ -158,18 +159,18 @@
     <!-- Date + broker -->
     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-5">
       <div>
-        <label class="text-xs font-medium mb-1.5 block" style="color:var(--text-muted)">Data acquisto *</label>
+        <label class="field-label">Data acquisto *</label>
         <input type="date" name="trade_date" value="{{ today }}" required class="input w-full">
       </div>
       <div>
-        <label class="text-xs font-medium mb-1.5 block" style="color:var(--text-muted)">Broker</label>
+        <label class="field-label">Broker</label>
         <input type="text" name="broker_name" value="Fineco" class="input w-full">
       </div>
     </div>
 
     <!-- Instrument rows -->
     <div class="mb-5">
-      <label class="text-xs font-medium mb-3 block" style="color:var(--text-muted)">Strumenti</label>
+      <label class="field-label mb-3">Strumenti</label>
       <template x-for="comp in (pacComponents[selectedPac] || [])" :key="comp.instrument_id">
         <div class="mb-3">
           <input type="hidden" name="instrument_ids" :value="comp.instrument_id">
@@ -179,21 +180,21 @@
           </p>
           <div class="grid grid-cols-3 gap-3">
             <div>
-              <label class="text-xs mb-1 block" style="color:var(--text-dim)">Quantità</label>
+              <label class="field-label">Quantità</label>
               <input type="number" name="quantities" :value="comp.target_weight || ''" placeholder="0" step="1" min="0" class="input w-full">
             </div>
             <div>
-              <label class="text-xs mb-1 block" style="color:var(--text-dim)">Prezzo unit.</label>
+              <label class="field-label">Prezzo unit.</label>
               <input type="number" name="unit_prices" placeholder="0.0000" step="0.0001" min="0" class="input w-full">
             </div>
             <div>
-              <label class="text-xs mb-1 block" style="color:var(--text-dim)">Commissioni</label>
+              <label class="field-label">Commissioni</label>
               <input type="number" name="fees_list" placeholder="0.00" step="0.01" min="0" value="0" class="input w-full">
             </div>
           </div>
         </div>
       </template>
-      <p x-show="(pacComponents[selectedPac] || []).length === 0" class="text-sm" style="color:var(--text-dim)">Nessuno strumento nel PAC.</p>
+      <p x-show="(pacComponents[selectedPac] || []).length === 0" class="hint">Nessuno strumento nel PAC.</p>
     </div>
 
     <div class="flex gap-2">

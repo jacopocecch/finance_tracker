@@ -1,432 +1,264 @@
 {% extends "base.html" %}
+{% import "_ui.html" as ui %}
 {% block title %}Categorie — Ledger{% endblock %}
 {% block content %}
 
-<div class="flex items-center justify-between mb-6">
-  <h1 class="text-xl font-semibold" style="color:var(--text)">Categorie e regole</h1>
-  <div class="flex gap-2">
-    <form method="post" action="/categories/recategorize" onsubmit="return confirm('Ricategorizzare tutte le transazioni con le regole attuali?')">
-      <button type="submit" class="btn-ghost text-sm" style="color:var(--sky)">↺ Ricategorizza tutto</button>
-    </form>
-  </div>
-</div>
-
-<!-- Add category -->
-<div class="card mb-6" x-data="{ open: false }">
-  <button @click="open = !open" class="flex items-center gap-2 text-sm font-medium w-full" style="color:var(--text)">
-    <span x-text="open ? '−' : '+'"></span>
-    Aggiungi categoria
-  </button>
-  <div x-show="open" x-transition class="mt-4">
-    <form method="post" action="/categories/add" class="flex gap-3 flex-wrap items-end">
-      <div>
-        <label class="text-xs mb-1.5 block font-medium" style="color:var(--text-muted)">Nome *</label>
-        <input type="text" name="name" placeholder="es. Palestra" required class="input">
-      </div>
-      <div>
-        <label class="text-xs mb-1.5 block font-medium" style="color:var(--text-muted)">Tipo</label>
-        <select name="cat_type" class="input">
-          <option value="expense">Spesa</option>
-          <option value="income">Entrata</option>
-          <option value="both">Entrate & Uscite</option>
-          <option value="transfer">Trasferimento</option>
-        </select>
-      </div>
-      <div>
-        <label class="text-xs mb-1.5 block font-medium" style="color:var(--text-muted)">Icona</label>
-        <input type="text" name="icon" value="💳" class="input" style="width:60px">
-      </div>
-      <div>
-        <label class="text-xs mb-1.5 block font-medium" style="color:var(--text-muted)">Colore</label>
-        <input type="color" name="color" value="#6B7280" class="rounded-lg" style="height:36px;width:48px;padding:2px;border:1px solid var(--border);background:var(--surface-2)">
-      </div>
-      <div>
-        <label class="text-xs mb-1.5 block font-medium" style="color:var(--text-muted)">Macrocategoria</label>
-        <select name="macrocategory_id" class="input">
-          <option value="">— nessuna —</option>
-          {% for m in macros %}<option value="{{ m.id }}">{{ m.name }}</option>{% endfor %}
-        </select>
-      </div>
-      <button type="submit" class="btn-primary">Aggiungi</button>
-    </form>
-    <p class="text-xs mt-2" style="color:var(--text-dim)">Assegnando una macrocategoria, il colore viene generato come sfumatura del suo colore base.</p>
-  </div>
-</div>
-
-<!-- Macrocategories -->
-<div class="card mb-6" x-data="{ open: false }">
-  <button @click="open = !open" class="flex items-center gap-2 text-sm font-medium w-full" style="color:var(--text)">
-    <span x-text="open ? '−' : '+'"></span>
-    Macrocategorie
-    <span class="text-xs num px-1.5 py-0.5 rounded ml-1" style="background:var(--surface-2);color:var(--text-dim)">{{ macros | length }}</span>
-  </button>
-  <div x-show="open" x-transition class="mt-4">
-    <form method="post" action="/macros/add" class="flex gap-3 flex-wrap items-end mb-4">
-      <div>
-        <label class="text-xs mb-1.5 block font-medium" style="color:var(--text-muted)">Nome *</label>
-        <input type="text" name="name" placeholder="es. Cibo" required class="input">
-      </div>
-      <div>
-        <label class="text-xs mb-1.5 block font-medium" style="color:var(--text-muted)">Colore base</label>
-        <input type="color" name="color" value="#10B981" class="rounded-lg" style="height:36px;width:48px;padding:2px;border:1px solid var(--border);background:var(--surface-2)">
-      </div>
-      <button type="submit" class="btn-primary">Aggiungi</button>
-    </form>
-    {% for m in macros %}
-    {% set m_cats = cats_by_macro.get(m.id, []) %}
-    <div class="flex items-center gap-3 py-2 flex-wrap" style="border-top:1px solid var(--border-subtle)">
-      <span class="cat-icon-wrap" style="width:24px;height:24px;border-radius:6px;background:{{ m.color }}"></span>
-      <span class="font-medium text-sm" style="color:var(--text)">{{ m.name }}</span>
-      <span class="text-xs num px-1.5 py-0.5 rounded" style="background:var(--surface-2);color:var(--text-dim)">{{ m_cats | length }} cat.</span>
-      <form method="post" action="/macros/{{ m.id }}/recolor" class="flex items-center gap-1.5">
-        <input type="color" name="color" value="{{ m.color }}" class="rounded-lg" style="height:30px;width:40px;padding:2px;border:1px solid var(--border);background:var(--surface-2)">
-        <button type="submit" class="cat-btn">Applica sfumature</button>
-      </form>
-      {% if not m_cats %}
-      <form method="post" action="/macros/{{ m.id }}/delete" onsubmit='return confirm({{ ("Eliminare la macrocategoria " ~ m.name ~ "?") | tojson }})'>
-        <button type="submit" class="cat-btn cat-btn-danger">✕</button>
-      </form>
-      {% endif %}
-    </div>
-    {% endfor %}
-  </div>
-</div>
-
-<!-- Category grid -->
 <style>
-  .cat-card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    overflow: hidden;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
-    transition: box-shadow 0.15s ease, transform 0.15s ease;
-  }
-  .cat-card:hover {
-    box-shadow: 0 4px 16px rgba(0,0,0,0.08);
-    transform: translateY(-1px);
-  }
-  .cat-card-header {
-    padding: 1rem 1.1rem 0.85rem;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 0.75rem;
-  }
-  .cat-card-body {
-    padding: 0 1.1rem 1rem;
-  }
-  .cat-accent-bar {
-    height: 3px;
-    width: 100%;
-  }
-  .cat-icon-wrap {
-    width: 36px;
-    height: 36px;
-    border-radius: 9px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 18px;
-    flex-shrink: 0;
-  }
-  .cat-type-pill {
-    font-size: 10px;
-    font-weight: 500;
-    letter-spacing: 0.04em;
-    text-transform:;
-    padding: 2px 7px;
-    border-radius: 99px;
-  }
-  .cat-stat {
-    font-size: 11px;
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    padding: 2px 8px;
-    border-radius: 99px;
-    background: var(--surface-2);
-    color: var(--text-dim);
-    border: 1px solid var(--border-subtle);
-  }
-  .cat-actions {
-    display: flex;
-    gap: 6px;
-    align-items: center;
-    flex-shrink: 0;
-  }
-  .cat-btn {
-    height: 28px;
-    padding: 0 10px;
-    border-radius: 7px;
-    font-size: 11px;
-    font-weight: 500;
-    display: flex;
-    align-items: center;
-    cursor: pointer;
-    transition: background 0.1s, color 0.1s;
-    border: 1px solid var(--border);
-    background: var(--surface-2);
-    color: var(--text-muted);
-    gap: 4px;
-  }
-  .cat-btn:hover { background: var(--border); color: var(--text); }
-  .cat-btn-danger { color: var(--rose); }
-  .cat-btn-danger:hover { background: rgba(217,59,79,0.08); border-color: rgba(217,59,79,0.2); color: var(--rose); }
-  .cat-expand-panel {
-    border-top: 1px solid var(--border-subtle);
-    padding: 1rem 1.1rem;
-    background: var(--bg);
-  }
-  .cat-section-label {
-    font-size: 10px;
-    font-weight: 600;
-    letter-spacing: 0.07em;
-    text-transform:;
-    color: var(--text-dim);
-    margin-bottom: 8px;
-  }
-  .cat-merchant-tag {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    font-size: 11px;
-    padding: 3px 8px 3px 9px;
-    border-radius: 99px;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    color: var(--text-muted);
-  }
-  .cat-rule-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 6px 10px;
-    border-radius: 8px;
-    background: var(--surface);
-    border: 1px solid var(--border-subtle);
-    gap: 8px;
-  }
-  .cat-rule-code {
-    font-size: 11px;
-    font-family: 'DM Mono', monospace;
-    color: var(--text-muted);
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .cat-priority-dot {
-    font-size: 10px;
-    font-family: 'DM Mono', monospace;
-    color: var(--text-dim);
-    white-space: nowrap;
-    flex-shrink: 0;
-  }
-  .cat-add-rule-form {
-    margin-top: 10px;
-    padding: 10px;
-    border-radius: 9px;
-    background: var(--surface);
-    border: 1px solid var(--border-subtle);
-  }
+  .cat-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+  .cat-card-header { padding: 0.9rem 1rem; display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; }
+  .cat-icon-wrap { width: 34px; height: 34px; border-radius: 9px; display: flex; align-items: center; justify-content: center; font-size: 17px; flex-shrink: 0; }
+  .cat-expand-panel { border-top: 1px solid var(--border-subtle); padding: 1rem; background: var(--bg); }
+  .cat-section-label { font-size: 11px; font-weight: 500; color: var(--text-dim); margin-bottom: 8px; }
+  .cat-merchant-tag { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; padding: 3px 8px 3px 9px; border-radius: 7px; background: var(--surface); border: 1px solid var(--border); color: var(--text-muted); }
+  .cat-rule-row { display: flex; align-items: center; justify-content: space-between; padding: 6px 10px; border-radius: 8px; background: var(--surface); border: 1px solid var(--border-subtle); gap: 8px; }
+  .cat-rule-code { font-family: 'Geist Mono', monospace; font-size: 12px; color: var(--text-muted); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .cat-priority { font-family: 'Geist Mono', monospace; font-size: 11px; color: var(--text-dim); white-space: nowrap; flex-shrink: 0; }
 </style>
 
-{% set sections = [
-  ('expense',  'Uscite',           'var(--rose)',    'rgba(217,59,79,0.12)'),
-  ('income',   'Entrate',          'var(--emerald)', 'rgba(21,128,61,0.12)'),
-  ('both',     'Entrate & Uscite', 'var(--text-muted)', 'rgba(107,107,136,0.12)'),
-  ('transfer', 'Trasferimenti',    'var(--sky)',     'rgba(47,91,234,0.12)'),
-] %}
+{% set type_labels = {'expense': 'Spesa', 'income': 'Entrata', 'both': 'Entrate e uscite', 'transfer': 'Trasferimento'} %}
+{% set type_badge  = {'expense': 'badge-rose', 'income': 'badge-emerald', 'both': 'badge-neutral', 'transfer': 'badge-accent'} %}
 
-{% for sec_type, sec_label, sec_color, sec_bg in sections %}
-{% set sec_cats = categories | selectattr('type', 'equalto', sec_type) | list %}
-{% if sec_cats %}
+<div class="flex flex-col gap-5">
 
-<div class="flex items-center gap-3 mb-3 {% if not loop.first %}mt-6{% endif %}">
-  <span class="text-sm" style="color:{{ sec_color }}">{{ sec_label }}</span>
-  <span class="text-xs num px-1.5 py-0.5 rounded" style="background:{{ sec_bg }};color:{{ sec_color }}">{{ sec_cats | length }}</span>
-  <div class="flex-1 h-px" style="background:var(--border-subtle)"></div>
-</div>
+  <div class="flex items-center justify-between gap-3 flex-wrap">
+    <h1 class="page-title">Categorie e regole</h1>
+    <form method="post" action="/categories/recategorize" onsubmit="return confirm('Ricategorizzare tutte le transazioni con le regole attuali?')">
+      <button type="submit" class="btn-ghost">{{ ui.icon('wand') }} Ricategorizza tutto</button>
+    </form>
+  </div>
 
-<div class="grid gap-3 mb-2" style="grid-template-columns: repeat(auto-fill, minmax(320px, 1fr))">
-{% for cat in sec_cats %}
-{% set cat_rules = rules_by_cat.get(cat.id, []) %}
-{% set cat_merchants = merchants_by_cat.get(cat.id, []) %}
-{% set type_styles = {
-  'expense':  'background:rgba(217,59,79,0.07);color:var(--rose);border:1px solid rgba(217,59,79,0.15)',
-  'income':   'background:rgba(21,128,61,0.07);color:var(--emerald);border:1px solid rgba(21,128,61,0.15)',
-  'both':     'background:rgba(107,107,136,0.07);color:var(--text-muted);border:1px solid rgba(107,107,136,0.25)',
-  'transfer': 'background:rgba(47,91,234,0.07);color:var(--sky);border:1px solid rgba(47,91,234,0.15)'
-} %}
-{% set type_labels = {'expense': 'Spesa', 'income': 'Entrata', 'both': 'Entrate & Uscite', 'transfer': 'Trasferimento'} %}
+  <!-- Add category -->
+  <section class="card" x-data="{ open: false }">
+    <button @click="open = !open" class="disclosure" :class="{ open: open }">
+      <span>Aggiungi categoria</span>
+      {{ ui.icon('chevron', 'w-4 h-4') }}
+    </button>
+    <div x-show="open" x-transition x-cloak class="mt-4">
+      <form method="post" action="/categories/add" class="flex gap-3 flex-wrap items-end">
+        <div>
+          <label class="field-label">Nome *</label>
+          <input type="text" name="name" placeholder="es. Palestra" required class="input">
+        </div>
+        <div>
+          <label class="field-label">Tipo</label>
+          <select name="cat_type" class="input">
+            <option value="expense">Spesa</option>
+            <option value="income">Entrata</option>
+            <option value="both">Entrate e uscite</option>
+            <option value="transfer">Trasferimento</option>
+          </select>
+        </div>
+        <div>
+          <label class="field-label">Icona</label>
+          <input type="text" name="icon" value="💳" class="input" style="width:60px">
+        </div>
+        <div>
+          <label class="field-label">Colore</label>
+          <input type="color" name="color" value="#6B7280" class="input">
+        </div>
+        <div>
+          <label class="field-label">Macrocategoria</label>
+          <select name="macrocategory_id" class="input">
+            <option value="">Nessuna</option>
+            {% for m in macros %}<option value="{{ m.id }}">{{ m.name }}</option>{% endfor %}
+          </select>
+        </div>
+        <button type="submit" class="btn-primary">Aggiungi</button>
+      </form>
+      <p class="hint mt-3">Assegnando una macrocategoria, il colore viene generato come sfumatura del suo colore base.</p>
+    </div>
+  </section>
 
-<div class="cat-card" x-data="{ rulesOpen: false, addRule: false }">
-  <!-- Colored accent bar -->
-  <div class="cat-accent-bar" style="background:{{ cat.color }}"></div>
-
-  <!-- Header -->
-  <div class="cat-card-header">
-    <!-- Icon + name -->
-    <div class="flex items-center gap-2.5 min-w-0">
-      <div class="cat-icon-wrap" style="background:{{ cat.color }}18">
-        <span>{{ cat.icon }}</span>
+  <!-- Macrocategories -->
+  <section class="card" x-data="{ open: false }">
+    <button @click="open = !open" class="disclosure" :class="{ open: open }">
+      <span class="flex items-center gap-2">Macrocategorie <span class="badge badge-neutral num">{{ macros | length }}</span></span>
+      {{ ui.icon('chevron', 'w-4 h-4') }}
+    </button>
+    <div x-show="open" x-transition x-cloak class="mt-4">
+      <form method="post" action="/macros/add" class="flex gap-3 flex-wrap items-end mb-4">
+        <div>
+          <label class="field-label">Nome *</label>
+          <input type="text" name="name" placeholder="es. Cibo" required class="input">
+        </div>
+        <div>
+          <label class="field-label">Colore base</label>
+          <input type="color" name="color" value="#10B981" class="input">
+        </div>
+        <button type="submit" class="btn-primary">Aggiungi</button>
+      </form>
+      {% for m in macros %}
+      {% set m_cats = cats_by_macro.get(m.id, []) %}
+      <div class="flex items-center gap-3 py-2.5 flex-wrap" style="border-top:1px solid var(--border-subtle)">
+        <span class="rounded-md flex-shrink-0" style="width:22px;height:22px;background:{{ m.color }}"></span>
+        <span class="font-medium text-sm" style="color:var(--text)">{{ m.name }}</span>
+        <span class="badge badge-neutral num">{{ m_cats | length }} cat.</span>
+        <form method="post" action="/macros/{{ m.id }}/recolor" class="flex items-center gap-1.5 ml-auto">
+          <input type="color" name="color" value="{{ m.color }}" class="input" style="height:28px;width:36px">
+          <button type="submit" class="btn-sm">Applica sfumature</button>
+        </form>
+        {% if not m_cats %}
+        <form method="post" action="/macros/{{ m.id }}/delete" onsubmit='return confirm({{ ("Eliminare la macrocategoria " ~ m.name ~ "?") | tojson }})'>
+          <button type="submit" class="icon-btn danger" title="Elimina">{{ ui.icon('x') }}</button>
+        </form>
+        {% endif %}
       </div>
-      <div class="min-w-0">
-        <p class="font-semibold text-sm leading-tight truncate" style="color:var(--text)">{{ cat.name }}</p>
-        <div class="flex items-center gap-1.5 mt-0.5 flex-wrap">
-          <span class="cat-type-pill" style="{{ type_styles.get(cat.type, '') }}">
-            {{ type_labels.get(cat.type, cat.type) }}
+      {% endfor %}
+    </div>
+  </section>
+
+  <!-- Category grid -->
+  {% set sections = [
+    ('expense',  'Uscite'),
+    ('income',   'Entrate'),
+    ('both',     'Entrate e uscite'),
+    ('transfer', 'Trasferimenti'),
+  ] %}
+
+  {% for sec_type, sec_label in sections %}
+  {% set sec_cats = categories | selectattr('type', 'equalto', sec_type) | list %}
+  {% if sec_cats %}
+  <div>
+    <div class="section-divider">
+      <span class="section-divider-label">{{ sec_label }}</span>
+      <span class="badge badge-neutral num">{{ sec_cats | length }}</span>
+      <div class="section-divider-line"></div>
+    </div>
+
+    <div class="grid gap-3" style="grid-template-columns: repeat(auto-fill, minmax(300px, 1fr))">
+    {% for cat in sec_cats %}
+    {% set cat_rules = rules_by_cat.get(cat.id, []) %}
+    {% set cat_merchants = merchants_by_cat.get(cat.id, []) %}
+    <div class="cat-card" x-data="{ rulesOpen: false, addRule: false }">
+      <div class="card-accent-bar" style="background:{{ cat.color }}"></div>
+
+      <div class="cat-card-header">
+        <div class="flex items-center gap-2.5 min-w-0">
+          <div class="cat-icon-wrap" style="background:{{ cat.color }}18"><span>{{ cat.icon }}</span></div>
+          <div class="min-w-0">
+            <p class="font-medium text-sm leading-tight truncate" style="color:var(--text)">{{ cat.name }}</p>
+            <div class="flex items-center gap-1.5 mt-1 flex-wrap">
+              <span class="badge {{ type_badge.get(cat.type, 'badge-neutral') }}">{{ type_labels.get(cat.type, cat.type) }}</span>
+              {% if cat_rules %}<span class="badge badge-neutral num" title="Regole regex">{{ cat_rules | length }} regex</span>{% endif %}
+              {% if cat_merchants %}<span class="badge badge-neutral num" title="Esercenti associati">{{ cat_merchants | length }} eserc.</span>{% endif %}
+            </div>
+          </div>
+        </div>
+        <div class="flex items-center gap-1.5 flex-shrink-0">
+          <button @click="rulesOpen = !rulesOpen" class="btn-sm" :class="{ active: rulesOpen }">
+            <span x-text="rulesOpen ? 'Chiudi' : 'Regole'"></span>
+          </button>
+          <form method="post" action="/categories/{{ cat.id }}/delete"
+                onsubmit='return confirm({{ ("Eliminare " ~ cat.name ~ "? Possibile solo se non ha transazioni.") | tojson }})'>
+            <button type="submit" class="icon-btn danger" title="Elimina categoria">{{ ui.icon('x') }}</button>
+          </form>
+        </div>
+      </div>
+
+      <!-- Rules panel -->
+      <div x-show="rulesOpen" x-transition x-cloak class="cat-expand-panel">
+        <p class="cat-section-label">Macrocategoria</p>
+        <form method="post" action="/categories/{{ cat.id }}/assign" class="flex items-center gap-2 mb-4">
+          <select name="macrocategory_id" class="input" style="height:30px;font-size:12px">
+            <option value="" {% if not cat.macrocategory_id %}selected{% endif %}>Nessuna</option>
+            {% for m in macros %}<option value="{{ m.id }}" {% if cat.macrocategory_id == m.id %}selected{% endif %}>{{ m.name }}</option>{% endfor %}
+          </select>
+          <button type="submit" class="btn-sm">Assegna</button>
+        </form>
+
+        {% if cat_merchants %}
+        <p class="cat-section-label">Esercenti</p>
+        <div class="flex flex-wrap gap-1.5 mb-4">
+          {% for mc in cat_merchants %}
+          <span class="cat-merchant-tag">
+            {{ mc.merchant }}
+            <form method="post" action="/merchant-categories/{{ mc.id }}/delete" class="inline leading-none">
+              <button type="submit" class="opacity-50 hover:opacity-100 leading-none transition-opacity" style="color:var(--rose)" title="Rimuovi">{{ ui.icon('x', 'w-3 h-3') }}</button>
+            </form>
           </span>
-          {% if cat_rules %}
-          <span class="cat-stat">
-            <svg width="9" height="9" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 3h10M1 6h7M1 9h5"/></svg>
-            {{ cat_rules | length }}
-          </span>
-          {% endif %}
-          {% if cat_merchants %}
-          <span class="cat-stat">
-            <svg width="9" height="9" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="5" width="10" height="6" rx="1"/><path d="M4 5V3a2 2 0 014 0v2"/></svg>
-            {{ cat_merchants | length }}
-          </span>
-          {% endif %}
+          {% endfor %}
+        </div>
+        {% endif %}
+
+        <p class="cat-section-label">Regex</p>
+        {% if cat_rules %}
+        <div class="flex flex-col gap-1.5 mb-3">
+          {% for rule in cat_rules %}
+          <div class="cat-rule-row">
+            <code class="cat-rule-code">{{ rule.pattern }}</code>
+            <div class="flex items-center gap-2 flex-shrink-0">
+              <span class="cat-priority">p{{ rule.priority }}</span>
+              <form method="post" action="/rules/{{ rule.id }}/delete">
+                <button type="submit" class="opacity-50 hover:opacity-100 transition-opacity" style="color:var(--rose)" title="Elimina regola">{{ ui.icon('x', 'w-3 h-3') }}</button>
+              </form>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+        {% else %}
+        <p class="hint mb-3">Nessuna regola regex.</p>
+        {% endif %}
+
+        <button @click="addRule = !addRule" class="btn-sm">
+          <span x-text="addRule ? 'Annulla' : 'Nuova regola'"></span>
+        </button>
+
+        <div x-show="addRule" x-transition x-cloak class="mt-2.5 p-2.5 rounded-lg" style="background:var(--surface);border:1px solid var(--border-subtle)">
+          <form method="post" action="/categories/{{ cat.id }}/rules/add" class="flex gap-2 items-end flex-wrap">
+            <div class="flex-1 min-w-40">
+              <label class="field-label">Pattern (case insensitive)</label>
+              <input type="text" name="pattern" placeholder="es. palestra|gym" required class="input w-full num" style="height:30px;font-size:12px">
+            </div>
+            <div>
+              <label class="field-label">Priorità</label>
+              <input type="number" name="priority" value="5" min="0" max="10" class="input num" style="height:30px;width:62px;font-size:12px">
+            </div>
+            <button type="submit" class="btn-primary" style="height:30px;padding:0 12px;font-size:12px">Salva</button>
+          </form>
         </div>
       </div>
     </div>
-
-    <!-- Action buttons -->
-    <div class="cat-actions">
-      <button @click="rulesOpen = !rulesOpen" class="cat-btn">
-        <svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2"
-             :style="rulesOpen ? 'transform:rotate(180deg);transition:transform 0.2s' : 'transition:transform 0.2s'">
-          <path d="M2 4l4 4 4-4"/>
-        </svg>
-        <span x-text="rulesOpen ? 'Chiudi' : 'Regole'"></span>
-      </button>
-      <form method="post" action="/categories/{{ cat.id }}/delete"
-            onsubmit='return confirm({{ ("Eliminare " ~ cat.name ~ "? Possibile solo se non ha transazioni.") | tojson }})'>
-        <button type="submit" class="cat-btn cat-btn-danger">✕</button>
-      </form>
+    {% endfor %}
     </div>
   </div>
+  {% endif %}
+  {% endfor %}
 
-  <!-- Expandable rules panel -->
-  <div x-show="rulesOpen" x-transition class="cat-expand-panel">
-
-    <p class="cat-section-label">Macrocategoria</p>
-    <form method="post" action="/categories/{{ cat.id }}/assign" class="flex items-center gap-2 mb-4">
-      <select name="macrocategory_id" class="input" style="height:32px;font-size:12px">
-        <option value="" {% if not cat.macrocategory_id %}selected{% endif %}>— nessuna —</option>
-        {% for m in macros %}<option value="{{ m.id }}" {% if cat.macrocategory_id == m.id %}selected{% endif %}>{{ m.name }}</option>{% endfor %}
-      </select>
-      <button type="submit" class="cat-btn" style="font-size:11px">Assegna</button>
-    </form>
-
-    {% if cat_merchants %}
-    <p class="cat-section-label">Esercenti</p>
-    <div class="flex flex-wrap gap-1.5 mb-4">
-      {% for mc in cat_merchants %}
-      <span class="cat-merchant-tag">
-        {{ mc.merchant }}
-        <form method="post" action="/merchant-categories/{{ mc.id }}/delete" class="inline leading-none">
-          <button type="submit" class="opacity-40 hover:opacity-100 leading-none text-xs transition-opacity" style="color:var(--rose)">✕</button>
-        </form>
-      </span>
-      {% endfor %}
+  <!-- Merchant associations -->
+  {% if all_merchants %}
+  <section x-data="{ open: false }" class="card" style="padding:0">
+    {# The sync form sits beside the toggle button, not inside it: a <form>
+       nested in a <button> gets hoisted out by the HTML parser. #}
+    <div class="card-head" :style="open ? '' : 'border-bottom:none'">
+      <button @click="open = !open" class="disclosure flex-1" :class="{ open: open }">
+        <span class="flex items-center gap-2">Esercenti associati <span class="badge badge-neutral num">{{ all_merchants | length }}</span></span>
+        {{ ui.icon('chevron', 'w-4 h-4') }}
+      </button>
+      <form method="post" action="/merchant-categories/sync" class="flex-shrink-0">
+        <button type="submit" class="btn-sm">{{ ui.icon('refresh', 'w-3 h-3') }} Sincronizza</button>
+      </form>
     </div>
-    {% endif %}
-
-    {% if cat_rules %}
-    <p class="cat-section-label">Regex</p>
-    <div class="flex flex-col gap-1.5 mb-3">
-      {% for rule in cat_rules %}
-      <div class="cat-rule-row">
-        <code class="cat-rule-code">{{ rule.pattern }}</code>
-        <div class="flex items-center gap-2 flex-shrink-0">
-          <span class="cat-priority-dot">p{{ rule.priority }}</span>
-          <form method="post" action="/rules/{{ rule.id }}/delete">
-            <button type="submit" class="opacity-40 hover:opacity-100 text-xs transition-opacity" style="color:var(--rose)">✕</button>
+    <div x-show="open" x-transition x-cloak>
+      {% for mc in all_merchants %}
+      <div class="list-row">
+        <span class="text-sm truncate" style="color:var(--text)">{{ mc.merchant }}</span>
+        <div class="flex items-center gap-1.5 flex-shrink-0">
+          <form method="post" action="/merchant-categories/{{ mc.id }}/update">
+            <select name="category_id" onchange="this.form.submit()" class="input" style="height:30px;font-size:12px;padding:0 8px">
+              {% for c in categories %}
+              <option value="{{ c.id }}" {% if c.id == mc.category_id %}selected{% endif %}>{{ c.icon }} {{ c.name }}</option>
+              {% endfor %}
+            </select>
+          </form>
+          <form method="post" action="/merchant-categories/{{ mc.id }}/delete">
+            <button type="submit" class="icon-btn danger" title="Rimuovi associazione">{{ ui.icon('x') }}</button>
           </form>
         </div>
       </div>
       {% endfor %}
     </div>
-    {% else %}
-    <p class="text-xs mb-3" style="color:var(--text-dim)">Nessuna regola regex.</p>
-    {% endif %}
+  </section>
+  {% endif %}
 
-    <button @click="addRule = !addRule" class="cat-btn" style="font-size:11px">
-      <span x-text="addRule ? '− Annulla' : '+ Regola'"></span>
-    </button>
-
-    <div x-show="addRule" x-transition>
-      <div class="cat-add-rule-form">
-        <form method="post" action="/categories/{{ cat.id }}/rules/add" class="flex gap-2 items-end flex-wrap">
-          <div class="flex-1 min-w-40">
-            <label class="text-xs mb-1 block" style="color:var(--text-dim)">Pattern (case insensitive)</label>
-            <input type="text" name="pattern" placeholder="es. palestra|gym" required class="input w-full" style="height:32px;font-size:12px">
-          </div>
-          <div>
-            <label class="text-xs mb-1 block" style="color:var(--text-dim)">Priorità</label>
-            <input type="number" name="priority" value="5" min="0" max="10" class="input" style="height:32px;width:62px;font-size:12px">
-          </div>
-          <button type="submit" class="btn-primary text-xs" style="height:32px;padding:0 12px">Salva</button>
-        </form>
-      </div>
-    </div>
-  </div>
 </div>
-{% endfor %}
-</div><!-- /grid -->
-
-{% endif %}
-{% endfor %}<!-- /sections -->
-
-<!-- Merchant associations — collapsible panel at the bottom -->
-{% if all_merchants %}
-<div x-data="{ open: false }" class="rounded-xl" style="border:1px dashed var(--border)">
-  <!-- The sync form sits beside the toggle button, not inside it: a <form>
-       nested in a <button> gets hoisted out by the HTML parser and its submit
-       button stops working. -->
-  <div class="flex items-center gap-3 px-5 py-4">
-    <button @click="open = !open"
-            class="flex items-center gap-3 flex-1 min-w-0 text-left"
-            style="color:var(--text-muted)">
-      <svg class="w-4 h-4 shrink-0 transition-transform duration-200" :style="open ? 'transform:rotate(90deg)' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-      </svg>
-      <span class="text-sm font-medium" style="color:var(--text)">Esercenti associati</span>
-      <span class="text-xs px-2 py-0.5 rounded-full" style="background:var(--surface-2);color:var(--text-dim)">{{ all_merchants | length }}</span>
-      <span class="text-xs ml-auto" style="color:var(--text-dim)" x-text="open ? 'Chiudi' : 'Espandi'"></span>
-    </button>
-    <form method="post" action="/merchant-categories/sync" class="shrink-0">
-      <button type="submit" class="text-xs font-medium px-3 py-1 rounded-lg transition-colors"
-              style="background:rgba(47,91,234,0.08);border:1px solid rgba(47,91,234,0.2);color:var(--sky)">
-        ↺ Sincronizza
-      </button>
-    </form>
-  </div>
-  <div x-show="open" x-transition style="border-top:1px solid var(--border)">
-    {% for mc in all_merchants %}
-    {% set cat = cat_map.get(mc.category_id) %}
-    <div class="flex items-center justify-between px-5 py-3 {% if not loop.last %}border-b{% endif %}" style="{% if not loop.last %}border-color:var(--border-subtle){% endif %}">
-      <span class="text-sm" style="color:var(--text)">{{ mc.merchant }}</span>
-      <div class="flex items-center gap-2">
-        <form method="post" action="/merchant-categories/{{ mc.id }}/update" class="flex items-center gap-1.5">
-          <select name="category_id" onchange="this.form.submit()" class="input text-xs" style="height:30px;padding:2px 8px">
-            {% for c in categories %}
-            <option value="{{ c.id }}" {% if c.id == mc.category_id %}selected{% endif %}>{{ c.icon }} {{ c.name }}</option>
-            {% endfor %}
-          </select>
-        </form>
-        <form method="post" action="/merchant-categories/{{ mc.id }}/delete">
-          <button type="submit" class="btn-ghost text-xs" style="height:30px;padding:0 10px;color:var(--rose)">✕</button>
-        </form>
-      </div>
-    </div>
-    {% endfor %}
-  </div>
-</div>
-{% endif %}
-
 {% endblock %}

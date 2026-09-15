@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% import "_ui.html" as ui %}
 {% block title %}Overview — Ledger{% endblock %}
 {% block content %}
 
@@ -19,7 +20,7 @@
 <div x-data="{ hidden: localStorage.getItem('liquidita_hidden') === '1' }" class="flex flex-col gap-5">
 
   <div class="flex items-center justify-between">
-    <h1 class="text-xl font-semibold tracking-tight" style="color:var(--text)">Overview</h1>
+    <h1 class="page-title">Overview</h1>
     <button @click="hidden = !hidden; localStorage.setItem('liquidita_hidden', hidden ? '1' : '0')"
             class="inline-flex items-center gap-1.5 text-sm transition-colors" style="color:var(--text-muted)" :aria-pressed="hidden">
       <svg x-show="!hidden" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>
@@ -29,49 +30,45 @@
   </div>
 
   <!-- Stat strip -->
-  <section class="grid grid-cols-1 sm:grid-cols-3 card" style="padding:0">
-    <div class="flex flex-col gap-2 px-6 py-5">
-      <p class="text-[13px]" style="color:var(--text-muted)">Patrimonio netto</p>
-      <p class="num text-[26px] font-medium leading-none" style="color:var(--text)">
-        <span x-show="!hidden">{{ "{:,.0f}".format(net_worth).replace(",", ".") }} €</span>
+  <section class="stat-strip" style="--cols:3">
+    <div class="stat-cell">
+      <p class="stat-label">Patrimonio netto</p>
+      <p class="stat-value">
+        <span x-show="!hidden">{{ net_worth | eur }}</span>
         <span x-show="hidden" x-cloak style="letter-spacing:0.08em">•••••• €</span>
       </p>
-      <p class="text-xs" style="color:var(--text-dim)">liquidità e investimenti</p>
+      <p class="stat-sub">liquidità e investimenti</p>
     </div>
-    <div class="flex flex-col gap-2 px-6 py-5 stat-cell">
-      <p class="text-[13px]" style="color:var(--text-muted)">Liquidità</p>
-      <p class="num text-[26px] font-medium leading-none" style="color:var(--text)">
-        <span x-show="!hidden">{{ "{:,.0f}".format(liquidity).replace(",", ".") }} €</span>
+    <div class="stat-cell">
+      <p class="stat-label">Liquidità</p>
+      <p class="stat-value">
+        <span x-show="!hidden">{{ liquidity | eur }}</span>
         <span x-show="hidden" x-cloak style="letter-spacing:0.08em">•••• €</span>
       </p>
-      <p class="text-xs" style="color:var(--text-dim)">conti, risparmio, contanti{% if liquidity_etf %}, ETF monetari{% endif %}</p>
+      <p class="stat-sub">conti, risparmio, contanti{% if liquidity_etf %}, ETF monetari{% endif %}</p>
     </div>
-    <div class="flex flex-col gap-2 px-6 py-5 stat-cell">
-      <p class="text-[13px]" style="color:var(--text-muted)">Investimenti</p>
-      <p class="num text-[26px] font-medium leading-none" style="color:var(--text)">
-        <span x-show="!hidden">{{ "{:,.0f}".format(portfolio_value).replace(",", ".") }} €</span>
+    <div class="stat-cell">
+      <p class="stat-label">Investimenti</p>
+      <p class="stat-value">
+        <span x-show="!hidden">{{ portfolio_value | eur }}</span>
         <span x-show="hidden" x-cloak style="letter-spacing:0.08em">•••• €</span>
       </p>
       {% if portfolio_pl is not none %}
-      <p class="text-xs num" style="color:{% if portfolio_pl >= 0 %}var(--emerald){% else %}var(--rose){% endif %}">
-        <span x-show="!hidden">{{ "{:+,.0f}".format(portfolio_pl).replace(",", ".") }} €{% if portfolio_pl_pct is not none %} ({{ "{:+.1f}%".format(portfolio_pl_pct) }}){% endif %}</span>
+      <p class="stat-sub num" style="color:{% if portfolio_pl >= 0 %}var(--emerald){% else %}var(--rose){% endif %}">
+        <span x-show="!hidden">{{ portfolio_pl | eur(0, true) }}{% if portfolio_pl_pct is not none %} ({{ "{:+.1f}%".format(portfolio_pl_pct) }}){% endif %}</span>
         <span x-show="hidden" x-cloak>•••</span>
       </p>
       {% else %}
-      <p class="text-xs" style="color:var(--text-dim)">portafoglio ETF</p>
+      <p class="stat-sub">portafoglio ETF</p>
       {% endif %}
     </div>
   </section>
 
   <!-- Net worth chart -->
-  <section class="card flex flex-col gap-4" style="padding:20px 24px">
+  <section class="card flex flex-col gap-4">
     <div class="flex items-center justify-between gap-4 flex-wrap">
-      <p class="text-sm font-medium" style="color:var(--text)">Andamento dal {{ labels[0] if labels else '—' }}</p>
-      <div class="flex items-center gap-4 text-xs" style="color:var(--text-muted)">
-        <span class="inline-flex items-center gap-1.5"><svg width="20" height="6" viewBox="0 0 20 6"><line x1="0" y1="3" x2="20" y2="3" stroke="#2f5bea" stroke-width="2"/></svg>Patrimonio netto</span>
-        <span class="inline-flex items-center gap-1.5"><svg width="20" height="6" viewBox="0 0 20 6"><line x1="0" y1="3" x2="20" y2="3" stroke="#5aa1a8" stroke-width="2" stroke-dasharray="4 3"/></svg>Liquidità</span>
-        <span class="inline-flex items-center gap-1.5"><svg width="20" height="6" viewBox="0 0 20 6"><line x1="0" y1="3" x2="20" y2="3" stroke="#d98546" stroke-width="2" stroke-dasharray="4 3"/></svg>Investimenti</span>
-      </div>
+      <p class="card-title">Andamento dal {{ labels[0] if labels else '—' }}</p>
+      {{ ui.legend([('Patrimonio netto', '#2f5bea', 'line'), ('Liquidità', '#5aa1a8', 'dash'), ('Investimenti', '#d98546', 'dash')]) }}
     </div>
     <div style="position:relative">
       <canvas id="networthChart" height="72"></canvas>
@@ -84,28 +81,28 @@
 
   <!-- Accounts -->
   <section class="card" style="padding:0">
-    <div class="flex flex-col gap-3 px-6 py-4" style="border-bottom:1px solid var(--border)">
+    <div class="card-head stack gap-3">
       <div class="flex items-center justify-between">
-        <p class="text-sm font-medium" style="color:var(--text)">Conti</p>
-        <a href="/setup" class="text-[13px]" style="color:var(--accent)">Gestisci</a>
+        <p class="card-title">Conti</p>
+        <a href="/setup" class="link">Gestisci</a>
       </div>
       {% if accounts %}
       {% set total_bal = accounts | map(attribute='balance') | select('gt', 0) | sum %}
-      <div x-show="!hidden" class="flex gap-0.5 overflow-hidden" style="height:6px;border-radius:3px">
+      <div x-show="!hidden" class="alloc-bar">
         {% for acc in accounts if acc.balance and acc.balance > 0 and total_bal %}
         <div style="width:{{ '%.2f' % (acc.balance / total_bal * 100) }}%;background:{{ acc_colors[loop.index0 % acc_colors|length] }}" title="{{ acc.display_name or acc.name }}"></div>
         {% endfor %}
       </div>
-      <div x-show="hidden" x-cloak style="height:6px;border-radius:3px;background:var(--surface-2)"></div>
+      <div x-show="hidden" x-cloak class="bar-track"></div>
       {% endif %}
     </div>
     {% if accounts %}
-    <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-10 px-6 py-1">
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-10 px-5 py-1">
       {% for acc in accounts %}
       {% set positive = acc.balance and acc.balance > 0 %}
       <div class="flex items-center justify-between gap-4 py-3" style="border-bottom:1px solid var(--border-subtle)">
         <div class="flex items-center gap-3 min-w-0">
-          <span class="w-2 h-2 rounded-full flex-shrink-0" style="background:{{ acc_colors[loop.index0 % acc_colors|length] }}"></span>
+          <span class="dot" style="background:{{ acc_colors[loop.index0 % acc_colors|length] }}"></span>
           <div class="min-w-0">
             <p class="text-sm font-medium truncate" style="color:var(--text)">{{ acc.display_name or acc.name }}</p>
             <p class="text-xs mt-0.5" style="color:var(--text-muted)">{{ acc.bank_name }}{% if acc.currency and acc.currency != 'EUR' %} · {{ acc.currency }}{% endif %}</p>
@@ -115,10 +112,10 @@
           <p class="num text-sm" style="color:{% if positive %}var(--text){% else %}var(--text-dim){% endif %}">
             <span x-show="!hidden">
               {% if acc.balance_currency != 'EUR' %}
-                {{ "{:,.2f}".format(acc.balance_native or 0).replace(",", "X").replace(".", ",").replace("X", ".") }} {{ acc.balance_currency }}
-                <span class="text-xs" style="color:var(--text-muted)">({{ "{:,.0f}".format(acc.balance or 0).replace(",", ".") }} €)</span>
+                {{ (acc.balance_native or 0) | num(2) }} {{ acc.balance_currency }}
+                <span class="text-xs" style="color:var(--text-muted)">({{ (acc.balance or 0) | eur }})</span>
               {% else %}
-                {{ "{:,.0f}".format(acc.balance or 0).replace(",", ".") }} €
+                {{ (acc.balance or 0) | eur }}
               {% endif %}
             </span>
             <span x-show="hidden" x-cloak style="letter-spacing:0.08em">•••• €</span>
@@ -129,26 +126,20 @@
       {% endfor %}
     </div>
     {% else %}
-    <div class="py-14 text-center">
-      <p class="text-sm mb-2" style="color:var(--text-muted)">Nessun conto connesso.</p>
-      <a href="/setup" class="text-sm" style="color:var(--accent)">Configura banche</a>
+    <div class="empty">
+      <p class="mb-2">Nessun conto connesso.</p>
+      <a href="/setup" class="link">Configura banche</a>
     </div>
     {% endif %}
   </section>
 
 </div>{# end x-data #}
 
-<style>
-  @media (min-width: 640px) { .stat-cell { border-left: 1px solid var(--border); } }
-  @media (max-width: 639px) { .stat-cell { border-top: 1px solid var(--border); } }
-</style>
-
 <script>
 (function() {
   const labels = {{ labels | tojson }};
   const series = {{ networth_series | tojson }};
   const ctx    = document.getElementById('networthChart');
-  const eur    = v => v.toLocaleString('it-IT', { maximumFractionDigits: 0 }) + ' €';
   const base   = { tension: 0.35, pointRadius: 0, pointHoverRadius: 3 };
 
   new Chart(ctx, {
@@ -191,16 +182,9 @@
       interaction: { intersect: false, mode: 'index' },
       plugins: {
         legend: { display: false },
-        tooltip: { callbacks: { label: c => '  ' + c.dataset.label + ': ' + eur(c.parsed.y) } }
+        tooltip: { callbacks: { label: c => c.dataset.label + ': ' + CHART.eur(c.parsed.y) } }
       },
-      scales: {
-        x: { grid: { display: false }, border: { display: false }, ticks: { maxTicksLimit: 7 } },
-        y: {
-          grid: { color: '#eef0f4' },
-          border: { display: false },
-          ticks: { callback: v => (v >= 1000 ? (v/1000).toFixed(0)+'k' : v) + ' €' }
-        }
-      }
+      scales: CHART.axes({ x: { ticks: { maxTicksLimit: 7 } } })
     }
   });
 })();

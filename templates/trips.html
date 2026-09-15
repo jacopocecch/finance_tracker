@@ -1,58 +1,59 @@
 {% extends "base.html" %}
+{% import "_ui.html" as ui %}
 {% block title %}Viaggi — Ledger{% endblock %}
 {% block content %}
 
-<div class="flex items-center justify-between mb-6">
-  <h1 class="text-xl font-semibold" style="color:var(--text)">Viaggi</h1>
-</div>
+<div class="flex flex-col gap-5">
 
-<!-- Nuovo viaggio -->
-<div class="card mb-5" x-data="{ open: {{ 'true' if not trips else 'false' }} }">
-  <button @click="open = !open" class="flex items-center gap-2 text-sm font-medium w-full" style="color:var(--text)">
-    <span x-text="open ? '−' : '+'"></span>
-    Nuovo viaggio
-  </button>
-  <div x-show="open" x-transition class="mt-4">
-    <form method="post" action="/trips/add" class="flex flex-wrap gap-3 items-end" x-data="{ start: '{{ today }}' }">
-      <div>
-        <label class="text-xs mb-1.5 block font-medium" style="color:var(--text-muted)">Nome *</label>
-        <input type="text" name="name" required placeholder="es. Lisbona 2026" class="input" style="width:200px">
-      </div>
-      <div>
-        <label class="text-xs mb-1.5 block font-medium" style="color:var(--text-muted)">Dal *</label>
-        <input type="date" name="start_date" required x-model="start" class="input num">
-      </div>
-      <div>
-        <label class="text-xs mb-1.5 block font-medium" style="color:var(--text-muted)">Al *</label>
-        <input type="date" name="end_date" required value="{{ today }}" :min="start" class="input num">
-      </div>
-      <button type="submit" class="btn-primary">Crea</button>
-    </form>
-    <p class="text-xs mt-2" style="color:var(--text-dim)">Le date servono per l'assegnazione automatica; voli e hotel prenotati prima si assegnano a mano dalla pagina Transazioni (icona ✈).</p>
+  <div class="flex items-center justify-between">
+    <h1 class="page-title">Viaggi</h1>
   </div>
-</div>
 
-<!-- Trip cards -->
-{% if trips %}
-<div class="grid gap-3" style="grid-template-columns: repeat(auto-fill, minmax(240px, 1fr))">
-  {% for trip in trips %}
-  {% set s = stats[trip.id] %}
-  <a href="/trips/{{ trip.id }}" class="card block tr-hover" style="text-decoration:none">
-    <div class="flex items-center justify-between mb-2">
-      <span class="text-sm font-semibold truncate" style="color:var(--text)">✈️ {{ trip.name }}</span>
+  <!-- New trip -->
+  <section class="card" x-data="{ open: {{ 'true' if not trips else 'false' }} }">
+    <button @click="open = !open" class="disclosure" :class="{ open: open }">
+      <span>Nuovo viaggio</span>
+      {{ ui.icon('chevron', 'w-4 h-4') }}
+    </button>
+    <div x-show="open" x-transition x-cloak class="mt-4">
+      <form method="post" action="/trips/add" class="flex flex-wrap gap-3 items-end" x-data="{ start: '{{ today }}' }">
+        <div>
+          <label class="field-label">Nome *</label>
+          <input type="text" name="name" required placeholder="es. Lisbona 2026" class="input" style="width:200px">
+        </div>
+        <div>
+          <label class="field-label">Dal *</label>
+          <input type="date" name="start_date" required x-model="start" class="input num">
+        </div>
+        <div>
+          <label class="field-label">Al *</label>
+          <input type="date" name="end_date" required value="{{ today }}" :min="start" class="input num">
+        </div>
+        <button type="submit" class="btn-primary">Crea</button>
+      </form>
+      <p class="hint mt-3">Le date servono per l'assegnazione automatica. Voli e hotel prenotati prima si assegnano a mano dalla pagina Transazioni.</p>
     </div>
-    <p class="num text-xs mb-3" style="color:var(--text-muted)">
-      {{ trip.start_date.strftime('%d/%m/%Y') }} → {{ trip.end_date.strftime('%d/%m/%Y') }}
-    </p>
-    <p class="num text-2xl font-medium" style="color:var(--rose)">
-      {% if s.count %}-€{{ "{:,.0f}".format(s.spent) }}{% else %}<span style="color:var(--text-dim)">—</span>{% endif %}
-    </p>
-    <p class="text-xs mt-1" style="color:var(--text-dim)">{{ s.count }} transazioni{% if s.refunds %} · rimborsi €{{ "{:,.0f}".format(s.refunds) }}{% endif %}</p>
-  </a>
-  {% endfor %}
-</div>
-{% else %}
-<p class="py-10 text-center text-sm" style="color:var(--text-dim)">Nessun viaggio ancora. Creane uno qui sopra.</p>
-{% endif %}
+  </section>
 
+  <!-- Trip cards -->
+  {% if trips %}
+  <div class="grid gap-3" style="grid-template-columns: repeat(auto-fill, minmax(240px, 1fr))">
+    {% for trip in trips %}
+    {% set s = stats[trip.id] %}
+    <a href="/trips/{{ trip.id }}" class="card block transition-colors hover:border-[#d3d6de]" style="text-decoration:none">
+      <div class="flex items-center gap-2 mb-1 min-w-0">
+        <span style="color:var(--accent)">{{ ui.icon('plane', 'w-4 h-4') }}</span>
+        <span class="text-sm font-medium truncate" style="color:var(--text)">{{ trip.name }}</span>
+      </div>
+      <p class="num text-xs mb-4" style="color:var(--text-muted)">{{ trip.start_date.strftime('%d/%m/%Y') }} – {{ trip.end_date.strftime('%d/%m/%Y') }}</p>
+      <p class="stat-value">{% if s.count %}{{ s.spent | eur }}{% else %}<span style="color:var(--text-dim)">—</span>{% endif %}</p>
+      <p class="stat-sub mt-2">{{ s.count }} transazioni{% if s.refunds %} · rimborsi {{ s.refunds | eur }}{% endif %}</p>
+    </a>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="empty">Nessun viaggio ancora. Creane uno qui sopra.</p>
+  {% endif %}
+
+</div>
 {% endblock %}

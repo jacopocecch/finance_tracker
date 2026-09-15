@@ -1,98 +1,96 @@
 {% extends "base.html" %}
+{% import "_ui.html" as ui %}
 {% block title %}Acquisti — Ledger{% endblock %}
 {% block content %}
 
-<div class="flex items-center justify-between mb-6">
-  <h1 class="text-xl font-semibold" style="color:var(--text)">Acquisti</h1>
-  <a href="/investments/transactions/add" class="btn-primary">+ Acquisto</a>
-</div>
+<div class="flex flex-col gap-5">
 
-<div class="card" style="padding:0">
-  <!-- Mobile cards -->
-  <div class="sm:hidden">
-    {% for tx in transactions %}
-    {% set inst = instruments.get(tx.instrument_id) %}
-    <div class="px-4 py-3 tr-hover" style="border-bottom:1px solid var(--border-subtle)">
-      <div class="flex items-start justify-between gap-2 mb-1">
-        <div class="min-w-0">
-          <p class="text-sm font-medium truncate" style="color:var(--text)">{{ inst.name if inst else tx.instrument_id }}</p>
-          <div class="flex items-center gap-2 mt-0.5">
-            <span class="tag text-xs" style="background:{% if tx.transaction_type=='BUY' %}rgba(21,128,61,0.1){% else %}rgba(217,59,79,0.1){% endif %};color:{% if tx.transaction_type=='BUY' %}var(--emerald){% else %}var(--rose){% endif %}">{{ tx.transaction_type }}</span>
-            <span class="num text-xs" style="color:var(--text-muted)">{{ tx.trade_date.strftime('%d/%m/%Y') }}</span>
+  <div class="flex items-center justify-between gap-3">
+    <div class="flex items-center gap-3">
+      <a href="/investments" class="btn-ghost btn-icon" aria-label="Torna a investimenti">{{ ui.icon('arrow-left', 'w-4 h-4') }}</a>
+      <h1 class="page-title">Acquisti</h1>
+    </div>
+    <a href="/investments/transactions/add" class="btn-primary">{{ ui.icon('plus') }}<span class="ml-1.5">Acquisto</span></a>
+  </div>
+
+  <section class="card" style="padding:0">
+    <!-- Mobile cards -->
+    <div class="sm:hidden">
+      {% for tx in transactions %}
+      {% set inst = instruments.get(tx.instrument_id) %}
+      <div class="px-5 py-3" style="border-bottom:1px solid var(--border-subtle)">
+        <div class="flex items-start justify-between gap-2 mb-1">
+          <div class="min-w-0">
+            <p class="text-sm font-medium truncate" style="color:var(--text)">{{ inst.name if inst else tx.instrument_id }}</p>
+            <div class="flex items-center gap-2 mt-0.5">
+              <span class="badge {% if tx.transaction_type == 'BUY' %}badge-emerald{% else %}badge-rose{% endif %}">{{ tx.transaction_type }}</span>
+              <span class="num text-xs" style="color:var(--text-muted)">{{ tx.trade_date.strftime('%d/%m/%Y') }}</span>
+            </div>
+          </div>
+          <p class="num text-sm font-medium flex-shrink-0" style="color:var(--text)">{{ (tx.quantity * tx.unit_price + tx.fees) | money(tx.currency) }}</p>
+        </div>
+        <div class="flex items-center justify-between gap-2 mt-1">
+          <p class="text-xs num" style="color:var(--text-muted)">qtà {{ tx.quantity }} · @{{ tx.unit_price | num(4) }} · comm. {{ tx.fees | num(2) }}</p>
+          <div class="flex gap-0.5 flex-shrink-0">
+            <a href="/investments/transactions/{{ tx.id }}/edit" class="icon-btn" title="Modifica">{{ ui.icon('edit') }}</a>
+            <form method="post" action="/investments/transactions/{{ tx.id }}/delete" onsubmit="return confirm('Eliminare questo acquisto?')">
+              <button type="submit" class="icon-btn danger" title="Elimina">{{ ui.icon('trash') }}</button>
+            </form>
           </div>
         </div>
-        <p class="num text-sm font-medium flex-shrink-0" style="color:var(--text)">{{ "{:,.2f}".format(tx.quantity * tx.unit_price + tx.fees) }} {{ tx.currency }}</p>
       </div>
-      <div class="flex items-center justify-between gap-2 mt-1">
-        <p class="text-xs" style="color:var(--text-muted)">Qtà {{ tx.quantity }} · @{{ "{:,.4f}".format(tx.unit_price) }} · comm. {{ "{:,.2f}".format(tx.fees) }}</p>
-        <div class="flex gap-1 flex-shrink-0">
-          <a href="/investments/transactions/{{ tx.id }}/edit" class="btn-ghost text-xs px-2 py-1">✏</a>
-          <form method="post" action="/investments/transactions/{{ tx.id }}/delete" onsubmit="return confirm('Eliminare questo acquisto?')">
-            <button type="submit" class="btn-ghost text-xs px-2 py-1" style="color:var(--rose)">✕</button>
-          </form>
-        </div>
-      </div>
+      {% else %}
+      <p class="empty">Nessun acquisto registrato. <a href="/investments/transactions/add" class="link">Aggiungi</a></p>
+      {% endfor %}
     </div>
-    {% else %}
-    <p class="px-5 py-14 text-center text-sm" style="color:var(--text-dim)">
-      Nessun acquisto registrato. <a href="/investments/transactions/add" style="color:var(--sky)">Aggiungi →</a>
-    </p>
-    {% endfor %}
-  </div>
 
-  <!-- Desktop table -->
-  <div class="hidden sm:block overflow-x-auto">
-  <table class="w-full text-sm">
-    <thead>
-      <tr class="text-xs" style="color:var(--text-dim); border-bottom:1px solid var(--border)">
-        <th class="text-left px-5 py-3 font-medium">Data</th>
-        <th class="text-left px-5 py-3 font-medium">Strumento</th>
-        <th class="text-left px-3 py-3 font-medium">Tipo</th>
-        <th class="text-right px-4 py-3 font-medium">Qtà</th>
-        <th class="text-right px-4 py-3 font-medium">Prezzo</th>
-        <th class="text-right px-4 py-3 font-medium">Comm.</th>
-        <th class="text-right px-4 py-3 font-medium">Totale</th>
-        <th class="text-left px-4 py-3 font-medium">PAC</th>
-        <th class="px-3 py-3"></th>
-      </tr>
-    </thead>
-    <tbody>
-    {% for tx in transactions %}
-    {% set inst = instruments.get(tx.instrument_id) %}
-    <tr class="tr-hover" style="border-bottom:1px solid var(--border-subtle)">
-      <td class="num px-5 py-3.5 text-xs" style="color:var(--text-muted); white-space:nowrap">{{ tx.trade_date.strftime('%d/%m/%Y') }}</td>
-      <td class="px-5 py-3.5">
-        <p class="font-medium text-sm" style="color:var(--text)">{{ inst.name if inst else tx.instrument_id }}</p>
-        <p class="text-xs" style="color:var(--text-dim)">{{ inst.ticker if inst else '' }}</p>
-      </td>
-      <td class="px-3 py-3.5">
-        <span class="tag text-xs" style="background:{% if tx.transaction_type == 'BUY' %}rgba(21,128,61,0.1){% else %}rgba(217,59,79,0.1){% endif %};color:{% if tx.transaction_type == 'BUY' %}var(--emerald){% else %}var(--rose){% endif %};border:1px solid {% if tx.transaction_type == 'BUY' %}rgba(21,128,61,0.2){% else %}rgba(217,59,79,0.2){% endif %}">
-          {{ tx.transaction_type }}
-        </span>
-      </td>
-      <td class="num px-4 py-3.5 text-right text-sm" style="color:var(--text)">{{ tx.quantity }}</td>
-      <td class="num px-4 py-3.5 text-right text-sm" style="color:var(--text)">{{ "{:,.4f}".format(tx.unit_price) }} {{ tx.currency }}</td>
-      <td class="num px-4 py-3.5 text-right text-sm" style="color:var(--text-muted)">{{ "{:,.2f}".format(tx.fees) }}</td>
-      <td class="num px-4 py-3.5 text-right text-sm font-medium" style="color:var(--text)">{{ "{:,.2f}".format(tx.quantity * tx.unit_price + tx.fees) }} {{ tx.currency }}</td>
-      <td class="px-4 py-3.5 text-xs" style="color:var(--text-muted)">{{ pacs[tx.pac_id].name if tx.pac_id and tx.pac_id in pacs else '—' }}</td>
-      <td class="px-3 py-3.5">
-        <div class="flex gap-1">
-          <a href="/investments/transactions/{{ tx.id }}/edit" class="btn-ghost text-xs px-2 py-1">✏</a>
-          <form method="post" action="/investments/transactions/{{ tx.id }}/delete" onsubmit="return confirm('Eliminare questo acquisto?')">
-            <button type="submit" class="btn-ghost text-xs px-2 py-1" style="color:var(--rose)">✕</button>
-          </form>
-        </div>
-      </td>
-    </tr>
-    {% else %}
-    <tr>
-      <td colspan="9" class="px-5 py-14 text-center text-sm" style="color:var(--text-dim)">
-        Nessun acquisto registrato. <a href="/investments/transactions/add" style="color:var(--sky)">Aggiungi →</a>
-      </td>
-    </tr>
-    {% endfor %}
-    </tbody>
-  </table>
-  </div>
+    <!-- Desktop table -->
+    <div class="hidden sm:block table-wrap">
+      <table class="tbl">
+        <thead>
+          <tr>
+            <th>Data</th>
+            <th>Strumento</th>
+            <th>Tipo</th>
+            <th class="r">Qtà</th>
+            <th class="r">Prezzo</th>
+            <th class="r">Comm.</th>
+            <th class="r">Totale</th>
+            <th>PAC</th>
+            <th style="width:76px"></th>
+          </tr>
+        </thead>
+        <tbody>
+        {% for tx in transactions %}
+        {% set inst = instruments.get(tx.instrument_id) %}
+        <tr>
+          <td class="num mut nw">{{ tx.trade_date.strftime('%d/%m/%Y') }}</td>
+          <td>
+            <p class="font-medium text-sm" style="color:var(--text)">{{ inst.name if inst else tx.instrument_id }}</p>
+            <p class="text-xs num mt-0.5" style="color:var(--text-dim)">{{ inst.ticker if inst else '' }}</p>
+          </td>
+          <td><span class="badge {% if tx.transaction_type == 'BUY' %}badge-emerald{% else %}badge-rose{% endif %}">{{ tx.transaction_type }}</span></td>
+          <td class="num r" style="color:var(--text)">{{ tx.quantity }}</td>
+          <td class="num r" style="color:var(--text)">{{ tx.unit_price | money(tx.currency, 4) }}</td>
+          <td class="num r mut">{{ tx.fees | num(2) }}</td>
+          <td class="num r font-medium" style="color:var(--text)">{{ (tx.quantity * tx.unit_price + tx.fees) | money(tx.currency) }}</td>
+          <td class="mut">{{ pacs[tx.pac_id].name if tx.pac_id and tx.pac_id in pacs else '—' }}</td>
+          <td>
+            <div class="flex items-center justify-end gap-0.5">
+              <a href="/investments/transactions/{{ tx.id }}/edit" class="icon-btn" title="Modifica">{{ ui.icon('edit') }}</a>
+              <form method="post" action="/investments/transactions/{{ tx.id }}/delete" onsubmit="return confirm('Eliminare questo acquisto?')">
+                <button type="submit" class="icon-btn danger" title="Elimina">{{ ui.icon('trash') }}</button>
+              </form>
+            </div>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="9" class="empty">Nessun acquisto registrato. <a href="/investments/transactions/add" class="link">Aggiungi</a></td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
 </div>
 {% endblock %}

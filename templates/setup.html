@@ -1,215 +1,189 @@
 {% extends "base.html" %}
+{% import "_ui.html" as ui %}
 {% block title %}Setup — Ledger{% endblock %}
 {% block content %}
 
-<div class="mb-7">
-  <h1 class="text-xl font-semibold" style="color:var(--text)">Setup</h1>
-  <p class="text-sm mt-1" style="color:var(--text-muted)">Connetti e gestisci i tuoi conti bancari.</p>
-</div>
+{% set type_options = [('checking', 'Corrente'), ('savings', 'Risparmio'), ('investment', 'Investimento'), ('cash', 'Contanti')] %}
 
-<!-- Connected accounts -->
-{% if accounts %}
-<p class="text-sm mb-3" style="color:var(--text-muted)">Conti connessi</p>
-<div class="card mb-7" style="padding:0">
-  {% for acc in accounts %}
-  <div x-data="{ open: false }" class="{% if not loop.last %}border-b{% endif %}" style="{% if not loop.last %}border-color:var(--border-subtle){% endif %}">
+<div class="flex flex-col gap-5">
 
-    <!-- Main row -->
-    <div class="px-4 sm:px-5 py-4 flex flex-col sm:flex-row sm:items-center gap-3">
-      <!-- Status dot + info -->
-      <div class="flex items-center gap-3 flex-1 min-w-0">
-        <div class="relative flex-shrink-0">
-          {% if acc.sync_error %}
-          <div class="w-2 h-2 rounded-full" style="background:var(--rose)"></div>
-          <div class="absolute inset-0 w-2 h-2 rounded-full animate-ping opacity-60" style="background:var(--rose)"></div>
-          {% elif acc.connected %}
-          <div class="w-2 h-2 rounded-full" style="background:var(--emerald)"></div>
-          <div class="absolute inset-0 w-2 h-2 rounded-full animate-ping opacity-60" style="background:var(--emerald)"></div>
-          {% else %}
-          <div class="w-2 h-2 rounded-full" style="background:var(--text-dim)"></div>
-          {% endif %}
-        </div>
-        <div class="min-w-0">
-          <p class="text-sm font-medium truncate" style="color:var(--text)">{{ acc.display_name or (acc.bank_name ~ ' — ' ~ acc.name) }}</p>
-          <p class="text-xs mt-0.5" style="color:var(--text-muted)">
-            {{ acc.bank_name }}
-            {% if acc.currency and acc.currency != 'EUR' %}
-            <span class="tag" style="background:rgba(47,91,234,0.1);color:var(--sky);border:1px solid rgba(47,91,234,0.2);font-size:10px;vertical-align:middle">{{ acc.currency }}</span>
+  <div>
+    <h1 class="page-title">Setup</h1>
+    <p class="page-sub">Connetti e gestisci i tuoi conti bancari.</p>
+  </div>
+
+  <!-- Connected accounts -->
+  {% if accounts %}
+  <section class="card" style="padding:0">
+    <div class="card-head">
+      <p class="card-title">Conti connessi</p>
+      <span class="num text-xs" style="color:var(--text-dim)">{{ accounts | length }}</span>
+    </div>
+    {% for acc in accounts %}
+    <div x-data="{ open: false }" style="{% if not loop.last %}border-bottom:1px solid var(--border-subtle){% endif %}">
+
+      <!-- Main row -->
+      <div class="px-5 py-4 flex flex-col sm:flex-row sm:items-center gap-3">
+        <div class="flex items-center gap-3 flex-1 min-w-0">
+          <span class="dot" style="background:{% if acc.sync_error %}var(--rose){% elif acc.connected %}var(--emerald){% else %}var(--text-dim){% endif %}"></span>
+          <div class="min-w-0">
+            <p class="text-sm font-medium truncate" style="color:var(--text)">{{ acc.display_name or (acc.bank_name ~ ' — ' ~ acc.name) }}</p>
+            <p class="text-xs mt-0.5 flex items-center gap-1.5 flex-wrap" style="color:var(--text-muted)">
+              <span>{{ acc.bank_name }}</span>
+              {% if acc.currency and acc.currency != 'EUR' %}<span class="badge badge-accent">{{ acc.currency }}</span>{% endif %}
+              <span>· sync {{ acc.last_sync.strftime('%d/%m/%Y %H:%M') if acc.last_sync else 'mai' }}</span>
+              {% if acc.iban %}<span class="num">· {{ acc.iban[-8:] }}</span>{% endif %}
+            </p>
+            {% if acc.sync_error %}
+            <p class="text-xs mt-0.5" style="color:var(--rose)">{{ acc.sync_error }}</p>
             {% endif %}
-            · Sync: {{ acc.last_sync.strftime('%d/%m/%Y %H:%M') if acc.last_sync else 'mai' }}
-            {% if acc.iban %} · {{ acc.iban[-8:] }}{% endif %}
-          </p>
-          {% if acc.sync_error %}
-          <p class="text-xs mt-0.5" style="color:var(--rose)">{{ acc.sync_error }}</p>
+          </div>
+        </div>
+
+        <!-- Actions -->
+        <div class="flex flex-wrap items-center gap-2 flex-shrink-0">
+          {% if acc.session_id != 'manual' and (acc.sync_error or not acc.connected) %}
+          <form method="post" action="/setup/connect">
+            <input type="hidden" name="bank" value="{{ acc.bank_name }}">
+            <button type="submit" class="btn-ghost" style="color:var(--amber)">Riconnetti</button>
+          </form>
           {% endif %}
+          {% if acc.session_id != 'manual' %}
+          <form method="post" action="/setup/account/{{ acc.id }}/sync">
+            <button type="submit" class="btn-ghost">{{ ui.icon('refresh') }} Sync</button>
+          </form>
+          {% endif %}
+          <button @click="open = !open" class="btn-ghost" :class="{ active: open }">
+            Gestisci
+            <svg class="w-3.5 h-3.5 transition-transform duration-150" :style="open ? 'transform:rotate(180deg)' : ''" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>
+          </button>
+          <form method="post" action="/setup/account/{{ acc.id }}/delete"
+                onsubmit='return confirm({{ ("Archiviare " ~ acc.bank_name ~ " — " ~ acc.name ~ "? Il conto verrà nascosto e non più sincronizzato. Le transazioni restano nello storico.") | tojson }})'>
+            <button type="submit" class="btn-ghost btn-danger">Archivia</button>
+          </form>
         </div>
       </div>
 
-      <!-- Actions -->
-      <div class="flex flex-wrap items-center gap-2 flex-shrink-0">
-        {% if acc.session_id != 'manual' and (acc.sync_error or not acc.connected) %}
-        <form method="post" action="/setup/connect">
-          <input type="hidden" name="bank" value="{{ acc.bank_name }}">
-          <button type="submit" class="btn-ghost" style="color:var(--amber, #d98546); border-color:rgba(217,133,70,0.25)">
-            Riconnetti
-          </button>
+      <!-- Manage panel -->
+      <div x-show="open" x-cloak x-transition:enter="transition ease-out duration-100" x-transition:enter-start="opacity-0 -translate-y-1" x-transition:enter-end="opacity-100 translate-y-0"
+           class="px-5 py-4 flex flex-col sm:flex-row sm:flex-wrap gap-2" style="background:var(--bg);border-top:1px solid var(--border-subtle)">
+        <form method="post" action="/setup/account/{{ acc.id }}/name" class="flex items-center gap-1.5">
+          <input type="text" name="display_name" value="{{ acc.display_name or '' }}" placeholder="Nome conto" class="input flex-1 sm:flex-none" style="min-width:0">
+          <button type="submit" class="btn-ghost flex-shrink-0">Rinomina</button>
         </form>
-        {% endif %}
-        {% if acc.session_id != 'manual' %}
-        <form method="post" action="/setup/account/{{ acc.id }}/sync">
-          <button type="submit" class="btn-ghost" style="color:var(--sky); border-color:rgba(125,211,252,0.25)">
-            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
-            </svg>
-            Sync
-          </button>
-        </form>
-        {% endif %}
-        <button @click="open = !open" class="btn-ghost" style="color:var(--text-muted)">
-          <svg class="w-3.5 h-3.5 transition-transform duration-150" :style="open ? 'transform:rotate(180deg)' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
-          </svg>
-          Gestisci
-        </button>
-        <form method="post" action="/setup/account/{{ acc.id }}/delete"
-              onsubmit='return confirm({{ ("Archiviare " ~ acc.bank_name ~ " — " ~ acc.name ~ "? Il conto verrà nascosto e non più sincronizzato. Le transazioni restano nello storico.") | tojson }})'>
-          <button type="submit" class="btn-ghost" style="color:var(--rose); border-color:rgba(217,59,79,0.25)">
-            Archivia
-          </button>
-        </form>
-      </div>
-    </div>
-
-    <!-- Submenu -->
-    <div x-show="open" x-transition:enter="transition ease-out duration-100" x-transition:enter-start="opacity-0 -translate-y-1" x-transition:enter-end="opacity-100 translate-y-0" class="px-4 sm:px-5 pb-4 flex flex-col sm:flex-row sm:flex-wrap gap-2" style="border-top:1px solid var(--border-subtle); padding-top:12px">
-      <form method="post" action="/setup/account/{{ acc.id }}/name" class="flex items-center gap-1.5">
-        <input type="text" name="display_name" value="{{ acc.display_name or '' }}" placeholder="Nome conto" class="input text-sm flex-1 sm:flex-none" style="min-width:0;sm:width:150px">
-        <button type="submit" class="btn-ghost flex-shrink-0">Rinomina</button>
-      </form>
-      <form method="post" action="/setup/account/{{ acc.id }}/type" class="flex items-center gap-1.5">
-        <select name="type" class="input text-sm flex-1 sm:flex-none">
-          <option value="checking" {% if acc.type == 'checking' %}selected{% endif %}>💳 Corrente</option>
-          <option value="savings" {% if acc.type == 'savings' %}selected{% endif %}>🏦 Risparmio</option>
-          <option value="investment" {% if acc.type == 'investment' %}selected{% endif %}>📈 Investimento</option>
-          <option value="cash" {% if acc.type == 'cash' %}selected{% endif %}>💵 Contanti</option>
-        </select>
-        <button type="submit" class="btn-ghost flex-shrink-0">Salva tipo</button>
-      </form>
-      {% if acc.session_id == 'manual' %}
-      <form method="post" action="/setup/account/{{ acc.id }}/balance" class="flex items-center gap-1.5">
-        <input type="number" name="balance" step="0.01" placeholder="Saldo attuale" class="input text-sm num flex-1 sm:flex-none" style="min-width:0">
-        <button type="submit" class="btn-ghost flex-shrink-0">Aggiorna saldo</button>
-      </form>
-      {% endif %}
-      <form method="post" action="/setup/account/{{ acc.id }}/threshold" class="flex items-center gap-1.5">
-        <input type="number" name="threshold" step="0.01" placeholder="Soglia saldo (es. 500)" value="{{ acc.balance_threshold if acc.balance_threshold is not none else '' }}" class="input text-sm num flex-1 sm:flex-none" style="min-width:0">
-        <button type="submit" class="btn-ghost flex-shrink-0">Soglia</button>
-      </form>
-    </div>
-  </div>
-  {% endfor %}
-</div>
-{% endif %}
-
-<!-- Connect new bank -->
-<p class="text-sm mb-3" style="color:var(--text-muted)">Connetti una banca</p>
-<div class="card mb-4">
-  <form method="post" action="/setup/connect" class="flex gap-2">
-    <select name="bank" class="input flex-1 text-sm">
-      {% for b in supported_banks %}
-      <option value="{{ b.name }}">{{ b.display_name }}</option>
-      {% endfor %}
-    </select>
-    <button type="submit" class="btn-primary">Connetti →</button>
-  </form>
-  <p class="text-xs mt-3" style="color:var(--text-dim)">
-    Verrai reindirizzato alla pagina di autorizzazione della banca via PSD2/Open Banking.
-    Le credenziali bancarie non transitano mai per questa app.
-  </p>
-</div>
-
-<!-- Manual account -->
-<p class="text-sm mb-3 mt-7" style="color:var(--text-muted)">Conto manuale</p>
-<div class="card mb-7" x-data="{ open: false }">
-  <button @click="open = !open" class="flex items-center gap-2 text-sm font-medium w-full" style="color:var(--text)">
-    <span x-text="open ? '−' : '+'"></span>
-    Aggiungi conto manuale
-  </button>
-  <div x-show="open" x-transition class="mt-4">
-    <form method="post" action="/setup/account/manual">
-      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
-        <div>
-          <label class="text-xs mb-1.5 block font-medium" style="color:var(--text-muted)">Nome conto *</label>
-          <input type="text" name="name" placeholder="es. Conto moglie" required class="input w-full">
-        </div>
-        <div>
-          <label class="text-xs mb-1.5 block font-medium" style="color:var(--text-muted)">Banca</label>
-          <input type="text" name="bank_name" placeholder="es. Fineco" class="input w-full">
-        </div>
-        <div>
-          <label class="text-xs mb-1.5 block font-medium" style="color:var(--text-muted)">Tipo</label>
-          <select name="acc_type" class="input w-full">
-            <option value="checking">💳 Corrente</option>
-            <option value="savings">🏦 Risparmio</option>
-            <option value="investment">📈 Investimento</option>
-            <option value="cash">💵 Contanti</option>
+        <form method="post" action="/setup/account/{{ acc.id }}/type" class="flex items-center gap-1.5">
+          <select name="type" class="input flex-1 sm:flex-none">
+            {% for val, label in type_options %}
+            <option value="{{ val }}" {% if acc.type == val %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
           </select>
-        </div>
-        <div class="grid grid-cols-2 gap-3">
-          <div>
-            <label class="text-xs mb-1.5 block font-medium" style="color:var(--text-muted)">Valuta</label>
-            <input type="text" name="currency" value="EUR" class="input num w-full">
-          </div>
-          <div>
-            <label class="text-xs mb-1.5 block font-medium" style="color:var(--text-muted)">Saldo iniziale</label>
-            <input type="number" name="initial_balance" value="0" step="0.01" class="input num w-full">
-          </div>
-        </div>
+          <button type="submit" class="btn-ghost flex-shrink-0">Salva tipo</button>
+        </form>
+        {% if acc.session_id == 'manual' %}
+        <form method="post" action="/setup/account/{{ acc.id }}/balance" class="flex items-center gap-1.5">
+          <input type="number" name="balance" step="0.01" placeholder="Saldo attuale" class="input num flex-1 sm:flex-none" style="min-width:0">
+          <button type="submit" class="btn-ghost flex-shrink-0">Aggiorna saldo</button>
+        </form>
+        {% endif %}
+        <form method="post" action="/setup/account/{{ acc.id }}/threshold" class="flex items-center gap-1.5">
+          <input type="number" name="threshold" step="0.01" placeholder="Soglia saldo (es. 500)" value="{{ acc.balance_threshold if acc.balance_threshold is not none else '' }}" class="input num flex-1 sm:flex-none" style="min-width:0">
+          <button type="submit" class="btn-ghost flex-shrink-0">Soglia</button>
+        </form>
       </div>
-      <button type="submit" class="btn-primary">Aggiungi</button>
-    </form>
-  </div>
-</div>
-
-<!-- Archived accounts -->
-{% if archived_accounts %}
-<div class="card mb-7" x-data="{ open: false }">
-  <button @click="open = !open" class="flex items-center gap-2 text-sm font-medium w-full" style="color:var(--text-muted)">
-    <span x-text="open ? '−' : '+'"></span>
-    Conti archiviati ({{ archived_accounts|length }})
-  </button>
-  <div x-show="open" x-transition class="mt-4">
-    {% for acc in archived_accounts %}
-    <div class="flex items-center gap-3 py-2.5 {% if not loop.last %}border-b{% endif %}" style="{% if not loop.last %}border-color:var(--border-subtle){% endif %}">
-      <div class="w-2 h-2 rounded-full flex-shrink-0" style="background:var(--text-dim)"></div>
-      <div class="flex-1 min-w-0">
-        <p class="text-sm truncate" style="color:var(--text-muted)">{{ acc.display_name or (acc.bank_name ~ ' — ' ~ acc.name) }}</p>
-        <p class="text-xs" style="color:var(--text-dim)">{{ acc.bank_name }}{% if acc.iban %} · {{ acc.iban[-8:] }}{% endif %}</p>
-      </div>
-      <form method="post" action="/setup/account/{{ acc.id }}/restore">
-        <button type="submit" class="btn-ghost flex-shrink-0">Ripristina</button>
-      </form>
     </div>
     {% endfor %}
-    <p class="text-xs mt-3" style="color:var(--text-dim)">
-      Le transazioni dei conti archiviati restano visibili nello storico e nelle statistiche.
-    </p>
+  </section>
+  {% endif %}
+
+  <!-- Connect a bank -->
+  <section class="card" style="padding:0">
+    <div class="card-head"><p class="card-title">Connetti una banca</p></div>
+    <div class="card-pad">
+      <form method="post" action="/setup/connect" class="flex gap-2">
+        <select name="bank" class="input flex-1">
+          {% for b in supported_banks %}
+          <option value="{{ b.name }}">{{ b.display_name }}</option>
+          {% endfor %}
+        </select>
+        <button type="submit" class="btn-primary">Connetti</button>
+      </form>
+      <p class="hint mt-3">Verrai reindirizzato alla pagina di autorizzazione della banca via PSD2/Open Banking. Le credenziali bancarie non transitano mai per questa app.</p>
+    </div>
+  </section>
+
+  <!-- Manual account -->
+  <section class="card" x-data="{ open: false }">
+    <button @click="open = !open" class="disclosure" :class="{ open: open }">
+      <span>Aggiungi conto manuale</span>
+      {{ ui.icon('chevron', 'w-4 h-4') }}
+    </button>
+    <div x-show="open" x-transition x-cloak class="mt-4">
+      <form method="post" action="/setup/account/manual">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
+          <div>
+            <label class="field-label">Nome conto *</label>
+            <input type="text" name="name" placeholder="es. Conto moglie" required class="input w-full">
+          </div>
+          <div>
+            <label class="field-label">Banca</label>
+            <input type="text" name="bank_name" placeholder="es. Fineco" class="input w-full">
+          </div>
+          <div>
+            <label class="field-label">Tipo</label>
+            <select name="acc_type" class="input w-full">
+              {% for val, label in type_options %}<option value="{{ val }}">{{ label }}</option>{% endfor %}
+            </select>
+          </div>
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="field-label">Valuta</label>
+              <input type="text" name="currency" value="EUR" class="input num w-full">
+            </div>
+            <div>
+              <label class="field-label">Saldo iniziale</label>
+              <input type="number" name="initial_balance" value="0" step="0.01" class="input num w-full">
+            </div>
+          </div>
+        </div>
+        <button type="submit" class="btn-primary">Aggiungi</button>
+      </form>
+    </div>
+  </section>
+
+  <!-- Archived accounts -->
+  {% if archived_accounts %}
+  <section class="card" x-data="{ open: false }">
+    <button @click="open = !open" class="disclosure" :class="{ open: open }">
+      <span class="flex items-center gap-2">Conti archiviati <span class="badge badge-neutral num">{{ archived_accounts|length }}</span></span>
+      {{ ui.icon('chevron', 'w-4 h-4') }}
+    </button>
+    <div x-show="open" x-transition x-cloak class="mt-3">
+      {% for acc in archived_accounts %}
+      <div class="flex items-center gap-3 py-2.5" style="{% if not loop.last %}border-bottom:1px solid var(--border-subtle){% endif %}">
+        <span class="dot" style="background:var(--text-dim)"></span>
+        <div class="flex-1 min-w-0">
+          <p class="text-sm truncate" style="color:var(--text-muted)">{{ acc.display_name or (acc.bank_name ~ ' — ' ~ acc.name) }}</p>
+          <p class="text-xs" style="color:var(--text-dim)">{{ acc.bank_name }}{% if acc.iban %} · {{ acc.iban[-8:] }}{% endif %}</p>
+        </div>
+        <form method="post" action="/setup/account/{{ acc.id }}/restore">
+          <button type="submit" class="btn-ghost flex-shrink-0">Ripristina</button>
+        </form>
+      </div>
+      {% endfor %}
+      <p class="hint mt-3">Le transazioni dei conti archiviati restano visibili nello storico e nelle statistiche.</p>
+    </div>
+  </section>
+  {% endif %}
+
+  <!-- Utility actions -->
+  <div class="flex justify-end gap-2 flex-wrap">
+    <form method="post" action="/setup/reparse">
+      <button type="submit" class="btn-ghost" style="color:var(--text-muted)">Re-analizza transazioni</button>
+    </form>
+    <form method="post" action="/sync">
+      <button type="submit" class="btn-ghost" style="color:var(--text-muted)">Forza sync completo</button>
+    </form>
   </div>
-</div>
-{% endif %}
 
-<!-- Utility actions -->
-<div class="flex justify-end gap-2">
-  <form method="post" action="/setup/reparse">
-    <button type="submit" class="btn-ghost" style="color:var(--text-dim)">
-      Re-analizza transazioni →
-    </button>
-  </form>
-  <form method="post" action="/sync">
-    <button type="submit" class="btn-ghost" style="color:var(--text-dim)">
-      Forza sync completo →
-    </button>
-  </form>
 </div>
-
 {% endblock %}

@@ -24,6 +24,7 @@ from database import (
 from colors import derive_leaf_colors
 from sync import build_auth_url, handle_callback, sync_all, sync_account
 from investments import router as investments_router, _build_portfolio_data
+from fmt import FILTERS
 from portfolio import compute_portfolio, _apply_transactions
 import fx as _fx
 from fx import FxUnavailable
@@ -46,15 +47,7 @@ def _tag_text_color(hex_color: str) -> str:
 
 templates.env.filters["tag_text_color"] = _tag_text_color
 
-_CURRENCY_SYMBOLS = {"EUR": "€", "USD": "$", "GBP": "£", "JPY": "¥", "CHF": "CHF",
-                     "SEK": "kr", "NOK": "kr", "DKK": "kr", "PLN": "zł", "CZK": "Kč",
-                     "HUF": "Ft", "RON": "lei", "TRY": "₺", "CNY": "¥", "HKD": "HK$",
-                     "SGD": "S$", "AUD": "A$", "CAD": "C$", "NZD": "NZ$", "MXN": "MX$"}
-
-def _currency_symbol(code: str) -> str:
-    return _CURRENCY_SYMBOLS.get((code or "EUR").upper(), code or "€")
-
-templates.env.filters["currency_symbol"] = _currency_symbol
+templates.env.filters.update(FILTERS)
 
 
 if Path("static").exists():
